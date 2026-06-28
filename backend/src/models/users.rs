@@ -24,6 +24,7 @@ pub struct User {
 pub struct RegisterRequest {
     pub email: String,
     pub password: String,
+    pub public_key: String
 }
 
 #[derive(Debug, Deserialize)]

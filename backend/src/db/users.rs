@@ -1,22 +1,22 @@
 use sqlx::PgPool;
 use uuid::Uuid;
-use bcrypt::{hash, };
 
 pub async fn create_user(
     pool: &PgPool,
     email: &str,
-    password: &str,
+    password_hash: &str,
+    public_key: &str,
 ) -> Result<Uuid, sqlx::Error> {
-    let hashed_password = hash(password, 4).expect("Failed to hash password");
-    
+
     let user_id = sqlx::query!(
         r#"
-        INSERT INTO users (email, password_hash)
-        VALUES ($1, $2)
+        INSERT INTO users (email, password_hash, public_key)
+        VALUES ($1, $2, $3)
         RETURNING id
         "#,
         email,
-        hashed_password
+        password_hash,
+        public_key
     )
     .fetch_one(pool)
     .await?

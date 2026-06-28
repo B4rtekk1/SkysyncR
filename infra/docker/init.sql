@@ -3,6 +3,7 @@ CREATE TABLE IF NOT EXISTS users
     id                              UUID PRIMARY KEY     DEFAULT gen_random_uuid(),
     email                           TEXT        NOT NULL UNIQUE,
     password_hash                   TEXT        NOT NULL,
+    public_key                      TEXT,
     email_verified                  BOOLEAN     NOT NULL DEFAULT FALSE,
     verification_token              TEXT,
     display_name                    TEXT,

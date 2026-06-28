@@ -1,0 +1,127 @@
+.vault {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 36px;
+  padding: 48px 32px;
+}
+
+.vault__rings {
+  position: relative;
+  width: 200px;
+  height: 200px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.vault__ring {
+  position: absolute;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+}
+
+.vault__ring--1 {
+  width: 100%;
+  height: 100%;
+  animation: ringPulse 3.2s ease-in-out infinite;
+}
+
+.vault__ring--2 {
+  width: 70%;
+  height: 70%;
+  animation: ringPulse 3.2s ease-in-out infinite 0.4s;
+}
+
+.vault__ring--3 {
+  width: 42%;
+  height: 42%;
+  border-color: var(--signal-dim);
+  animation: ringPulse 3.2s ease-in-out infinite 0.8s;
+}
+
+@keyframes ringPulse {
+  0%, 100% {
+    opacity: 0.5;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.03);
+  }
+}
+
+.vault__core {
+  position: relative;
+  width: 30%;
+  height: 30%;
+  border-radius: 50%;
+  background: var(--panel-2);
+  border: 1px solid var(--signal-dim);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--signal);
+  box-shadow: 0 0 28px 4px rgba(79, 242, 192, 0.16);
+}
+
+.vault__lines {
+  width: 100%;
+  max-width: 280px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.vault__line {
+  display: flex;
+  justify-content: space-between;
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  padding-bottom: 8px;
+  border-bottom: 1px dashed var(--line);
+  opacity: 0;
+  transform: translateY(6px);
+  animation: lineIn 0.5s ease forwards;
+}
+
+.vault__line:last-child {
+  border-bottom: none;
+}
+
+.vault__line-label {
+  color: var(--mist);
+  text-transform: lowercase;
+}
+
+.vault__line-value {
+  color: var(--paper);
+}
+
+@keyframes lineIn {
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vault__ring,
+  .vault__line {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (max-width: 480px) {
+  .vault {
+    padding: 32px 16px;
+  }
+
+  .vault__rings {
+    width: 150px;
+    height: 150px;
+  }
+}
