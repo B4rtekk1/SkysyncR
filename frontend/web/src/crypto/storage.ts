@@ -1,35 +1,42 @@
-import type {EncryptedPrivatekey} from "./keys.ts";
+import type { EncryptedPrivateKey } from './keys'
 
-const DB_NAME = "skysync-vault";
-const STORE_NAME = "keys";
+const DB_NAME = 'skysyncr-vault'
+const STORE_NAME = 'keys'
 
-function openDB(): Promise<IDBDatabase> {
-    return new Promise((resolve, reject) => {
-        const request = indexedDB.open(DB_NAME, 1);
-        request.onupgradeneeded = () => {
-            request.result.createObjectStore(STORE_NAME)
-        }
-        request.onsuccess = () => resolve(request.result);
-        request.onerror = () => reject(request.error);
-    })
+function openDb(): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(DB_NAME, 1)
+    req.onupgradeneeded = () => {
+      req.result.createObjectStore(STORE_NAME)
+    }
+    req.onsuccess = () => resolve(req.result)
+    req.onerror = () => reject(req.error)
+  })
 }
 
-export async function storeEncryptedPrivateKey(userId: string, key: EncryptedPrivatekey): Promise<void> {
-    const db = await openDB();
-    await new Promise<void>((resolve, reject) => {
-        const transaction = db.transaction(STORE_NAME, "readwrite");
-        transaction.objectStore(STORE_NAME).put(key, userId);
-        transaction.oncomplete = () => resolve();
-        transaction.onerror = () => reject(transaction.error);
-    })
+/** Zapisuje zaszyfrowany klucz prywatny lokalnie w przeglądarce. */
+export async function storeEncryptedPrivateKey(
+  userId: string,
+  data: EncryptedPrivateKey,
+): Promise<void> {
+  const db = await openDb()
+  await new Promise<void>((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, 'readwrite')
+    tx.objectStore(STORE_NAME).put(data, userId)
+    tx.oncomplete = () => resolve()
+    tx.onerror = () => reject(tx.error)
+  })
 }
 
-export async function loadEncryptedPrivateKey(userId: string): Promise<EncryptedPrivatekey | undefined> {
-    const db = await openDB();
-    return new Promise((resolve, reject) => {
-        const transaction = db.transaction(STORE_NAME, "readonly");
-        const request = transaction.objectStore(STORE_NAME).get(userId);
-        request.onsuccess = () => resolve(request.result);
-        request.onerror = () => reject(request.error);
-    })
+/** Odczytuje zaszyfrowany klucz prywatny (np. przy logowaniu). */
+export async function loadEncryptedPrivateKey(
+  userId: string,
+): Promise<EncryptedPrivateKey | undefined> {
+  const db = await openDb()
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, 'readonly')
+    const req = tx.objectStore(STORE_NAME).get(userId)
+    req.onsuccess = () => resolve(req.result)
+    req.onerror = () => reject(req.error)
+  })
 }

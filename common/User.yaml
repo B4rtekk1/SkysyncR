@@ -1,0 +1,57 @@
+openapi: 3.0.3
+info:
+  title: User Service API
+  version: 1.0.0
+
+components:
+  schemas:
+
+    User:
+      type: object
+      required:
+        - id
+        - email
+        - password_hash
+        - is_active
+        - is_admin
+        - storage_quota_bytes
+        - used_storage_bytes
+        - created_at
+        - updated_at
+
+      properties:
+        id:
+          type: string
+          format: uuid
+
+        email:
+          type: string
+          format: email
+
+        password_hash:
+          type: string
+          description: Hashed password (never plain text)
+
+        is_active:
+          type: boolean
+
+        is_admin:
+          type: boolean
+
+        storage_quota_bytes:
+          type: integer
+          format: int64
+          description: Max allowed storage in bytes
+
+        used_storage_bytes:
+          type: integer
+          format: int64
+          description: Currently used storage in bytes
+
+        created_at:
+          type: string
+          format: date-time
+
+        updated_at:
+          type: string
+          format: date-time

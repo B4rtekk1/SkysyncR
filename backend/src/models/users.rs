@@ -23,6 +23,7 @@ pub struct User {
 #[derive(Debug, Deserialize)]
 pub struct RegisterRequest {
     pub email: String,
+    pub display_name: String,
     pub password: String,
     pub public_key: String
 }

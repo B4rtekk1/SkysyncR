@@ -4,8 +4,8 @@ mod state;
 mod models;
 mod routes;
 mod handlers;
-mod crypto;
 mod services;
+mod crypto;
 
 use app::run_server;
 use dotenvy;
