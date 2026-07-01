@@ -1,7 +1,7 @@
 import { type FormEvent, useState } from 'react'
 import { Link } from 'react-router-dom'
 import '../App.css'
-import './Login.css'
+import '../css/Login.css'
 import VaultPanel from '../components/VaultPanel'
 import { generateKeyPair, exportPublicKey, encryptPrivateKey } from '../crypto/keys'
 import { storeEncryptedPrivateKey } from '../crypto/storage'

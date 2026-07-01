@@ -1,7 +1,8 @@
 import { type FormEvent, useState } from 'react'
 import { Link } from 'react-router-dom'
 import '../App.css'
-import './Login.css'
+import '../css/Login.css'
+import {loginUser} from '../api/users.ts'
 import VaultPanel from '../components/VaultPanel'
 
 function Login() {
@@ -17,23 +18,24 @@ function Login() {
     setLoading(true)
 
     try {
-      const res = await fetch('/users/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
+      const { token } = await loginUser({
+        email,
+        password,
       })
 
-      if (!res.ok) {
-        const message = await res.text()
-        throw new Error(message || 'Sign in failed')
+      // persist token
+      if (remember) {
+        localStorage.setItem('auth_token', token)
+      } else {
+        sessionStorage.setItem('auth_token', token)
       }
 
-      window.location.href = '/app'
+      window.location.href = '/dashboard'
     } catch (err) {
       setError(
-        err instanceof Error
-          ? err.message
-          : 'Something went wrong. Please try again.',
+          err instanceof Error
+              ? err.message
+              : 'Something went wrong. Please try again.',
       )
     } finally {
       setLoading(false)

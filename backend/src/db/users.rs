@@ -1,30 +1,34 @@
+use crate::crypto::email::generate_verification_token;
 use axum::http::StatusCode;
 use sqlx::PgPool;
 use uuid::Uuid;
 
-pub async fn create_user(
-    pool: &PgPool,
-    email: &str,
-    visible_name: &str,
-    password_hash: &str,
-    public_key: &str,
-) -> Result<Uuid, sqlx::Error> {
+pub struct NewUser<'a> {
+    pub email: &'a str,
+    pub display_name: &'a str,
+    pub password_hash: &'a str,
+    pub public_key: &'a str,
+}
+
+pub async fn create_user(pool: &PgPool, new_user: NewUser<'_>) -> Result<(Uuid, String), sqlx::Error> {
+    let token = generate_verification_token();
     let user_id = sqlx::query!(
         r#"
-        INSERT INTO users (email, password_hash, public_key, display_name)
-        VALUES ($1, $2, $3, $4)
+        INSERT INTO users (email, password_hash, public_key, display_name, verification_token)
+        VALUES ($1, $2, $3, $4, $5)
         RETURNING id
         "#,
-        email,
-        password_hash,
-        public_key,
-        visible_name
+        new_user.email,
+        new_user.password_hash,
+        new_user.public_key,
+        new_user.display_name,
+        token
     )
     .fetch_one(pool)
     .await?
     .id;
 
-    Ok(user_id)
+    Ok((user_id, token))
 }
 
 pub async fn compare_passwords(
@@ -43,4 +47,49 @@ pub async fn compare_passwords(
         .unwrap_or(fake_hash.to_string());
 
     let is_valid = bcrypt::verify(password, &hash).unwrap_or(false);
+    Ok(is_valid)
+}
+
+pub async fn verify_email_token(pool: &PgPool, token: &str) -> Result<bool, sqlx::Error> {
+    let result = sqlx::query!(
+        r#"
+        UPDATE users
+        SET email_verified = TRUE, verification_token = NULL
+        WHERE verification_token = $1
+        RETURNING id
+        "#,
+        token
+    )
+    .fetch_optional(pool)
+    .await?;
+
+    Ok(result.is_some())
+}
+
+pub async fn is_user_verified(pool: &PgPool, email: &str) -> Result<bool, sqlx::Error> {
+    let result = sqlx::query!(
+        r#"
+        SELECT email_verified FROM users WHERE email = $1
+        "#,
+        email
+    )
+    .fetch_optional(pool)
+    .await?;
+
+    Ok(result.map(|r| r.email_verified).unwrap_or(false))
+}
+
+pub async fn update_last_login(pool: &PgPool, user_id: &str) -> Result<(), sqlx::Error> {
+    sqlx::query!(
+        r#"
+        UPDATE users
+        SET last_login_at = NOW()
+        WHERE email = $1
+        "#,
+        user_id
+    )
+    .execute(pool)
+    .await?;
+
+    Ok(())
 }

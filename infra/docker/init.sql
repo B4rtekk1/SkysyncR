@@ -24,6 +24,8 @@ CREATE TABLE IF NOT EXISTS folders
     owner_id         UUID        NOT NULL REFERENCES users (id) ON DELETE CASCADE,
     name             TEXT        NOT NULL,
     parent_folder_id UUID        REFERENCES folders (id) ON DELETE SET NULL,
+    deleted_at        timestamptz,
+    is_deleted       BOOLEAN     NOT NULL DEFAULT FALSE,
     created_at       timestamptz NOT NULL DEFAULT NOW(),
     updated_at       timestamptz NOT NULL DEFAULT NOW()
 );

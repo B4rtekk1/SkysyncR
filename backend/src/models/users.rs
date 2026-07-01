@@ -34,6 +34,15 @@ pub struct LoginRequest {
     pub password: String,
 }
 
+#[derive(Serialize)]
+pub struct RegisterResponse {
+    pub id: String,
+}
+#[derive(Serialize)]
+pub struct LoginResponse {
+    pub token: String,
+}
+
 #[derive(Debug, Deserialize)]
 pub struct DeleteUserRequest {}
 

@@ -4,8 +4,6 @@
   flex-direction: column;
 }
 
-/* ---------- NAV ---------- */
-
 .nav {
   position: sticky;
   top: 0;
@@ -54,7 +52,6 @@
   gap: 10px;
 }
 
-/* ---------- BUTTONS ---------- */
 
 .btn {
   border: 1px solid transparent;
@@ -104,7 +101,6 @@
   font-size: 0.95rem;
 }
 
-/* ---------- HERO ---------- */
 
 .hero {
   flex: 1;
@@ -203,7 +199,6 @@
   transform: translateY(0) scale(1);
 }
 
-/* ---------- FEATURES ---------- */
 
 .features {
   border-top: 1px solid var(--line);
@@ -262,7 +257,6 @@
   margin: 0;
 }
 
-/* ---------- FOOTER ---------- */
 
 .footer {
   text-align: center;
@@ -276,7 +270,6 @@
   margin: 0 8px;
 }
 
-/* ---------- RESPONSIVE ---------- */
 
 @media (max-width: 880px) {
   .hero {
