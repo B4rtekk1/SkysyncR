@@ -14,6 +14,7 @@ import {
     type SharedFile,
     type StorageQuota,
 } from '../api/files'
+import { logout } from '../api/auth'
 import { generateFileKey, encryptFile, exportRawKey } from '../crypto/fileEncryption'
 
 type ViewKey = 'all' | 'shared' | 'trash'
@@ -143,6 +144,23 @@ const NAV_ICONS: Record<ViewKey, React.ReactElement> = {
     ),
 }
 
+const SETTINGS_ICON = (
+    <svg
+        width="17"
+        height="17"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden="true"
+    >
+        <circle cx="12" cy="12" r="3" />
+        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+    </svg>
+)
+
 function isShared(item: Item): item is SharedFile {
     return 'permission' in item
 }
@@ -232,10 +250,17 @@ function Dashboard() {
         return localStorage.getItem('display_name') || sessionStorage.getItem('display_name') || 'You'
     }, [])
 
+    const refreshQuota = async () => {
+        try {
+            const data = await getStorageQuota()
+            setQuota(data)
+        } catch {
+            setQuota(null)
+        }
+    }
+
     useEffect(() => {
-        getStorageQuota()
-            .then(setQuota)
-            .catch(() => setQuota(null))
+        void refreshQuota()
     }, [])
 
     useEffect(() => {
@@ -322,11 +347,13 @@ function Dashboard() {
                 })
             }
         }
+
+        await refreshQuota()
     }
 
     function onUploadChange(e: ChangeEvent<HTMLInputElement>) {
         if (e.target.files && e.target.files.length > 0) {
-            ingestFiles(e.target.files)
+            void ingestFiles(e.target.files)
             e.target.value = ''
         }
     }
@@ -335,7 +362,7 @@ function Dashboard() {
         e.preventDefault()
         setDragActive(false)
         if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-            ingestFiles(e.dataTransfer.files)
+            void ingestFiles(e.dataTransfer.files)
         }
     }
 
@@ -343,6 +370,7 @@ function Dashboard() {
         setItems((prev) => prev.filter((i) => i.id !== id))
         try {
             await softDeleteFile(id)
+            await refreshQuota()
         } catch (e) {
             setError(e instanceof Error ? e.message : 'Could not move that file to trash.')
         }
@@ -352,14 +380,14 @@ function Dashboard() {
         setItems((prev) => prev.filter((i) => i.id !== id))
         try {
             await restoreFile(id)
+            await refreshQuota()
         } catch (e) {
             setError(e instanceof Error ? e.message : 'Could not restore that file.')
         }
     }
 
-    function signOut() {
-        localStorage.removeItem('auth_token')
-        sessionStorage.removeItem('auth_token')
+    async function signOut() {
+        await logout()
         window.location.href = '/login'
     }
 
@@ -394,6 +422,13 @@ function Dashboard() {
                             {label}
                         </button>
                     ))}
+                </nav>
+
+                <nav className="shell__navlist shell__navlist--footer">
+                    <Link to="/settings" className="shell__navitem">
+                        <span className="shell__navicon">{SETTINGS_ICON}</span>
+                        Settings
+                    </Link>
                 </nav>
 
                 <div className="shell__storage">

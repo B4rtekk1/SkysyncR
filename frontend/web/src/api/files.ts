@@ -1,13 +1,6 @@
-const API_BASE = import.meta.env.VITE_API_BASE;
+import { authenticatedFetch } from './auth'
 
-function authHeader(): HeadersInit {
-    const token = localStorage.getItem('token') || sessionStorage.getItem('token');
-    if (token) {
-        return {'Authorization': `Bearer ${token}`};
-    } else {
-        return {};
-    }
-}
+const API_BASE = import.meta.env.VITE_API_BASE ?? 'http://localhost:3000/'
 
 async function parseErrorMessage(response: Response): Promise<string> {
     try {
@@ -56,10 +49,9 @@ export interface StorageQuota {
 
 export async function listFiles(folderId?: string): Promise<ApiFile[]> {
     const qs = folderId ? `?folder_id=${encodeURIComponent(folderId)}` : '';
-    const res = await fetch(`${API_BASE}/files${qs}`, {
+    const res = await authenticatedFetch(`${API_BASE}files${qs}`, {
         method: 'GET',
         headers: {
-            ...authHeader(),
             'Content-Type': 'application/json',
         },
     });
@@ -73,10 +65,8 @@ export async function listFiles(folderId?: string): Promise<ApiFile[]> {
 }
 
 export async function listTrash(): Promise<ApiFile[]> {
-    const res = await fetch(`${API_BASE}/files?trashed=true`, {
-        headers: {
-            ...authHeader(),
-        },
+    const res = await authenticatedFetch(`${API_BASE}files?trashed=true`, {
+        method: 'GET',
     })
     if (!res.ok) {
         const message = await parseErrorMessage(res);
@@ -86,10 +76,8 @@ export async function listTrash(): Promise<ApiFile[]> {
 }
 
 export async function listSharedFilesWithMe(): Promise<SharedFile[]> {
-    const res = await fetch(`${API_BASE}/files/shared-with-me`, {
-        headers: {
-            ...authHeader(),
-        },
+    const res = await authenticatedFetch(`${API_BASE}files/shared-with-me`, {
+        method: 'GET',
     })
     if (!res.ok) {
         const message = await parseErrorMessage(res);
@@ -100,10 +88,9 @@ export async function listSharedFilesWithMe(): Promise<SharedFile[]> {
 
 export async function listFolders(parentFolderId?: string): Promise<ApiFolder[]> {
     const qs = parentFolderId ? `?parent_folder_id=${encodeURIComponent(parentFolderId)}` : '';
-    const res = await fetch(`${API_BASE}/folders${qs}`, {
+    const res = await authenticatedFetch(`${API_BASE}folders${qs}`, {
         method: 'GET',
         headers: {
-            ...authHeader(),
             'Content-Type': 'application/json',
         },
     });
@@ -117,10 +104,9 @@ export async function listFolders(parentFolderId?: string): Promise<ApiFolder[]>
 }
 
 export async function getStorageQuota(): Promise<StorageQuota> {
-    const res = await fetch(`${API_BASE}/storage/quota`, {
+    const res = await authenticatedFetch(`${API_BASE}storage/quota`, {
         method: 'GET',
         headers: {
-            ...authHeader(),
             'Content-Type': 'application/json',
         },
     });
@@ -146,9 +132,8 @@ export async function uploadFile(params: {
     form.append('encrypted_key', arrayBufferToBase64(params.encryptedKey))
     form.append('encryption_nonce', arrayBufferToBase64(params.encryptionNonce))
 
-    const res = await fetch(`${API_BASE}/api/files`, {
+    const res = await authenticatedFetch(`${API_BASE}files`, {
         method: 'POST',
-        headers: { ...authHeader() },
         body: form,
     })
     if (!res.ok) throw new Error(await parseErrorMessage(res))
@@ -156,17 +141,15 @@ export async function uploadFile(params: {
 }
 
 export async function softDeleteFile(id: string): Promise<void> {
-    const res = await fetch(`${API_BASE}/api/files/${id}`, {
+    const res = await authenticatedFetch(`${API_BASE}files/${id}`, {
         method: 'DELETE',
-        headers: { ...authHeader() },
     })
     if (!res.ok) throw new Error(await parseErrorMessage(res))
 }
 
 export async function restoreFile(id: string): Promise<void> {
-    const res = await fetch(`${API_BASE}/api/files/${id}/restore`, {
+    const res = await authenticatedFetch(`${API_BASE}files/${id}/restore`, {
         method: 'POST',
-        headers: { ...authHeader() },
     })
     if (!res.ok) throw new Error(await parseErrorMessage(res))
 }

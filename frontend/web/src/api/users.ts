@@ -1,5 +1,8 @@
 const url = 'http://localhost:3000/'
 
+import { saveTokens, type TokenPair } from './auth'
+import { withDeviceHeaders } from './device'
+
 export interface RegisterPayload {
   email: string
   display_name: string
@@ -15,13 +18,10 @@ export interface LoginPayload {
 export interface RegisterResponse {
   id: string
 }
-export interface LoginResponse {
-  id: string
-  token: string
-}
 
-export async function
-registerUser(
+export type LoginResponse = TokenPair
+
+export async function registerUser(
   payload: RegisterPayload,
 ): Promise<RegisterResponse> {
   const res = await fetch(`${url}users/register`, {
@@ -39,11 +39,12 @@ registerUser(
 }
 
 export async function loginUser(
-    payload: LoginPayload,
+  payload: LoginPayload,
+  remember = true,
 ): Promise<LoginResponse> {
   const res = await fetch(`${url}users/login`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: withDeviceHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify(payload),
   })
 
@@ -52,7 +53,9 @@ export async function loginUser(
     throw new Error(message || 'Login failed')
   }
 
-  return res.json()
+  const tokens: LoginResponse = await res.json()
+  saveTokens(tokens, remember)
+  return tokens
 }
 
 export async function verifyUser(token: string): Promise<void> {

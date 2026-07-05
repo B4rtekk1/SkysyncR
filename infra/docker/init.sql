@@ -6,6 +6,7 @@ CREATE TABLE IF NOT EXISTS users
     public_key                      TEXT,
     email_verified                  BOOLEAN     NOT NULL DEFAULT FALSE,
     verification_token              TEXT,
+    verification_token_expires_at   timestamptz,
     display_name                    TEXT,
     avatar_url                      TEXT,
     is_active                       BOOLEAN     NOT NULL DEFAULT TRUE,
@@ -63,7 +64,8 @@ CREATE TABLE IF NOT EXISTS refresh_tokens
     revoked    BOOLEAN     NOT NULL DEFAULT FALSE,
     created_at timestamptz NOT NULL DEFAULT NOW(),
     user_agent TEXT,
-    ip_address inet
+    ip_address inet,
+    device_id  TEXT
 );
 CREATE INDEX idx_refresh_tokens_user_id ON refresh_tokens (user_id);
 
@@ -174,3 +176,7 @@ CREATE TABLE IF NOT EXISTS favorites
     created_at timestamptz NOT NULL DEFAULT NOW(),
     PRIMARY KEY (user_id, file_id)
 );
+
+-- Migrations for existing dev databases
+ALTER TABLE users ADD COLUMN IF NOT EXISTS verification_token_expires_at timestamptz;
+ALTER TABLE refresh_tokens ADD COLUMN IF NOT EXISTS device_id TEXT;

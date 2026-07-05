@@ -1,33 +1,40 @@
-use serde::{Serialize, Deserialize};
-use jsonwebtoken::{encode, decode, EncodingKey, DecodingKey, Validation, Header};
-use chrono::{Utc, Duration};
+use chrono::{Duration, Utc};
+use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, Validation};
+use serde::{Deserialize, Serialize};
+
+pub const ACCESS_TOKEN_DURATION: Duration = Duration::minutes(15);
 
 #[derive(Debug, Serialize, Deserialize)]
-struct Claims {
-    sub: String, //user id
-    exp: usize, // expiration time
-    iat: usize, // issued at time
+pub struct Claims {
+    pub sub: String,
+    pub did: String,
+    pub exp: usize,
+    pub iat: usize,
 }
 
-pub fn generate_jwt(user_id: &str, secret: &str) -> Result<String, jsonwebtoken::errors::Error> {
+pub fn generate_access_token(
+    user_id: &str,
+    device_id: &str,
+    secret: &str,
+) -> Result<String, jsonwebtoken::errors::Error> {
     let now = Utc::now();
-    let exp = now + Duration::hours(24); // Token valid for 24 hours
+    let exp = now + ACCESS_TOKEN_DURATION;
 
     let claims = Claims {
         sub: user_id.to_owned(),
+        did: device_id.to_owned(),
         exp: exp.timestamp() as usize,
         iat: now.timestamp() as usize,
     };
 
-    let token = encode(
-        &Header::default(), // HS256 is the default algorithm
+    encode(
+        &Header::default(),
         &claims,
         &EncodingKey::from_secret(secret.as_ref()),
-    )?;
-    Ok(token)
+    )
 }
 
-fn verify_jwt(token: &str, secret: &str) -> Result<Claims, jsonwebtoken::errors::Error> {
+pub fn verify_access_token(token: &str, secret: &str) -> Result<Claims, jsonwebtoken::errors::Error> {
     let token_data = decode::<Claims>(
         token,
         &DecodingKey::from_secret(secret.as_ref()),

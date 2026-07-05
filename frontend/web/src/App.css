@@ -32,7 +32,7 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  font-family: var(--font-display);
+  font-family: var(--font-display), sans-serif;
   font-weight: 600;
   font-size: 1.05rem;
   text-decoration: none;
@@ -129,7 +129,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  font-family: var(--font-mono);
+  font-family: var(--font-mono), monospace;
   font-size: 0.78rem;
   letter-spacing: 0.04em;
   color: var(--signal);
@@ -151,7 +151,7 @@
 }
 
 .h1 {
-  font-family: var(--font-display);
+  font-family: var(--font-display), sans-serif;
   font-weight: 600;
   font-size: clamp(2.1rem, 4.2vw, 3.2rem);
   line-height: 1.12;
@@ -180,7 +180,7 @@
 }
 
 .trust-line {
-  font-family: var(--font-mono);
+  font-family: var(--font-mono), monospace;
   font-size: 0.78rem;
   color: var(--mist);
   margin: 0;
@@ -234,7 +234,7 @@
 }
 
 .feature__index {
-  font-family: var(--font-mono);
+  font-family: var(--font-mono), monospace;
   font-size: 0.74rem;
   letter-spacing: 0.06em;
   color: var(--signal);
@@ -243,7 +243,7 @@
 }
 
 .feature__title {
-  font-family: var(--font-display);
+  font-family: var(--font-display), sans-serif;
   font-size: 1.2rem;
   font-weight: 600;
   margin: 0 0 10px;
@@ -261,7 +261,7 @@
 .footer {
   text-align: center;
   padding: 28px 32px;
-  font-family: var(--font-mono);
+  font-family: var(--font-mono), monospace;
   font-size: 0.74rem;
   color: var(--mist);
 }

@@ -28,7 +28,7 @@ body {
   margin: 0;
   background: var(--ink);
   color: var(--paper);
-  font-family: var(--font-body);
+  font-family: var(--font-body), sans-serif;
   -webkit-font-smoothing: antialiased;
   overflow-x: hidden;
 }

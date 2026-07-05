@@ -16,12 +16,11 @@ function VerifyEmail() {
     useEffect(() => {
         if (!token) return;
 
-        async function verify() {
+        async function verify(verificationToken: string) {
             setStatus('verifying');
 
             try {
-                if (!token) throw new Error('No token provided');
-                await verifyUser(token);
+                await verifyUser(verificationToken);
                 setStatus('success');
             } catch (err) {
                 setError(
@@ -33,7 +32,7 @@ function VerifyEmail() {
             }
         }
 
-        verify();
+        void verify(token);
     }, [token]);
 
     return (
