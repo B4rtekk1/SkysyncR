@@ -1,5 +1,5 @@
 :root {
-  /* Color tokens */
+  /* Color tokens — dark theme (default) */
   --ink: #0a0e1a;
   --panel: #121829;
   --panel-2: #161e33;
@@ -9,11 +9,39 @@
   --signal: #4ff2c0;
   --signal-dim: #2c8c70;
   --amber: #ffb04c;
+  --shadow-soft: rgba(0, 0, 0, 0.6);
+  --glow: rgba(79, 242, 192, 0.16);
+  --glow-strong: rgba(79, 242, 192, 0.26);
+  --glow-active: rgba(79, 242, 192, 0.32);
+  --nav-bg: rgba(10, 14, 26, 0.85);
 
   /* Type */
   --font-display: 'Space Grotesk', sans-serif;
   --font-body: 'Public Sans', sans-serif;
   --font-mono: 'IBM Plex Mono', monospace;
+
+  color-scheme: dark;
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    --ink: #f5f6fa;
+    --panel: #ffffff;
+    --panel-2: #eef0f6;
+    --line: #dde1ec;
+    --paper: #131722;
+    --mist: #656d84;
+    --signal: #0e9c73;
+    --signal-dim: #bdeadb;
+    --amber: #b0620a;
+    --shadow-soft: rgba(30, 35, 55, 0.14);
+    --glow: rgba(14, 156, 115, 0.14);
+    --glow-strong: rgba(14, 156, 115, 0.22);
+    --glow-active: rgba(14, 156, 115, 0.28);
+    --nav-bg: rgba(255, 255, 255, 0.85);
+
+    color-scheme: light;
+  }
 }
 
 * {

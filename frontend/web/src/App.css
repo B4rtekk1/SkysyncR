@@ -14,7 +14,7 @@
 }
 
 .nav--solid {
-  background: rgba(10, 14, 26, 0.85);
+  background: var(--nav-bg);
   backdrop-filter: blur(10px);
   border-bottom: 1px solid var(--line);
 }
@@ -82,7 +82,7 @@
 }
 
 .btn--solid:hover {
-  box-shadow: 0 0 0 4px rgba(79, 242, 192, 0.18);
+  box-shadow: 0 0 0 4px var(--glow-strong);
 }
 
 .btn--outline {

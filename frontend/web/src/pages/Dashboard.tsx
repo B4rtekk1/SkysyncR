@@ -17,8 +17,88 @@ import {
 import { logout } from '../api/auth'
 import { generateFileKey, encryptFile, exportRawKey } from '../crypto/fileEncryption'
 
-type ViewKey = 'all' | 'shared' | 'trash'
+type ViewKey = 'all' | 'favourites' | 'shared' | 'trash'
 type Item = ApiFile | SharedFile
+
+const FAVOURITES_STORAGE_KEY = 'favourite_file_ids'
+
+function loadFavouriteIds(): Set<string> {
+    try {
+        const raw = localStorage.getItem(FAVOURITES_STORAGE_KEY)
+        return raw ? new Set(JSON.parse(raw) as string[]) : new Set()
+    } catch {
+        return new Set()
+    }
+}
+
+function saveFavouriteIds(ids: Set<string>) {
+    try {
+        localStorage.setItem(FAVOURITES_STORAGE_KEY, JSON.stringify(Array.from(ids)))
+    } catch {
+        // ignore storage failures (e.g. private browsing)
+    }
+}
+
+const ORDER_STORAGE_PREFIX = 'file_order_'
+
+function loadOrderIds(view: ViewKey): string[] {
+    try {
+        const raw = localStorage.getItem(ORDER_STORAGE_PREFIX + view)
+        return raw ? (JSON.parse(raw) as string[]) : []
+    } catch {
+        return []
+    }
+}
+
+function saveOrderIds(view: ViewKey, ids: string[]) {
+    try {
+        localStorage.setItem(ORDER_STORAGE_PREFIX + view, JSON.stringify(ids))
+    } catch {
+        // ignore storage failures (e.g. private browsing)
+    }
+}
+
+function applySavedOrder<T extends Item>(data: T[], view: ViewKey): T[] {
+    const savedOrder = loadOrderIds(view)
+    if (savedOrder.length === 0) return data
+    const positions = new Map(savedOrder.map((id, i) => [id, i]))
+    return [...data].sort((a, b) => {
+        const posA = positions.has(a.id) ? (positions.get(a.id) as number) : Number.MAX_SAFE_INTEGER
+        const posB = positions.has(b.id) ? (positions.get(b.id) as number) : Number.MAX_SAFE_INTEGER
+        return posA - posB
+    })
+}
+
+const NAV_ORDER_STORAGE_KEY = 'nav_order'
+const DEFAULT_NAV_ORDER: ViewKey[] = ['all', 'favourites', 'shared', 'trash']
+
+function loadNavOrder(): ViewKey[] {
+    try {
+        const raw = localStorage.getItem(NAV_ORDER_STORAGE_KEY)
+        if (!raw) return DEFAULT_NAV_ORDER
+        const saved = JSON.parse(raw) as ViewKey[]
+        const known = saved.filter((k) => DEFAULT_NAV_ORDER.includes(k))
+        const missing = DEFAULT_NAV_ORDER.filter((k) => !known.includes(k))
+        return [...known, ...missing]
+    } catch {
+        return DEFAULT_NAV_ORDER
+    }
+}
+
+function saveNavOrder(order: ViewKey[]) {
+    try {
+        localStorage.setItem(NAV_ORDER_STORAGE_KEY, JSON.stringify(order))
+    } catch {
+        // ignore storage failures (e.g. private browsing)
+    }
+}
+
+const NAV_LABELS: Record<ViewKey, string> = {
+    all: 'All files',
+    favourites: 'Favourites',
+    shared: 'Shared with me',
+    trash: 'Trash',
+}
 
 const CIPHER_CHARS = '01#$%&*+=ABCDEF'
 
@@ -142,7 +222,32 @@ const NAV_ICONS: Record<ViewKey, React.ReactElement> = {
             <path d="M5 7h14M9.5 7V5.2a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1V7M7 7l1 12.2a1 1 0 0 0 1 .8h6a1 1 0 0 0 1-.8L17 7" stroke="currentColor" strokeWidth="1.4" />
         </svg>
     ),
+    favourites: (
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path
+                d="M12 3.5l2.55 5.17 5.7.83-4.13 4.02.98 5.68L12 16.4l-5.1 2.8.98-5.68-4.13-4.02 5.7-.83L12 3.5Z"
+                stroke="currentColor"
+                strokeWidth="1.4"
+            />
+        </svg>
+    ),
 }
+
+const STAR_ICON_FILLED = (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+        <path d="M12 3.5l2.55 5.17 5.7.83-4.13 4.02.98 5.68L12 16.4l-5.1 2.8.98-5.68-4.13-4.02 5.7-.83L12 3.5Z" />
+    </svg>
+)
+
+const STAR_ICON_OUTLINE = (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path
+            d="M12 3.5l2.55 5.17 5.7.83-4.13 4.02.98 5.68L12 16.4l-5.1 2.8.98-5.68-4.13-4.02 5.7-.83L12 3.5Z"
+            stroke="currentColor"
+            strokeWidth="1.4"
+        />
+    </svg>
+)
 
 const SETTINGS_ICON = (
     <svg
@@ -161,6 +266,17 @@ const SETTINGS_ICON = (
     </svg>
 )
 
+const DRAG_HANDLE_ICON = (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+        <circle cx="8" cy="6" r="1.6" />
+        <circle cx="16" cy="6" r="1.6" />
+        <circle cx="8" cy="12" r="1.6" />
+        <circle cx="16" cy="12" r="1.6" />
+        <circle cx="8" cy="18" r="1.6" />
+        <circle cx="16" cy="18" r="1.6" />
+    </svg>
+)
+
 function isShared(item: Item): item is SharedFile {
     return 'permission' in item
 }
@@ -172,6 +288,16 @@ function FileCard({
                       onDelete,
                       onRestore,
                       view,
+                      isFavourite,
+                      onToggleFavourite,
+                      draggable,
+                      isDragging,
+                      isDropTarget,
+                      onDragStartCard,
+                      onDragEnterCard,
+                      onDragLeaveCard,
+                      onDropCard,
+                      onDragEndCard,
                   }: {
     item: Item
     index: number
@@ -179,12 +305,54 @@ function FileCard({
     onDelete?: (id: string) => void
     onRestore?: (id: string) => void
     view: ViewKey
+    isFavourite?: boolean
+    onToggleFavourite?: (id: string) => void
+    draggable?: boolean
+    isDragging?: boolean
+    isDropTarget?: boolean
+    onDragStartCard?: (id: string, e: DragEvent<HTMLElement>) => void
+    onDragEnterCard?: (id: string) => void
+    onDragLeaveCard?: (id: string) => void
+    onDropCard?: (id: string, e: DragEvent<HTMLElement>) => void
+    onDragEndCard?: () => void
 }) {
     const display = useDecryptReveal(item.filename, index * 60)
     const kind = kindFromFile(item.filename, item.mime_type)
 
     return (
-        <article className="file-card">
+        <article
+            className={`file-card ${isDragging ? 'is-dragging-card' : ''} ${isDropTarget ? 'is-drop-target' : ''}`}
+            draggable={draggable && !pending}
+            onDragStart={(e) => onDragStartCard?.(item.id, e)}
+            onDragEnter={(e) => {
+                e.preventDefault()
+                onDragEnterCard?.(item.id)
+            }}
+            onDragOver={(e) => e.preventDefault()}
+            onDragLeave={() => onDragLeaveCard?.(item.id)}
+            onDrop={(e) => {
+                e.preventDefault()
+                e.stopPropagation()
+                onDropCard?.(item.id, e)
+            }}
+            onDragEnd={() => onDragEndCard?.()}
+        >
+            {draggable && !pending && (
+                <span className="file-card__handle" aria-hidden="true">
+                    {DRAG_HANDLE_ICON}
+                </span>
+            )}
+            {onToggleFavourite && !isShared(item) && (
+                <button
+                    className={`file-card__fav ${isFavourite ? 'is-active' : ''}`}
+                    onClick={() => onToggleFavourite(item.id)}
+                    aria-label={isFavourite ? 'Remove from favourites' : 'Add to favourites'}
+                    aria-pressed={isFavourite}
+                    type="button"
+                >
+                    {isFavourite ? STAR_ICON_FILLED : STAR_ICON_OUTLINE}
+                </button>
+            )}
             <div className="file-card__top">
                 <FileIcon kind={kind} />
                 {pending ? (
@@ -243,6 +411,12 @@ function Dashboard() {
     const [query, setQuery] = useState('')
     const [menuOpen, setMenuOpen] = useState(false)
     const [dragActive, setDragActive] = useState(false)
+    const [favouriteIds, setFavouriteIds] = useState<Set<string>>(() => loadFavouriteIds())
+    const [draggedCardId, setDraggedCardId] = useState<string | null>(null)
+    const [dropTargetId, setDropTargetId] = useState<string | null>(null)
+    const [navOrder, setNavOrder] = useState<ViewKey[]>(() => loadNavOrder())
+    const [draggedNavKey, setDraggedNavKey] = useState<ViewKey | null>(null)
+    const [dropNavTarget, setDropNavTarget] = useState<ViewKey | null>(null)
     const menuRef = useRef<HTMLDivElement>(null)
 
     // TODO: replace with a real "current user" fetch once api/users.ts exposes one.
@@ -271,10 +445,14 @@ function Dashboard() {
                 if (!active) return undefined
                 setLoading(true)
                 setError(null)
-                return view === 'all' ? listFiles() : view === 'trash' ? listTrash() : listSharedFilesWithMe()
+                return view === 'all' || view === 'favourites'
+                    ? listFiles()
+                    : view === 'trash'
+                        ? listTrash()
+                        : listSharedFilesWithMe()
             })
             .then((data) => {
-                if (active && data) setItems(data)
+                if (active && data) setItems(applySavedOrder(data, view))
             })
             .catch((e) => {
                 if (active) setError(e instanceof Error ? e.message : 'Could not load your files.')
@@ -358,6 +536,10 @@ function Dashboard() {
         }
     }
 
+    function isFileDrag(e: DragEvent<HTMLDivElement>) {
+        return Array.from(e.dataTransfer.types).includes('Files')
+    }
+
     function onDrop(e: DragEvent<HTMLDivElement>) {
         e.preventDefault()
         setDragActive(false)
@@ -386,14 +568,101 @@ function Dashboard() {
         }
     }
 
+    function toggleFavourite(id: string) {
+        setFavouriteIds((prev) => {
+            const next = new Set(prev)
+            if (next.has(id)) {
+                next.delete(id)
+            } else {
+                next.add(id)
+            }
+            saveFavouriteIds(next)
+            return next
+        })
+    }
+
+    function handleCardDragStart(id: string, e: DragEvent<HTMLElement>) {
+        e.dataTransfer.effectAllowed = 'move'
+        e.dataTransfer.setData('text/plain', id)
+        setDraggedCardId(id)
+    }
+
+    function handleCardDragEnter(id: string) {
+        if (id !== draggedCardId) setDropTargetId(id)
+    }
+
+    function handleCardDragLeave(id: string) {
+        setDropTargetId((prev) => (prev === id ? null : prev))
+    }
+
+    function handleCardDrop(targetId: string, e: DragEvent<HTMLElement>) {
+        const sourceId = e.dataTransfer.getData('text/plain') || draggedCardId
+        setDraggedCardId(null)
+        setDropTargetId(null)
+        if (!sourceId || sourceId === targetId) return
+
+        setItems((prev) => {
+            const arr = [...prev]
+            const fromIdx = arr.findIndex((i) => i.id === sourceId)
+            const toIdx = arr.findIndex((i) => i.id === targetId)
+            if (fromIdx === -1 || toIdx === -1) return prev
+            const [moved] = arr.splice(fromIdx, 1)
+            arr.splice(toIdx, 0, moved)
+            saveOrderIds(view, arr.map((i) => i.id))
+            return arr
+        })
+    }
+
+    function handleCardDragEnd() {
+        setDraggedCardId(null)
+        setDropTargetId(null)
+    }
+
+    function handleNavDragStart(key: ViewKey, e: DragEvent<HTMLElement>) {
+        e.dataTransfer.effectAllowed = 'move'
+        e.dataTransfer.setData('text/plain', key)
+        setDraggedNavKey(key)
+    }
+
+    function handleNavDragEnter(key: ViewKey) {
+        if (key !== draggedNavKey) setDropNavTarget(key)
+    }
+
+    function handleNavDragLeave(key: ViewKey) {
+        setDropNavTarget((prev) => (prev === key ? null : prev))
+    }
+
+    function handleNavDrop(targetKey: ViewKey, e: DragEvent<HTMLElement>) {
+        const sourceKey = (e.dataTransfer.getData('text/plain') as ViewKey) || draggedNavKey
+        setDraggedNavKey(null)
+        setDropNavTarget(null)
+        if (!sourceKey || sourceKey === targetKey) return
+
+        setNavOrder((prev) => {
+            const arr = [...prev]
+            const fromIdx = arr.indexOf(sourceKey)
+            const toIdx = arr.indexOf(targetKey)
+            if (fromIdx === -1 || toIdx === -1) return prev
+            const [moved] = arr.splice(fromIdx, 1)
+            arr.splice(toIdx, 0, moved)
+            saveNavOrder(arr)
+            return arr
+        })
+    }
+
+    function handleNavDragEnd() {
+        setDraggedNavKey(null)
+        setDropNavTarget(null)
+    }
+
     async function signOut() {
         await logout()
         window.location.href = '/login'
     }
 
-    const visibleItems = items.filter((i) =>
-        i.filename.toLowerCase().includes(query.trim().toLowerCase()),
-    )
+    const visibleItems = items
+        .filter((i) => i.filename.toLowerCase().includes(query.trim().toLowerCase()))
+        .filter((i) => (view === 'favourites' ? favouriteIds.has(i.id) : true))
 
     const usedPct = quota ? Math.min(100, Math.round((quota.used_bytes / quota.total_bytes) * 100)) : 0
 
@@ -406,20 +675,31 @@ function Dashboard() {
                 </Link>
 
                 <nav className="shell__navlist">
-                    {(
-                        [
-                            ['all', 'All files'],
-                            ['shared', 'Shared with me'],
-                            ['trash', 'Trash'],
-                        ] as [ViewKey, string][]
-                    ).map(([key, label]) => (
+                    {navOrder.map((key) => (
                         <button
                             key={key}
-                            className={`shell__navitem ${view === key ? 'is-active' : ''}`}
+                            className={`shell__navitem ${view === key ? 'is-active' : ''} ${
+                                draggedNavKey === key ? 'is-dragging-nav' : ''
+                            } ${dropNavTarget === key ? 'is-drop-target-nav' : ''}`}
                             onClick={() => setView(key)}
+                            draggable
+                            onDragStart={(e) => handleNavDragStart(key, e)}
+                            onDragEnter={(e) => {
+                                e.preventDefault()
+                                handleNavDragEnter(key)
+                            }}
+                            onDragOver={(e) => e.preventDefault()}
+                            onDragLeave={() => handleNavDragLeave(key)}
+                            onDrop={(e) => {
+                                e.preventDefault()
+                                e.stopPropagation()
+                                handleNavDrop(key, e)
+                            }}
+                            onDragEnd={handleNavDragEnd}
                         >
+                            <span className="shell__navicon shell__navicon--handle">{DRAG_HANDLE_ICON}</span>
                             <span className="shell__navicon">{NAV_ICONS[key]}</span>
-                            {label}
+                            {NAV_LABELS[key]}
                         </button>
                     ))}
                 </nav>
@@ -487,11 +767,15 @@ function Dashboard() {
                 <div
                     className={`shell__content ${dragActive ? 'is-dragging' : ''}`}
                     onDragOver={(e) => {
+                        if (!isFileDrag(e)) return
                         e.preventDefault()
                         setDragActive(true)
                     }}
                     onDragLeave={() => setDragActive(false)}
-                    onDrop={onDrop}
+                    onDrop={(e) => {
+                        if (!isFileDrag(e)) return
+                        onDrop(e)
+                    }}
                 >
                     <div className="shell__content-head">
                         <div>
@@ -500,6 +784,7 @@ function Dashboard() {
                             </p>
                             <h1 className="shell__title">
                                 {view === 'all' && 'All files'}
+                                {view === 'favourites' && 'Favourites'}
                                 {view === 'shared' && 'Shared with me'}
                                 {view === 'trash' && 'Trash'}
                             </h1>
@@ -525,6 +810,13 @@ function Dashboard() {
                         <EmptyPane
                             title="Nothing shared yet"
                             body="Files someone shares with you will show up here, still encrypted end-to-end."
+                        />
+                    )}
+
+                    {!loading && view === 'favourites' && visibleItems.length === 0 && (
+                        <EmptyPane
+                            title={query ? 'No favourites match your search' : 'No favourites yet'}
+                            body="Tap the star on any file to pin it here for quick access."
                         />
                     )}
 
@@ -557,6 +849,18 @@ function Dashboard() {
                                     view={view}
                                     onDelete={view === 'all' ? handleDelete : undefined}
                                     onRestore={view === 'trash' ? handleRestore : undefined}
+                                    isFavourite={favouriteIds.has(item.id)}
+                                    onToggleFavourite={
+                                        view === 'all' || view === 'favourites' ? toggleFavourite : undefined
+                                    }
+                                    draggable={!pendingIds.has(item.id)}
+                                    isDragging={draggedCardId === item.id}
+                                    isDropTarget={dropTargetId === item.id}
+                                    onDragStartCard={handleCardDragStart}
+                                    onDragEnterCard={handleCardDragEnter}
+                                    onDragLeaveCard={handleCardDragLeave}
+                                    onDropCard={handleCardDrop}
+                                    onDragEndCard={handleCardDragEnd}
                                 />
                             ))}
                         </div>

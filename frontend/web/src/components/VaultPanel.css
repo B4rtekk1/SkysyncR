@@ -19,6 +19,7 @@
   position: absolute;
   border-radius: 50%;
   border: 1px solid var(--line);
+  transition: border-color 0.5s ease;
 }
 
 .vault__ring--1 {
@@ -38,6 +39,19 @@
   height: 42%;
   border-color: var(--signal-dim);
   animation: ringPulse 3.2s ease-in-out infinite 0.8s;
+}
+
+.vault__rings--unlocked .vault__ring--1,
+.vault__rings--unlocked .vault__ring--2 {
+  border-color: var(--signal-dim);
+}
+
+.vault__rings--unlocked .vault__ring--3 {
+  border-color: var(--signal);
+}
+
+.vault__rings--unlocked .vault__ring {
+  animation-duration: 2s;
 }
 
 @keyframes ringPulse {
@@ -62,7 +76,77 @@
   align-items: center;
   justify-content: center;
   color: var(--signal);
-  box-shadow: 0 0 28px 4px rgba(79, 242, 192, 0.16);
+  box-shadow: 0 0 28px 4px var(--glow);
+  padding: 0;
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.35s ease, border-color 0.35s ease, background 0.35s ease;
+}
+
+.vault__core:hover {
+  box-shadow: 0 0 32px 6px var(--glow-strong);
+  transform: scale(1.04);
+}
+
+.vault__core:active {
+  transform: scale(0.94);
+}
+
+.vault__core:focus-visible {
+  outline: 2px solid var(--signal);
+  outline-offset: 3px;
+}
+
+.vault__rings--unlocked .vault__core {
+  border-color: var(--signal);
+  background: color-mix(in srgb, var(--signal) 10%, transparent);
+  box-shadow: 0 0 40px 8px var(--glow-active);
+  animation: coreSnap 0.4s ease;
+}
+
+@keyframes coreSnap {
+  0% {
+    transform: scale(1);
+  }
+  35% {
+    transform: scale(1.16);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.lock-icon {
+  position: relative;
+  display: inline-flex;
+  width: 28px;
+  height: 28px;
+}
+
+.lock-icon__layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+.lock-icon.is-locked .lock-icon__layer--locked {
+  opacity: 1;
+  transform: rotate(0deg) scale(1);
+}
+
+.lock-icon.is-locked .lock-icon__layer--unlocked {
+  opacity: 0;
+  transform: rotate(8deg) scale(0.85);
+}
+
+.lock-icon.is-unlocked .lock-icon__layer--locked {
+  opacity: 0;
+  transform: rotate(-8deg) scale(0.85);
+}
+
+.lock-icon.is-unlocked .lock-icon__layer--unlocked {
+  opacity: 1;
+  transform: rotate(0deg) scale(1);
 }
 
 .vault__lines {
@@ -97,6 +181,18 @@
 
 .vault__line-value {
   color: var(--paper);
+  animation: valueSwap 0.3s ease;
+}
+
+@keyframes valueSwap {
+  from {
+    opacity: 0;
+    transform: translateY(-3px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 @keyframes lineIn {
@@ -108,7 +204,10 @@
 
 @media (prefers-reduced-motion: reduce) {
   .vault__ring,
-  .vault__line {
+  .vault__line,
+  .vault__core,
+  .lock-icon__layer,
+  .vault__line-value {
     animation: none;
     opacity: 1;
     transform: none;
