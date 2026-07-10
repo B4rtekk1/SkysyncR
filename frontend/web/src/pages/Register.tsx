@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import '../App.css'
 import '../css/Login.css'
 import VaultPanel from '../components/VaultPanel'
+import ThemeToggle from '../components/ThemeToggle'
 import { generateKeyPair, exportPublicKey, encryptPrivateKey } from '../crypto/keys'
 import { storeEncryptedPrivateKey } from '../crypto/storage'
 import { registerUser } from '../api/users'
@@ -282,9 +283,12 @@ function Register() {
             <span className="auth-nav__logo-mark" aria-hidden="true" />
             SkysyncR
           </Link>
-          <Link to="/" className="auth-nav__back">
-            ← Back to home
-          </Link>
+          <div className="auth-nav__actions">
+            <ThemeToggle className="nav__theme-toggle" />
+            <Link to="/" className="auth-nav__back">
+              ← Back to home
+            </Link>
+          </div>
         </nav>
 
         <main className="auth">

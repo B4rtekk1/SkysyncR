@@ -4,6 +4,7 @@ import '../App.css'
 import '../css/Login.css'
 import {loginUser} from '../api/users.ts'
 import VaultPanel from '../components/VaultPanel'
+import ThemeToggle from '../components/ThemeToggle'
 
 function EyeIcon({ open }: { open: boolean }) {
   return (
@@ -88,9 +89,12 @@ function Login() {
             <span className="auth-nav__logo-mark" aria-hidden="true" />
             SkysyncR
           </Link>
-          <Link to="/" className="auth-nav__back">
-            ← Back to home
-          </Link>
+          <div className="auth-nav__actions">
+            <ThemeToggle className="nav__theme-toggle" />
+            <Link to="/" className="auth-nav__back">
+              ← Back to home
+            </Link>
+          </div>
         </nav>
 
         <main className="auth">

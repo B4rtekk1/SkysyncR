@@ -3,6 +3,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import "../App.css";
 import "../css/Login.css";
 import { verifyUser } from "../api/users";
+import ThemeToggle from "../components/ThemeToggle";
 
 type Status = "idle" | "verifying" | "success" | "error";
 
@@ -42,6 +43,7 @@ function VerifyEmail() {
                     <span className="auth-nav__logo-mark" aria-hidden="true" />
                     SkysyncR
                 </Link>
+                <ThemeToggle className="nav__theme-toggle" />
             </nav>
 
             <main className="auth" style={{ gridTemplateColumns: "1fr" }}>

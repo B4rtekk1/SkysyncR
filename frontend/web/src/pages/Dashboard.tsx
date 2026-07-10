@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState, type ChangeEvent, type Dra
 import { Link } from 'react-router-dom'
 import '../App.css'
 import '../css/Dashbord.css'
+import ThemeToggle from '../components/ThemeToggle'
 import {
     listFiles,
     listTrash,
@@ -743,6 +744,8 @@ function Dashboard() {
             <span className="shell__sync">
               <span className="eyebrow__dot" /> synced · encrypted
             </span>
+
+                        <ThemeToggle className="shell__theme-toggle" />
 
                         <div className="shell__user" ref={menuRef}>
                             <button

@@ -1,7 +1,27 @@
+/* ---------- THEME ---------- */
+
+:root {
+    --signal-rgb: 79, 242, 192;
+}
+
+html[data-theme='light'] {
+    --panel: #ffffff;
+    --panel-2: #f0f2f4;
+    --paper: #16191c;
+    --mist: #6a7178;
+    --line: #e2e5e9;
+    --signal: #2563eb;
+    --signal-dim: #dbeafe;
+    --signal-rgb: 37, 99, 235;
+    --amber: #b3590f;
+}
+
 .shell {
     min-height: 100vh;
     display: grid;
     grid-template-columns: 240px 1fr;
+    background: var(--panel);
+    transition: background 0.2s ease;
 }
 
 /* ---------- SIDEBAR ---------- */
@@ -152,7 +172,7 @@
 
 .shell__search:has(input:focus) {
     border-color: var(--signal);
-    box-shadow: 0 0 0 3px rgba(79, 242, 192, 0.14);
+    box-shadow: 0 0 0 3px rgba(var(--signal-rgb), 0.14);
 }
 
 .shell__search input {
@@ -186,6 +206,26 @@
     color: var(--mist);
     text-transform: lowercase;
     white-space: nowrap;
+}
+
+.shell__theme-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    height: 34px;
+    border: 1px solid var(--line);
+    border-radius: 50%;
+    background: var(--panel-2);
+    color: var(--mist);
+    cursor: pointer;
+    transition: border-color 0.15s ease, color 0.15s ease, transform 0.15s ease;
+}
+
+.shell__theme-toggle:hover {
+    border-color: var(--signal);
+    color: var(--signal);
+    transform: rotate(12deg);
 }
 
 .shell__user {
@@ -318,7 +358,7 @@
 
 .file-card.is-drop-target {
     border-color: var(--signal);
-    box-shadow: 0 0 0 2px rgba(79, 242, 192, 0.18);
+    box-shadow: 0 0 0 2px rgba(var(--signal-rgb), 0.18);
 }
 
 .file-card__handle {
@@ -478,7 +518,7 @@
     inset: 16px;
     border: 2px dashed var(--signal);
     border-radius: 16px;
-    background: rgba(79, 242, 192, 0.06);
+    background: rgba(var(--signal-rgb), 0.06);
     display: flex;
     align-items: center;
     justify-content: center;

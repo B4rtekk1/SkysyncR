@@ -1,7 +1,22 @@
+html[data-theme='light'] {
+  --panel: #ffffff;
+  --panel-2: #f0f2f4;
+  --paper: #16191c;
+  --mist: #6a7178;
+  --line: #e2e5e9;
+  --signal: #2563eb;
+  --signal-dim: #dbeafe;
+  --signal-rgb: 37, 99, 235;
+  --nav-bg: rgba(255, 255, 255, 0.82);
+  --glow-strong: rgba(37, 99, 235, 0.18);
+}
+
 .page {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
+  background: var(--panel);
+  transition: background 0.2s ease;
 }
 
 .nav {
@@ -49,7 +64,28 @@
 
 .nav__actions {
   display: flex;
+  align-items: center;
   gap: 10px;
+}
+
+.nav__theme-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: transparent;
+  color: var(--mist);
+  cursor: pointer;
+  transition: border-color 0.15s ease, color 0.15s ease, transform 0.15s ease;
+}
+
+.nav__theme-toggle:hover {
+  border-color: var(--signal);
+  color: var(--signal);
+  transform: rotate(12deg);
 }
 
 
@@ -78,7 +114,7 @@
 
 .btn--solid {
   background: var(--signal);
-  color: #07241c;
+  color: #f8fbff;
 }
 
 .btn--solid:hover {

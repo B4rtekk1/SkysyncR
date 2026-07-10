@@ -1,4 +1,5 @@
-:root {
+:root,
+html[data-theme='dark'] {
   /* Color tokens — dark theme (default) */
   --ink: #0a0e1a;
   --panel: #121829;
@@ -8,6 +9,7 @@
   --mist: #8c94ad;
   --signal: #4ff2c0;
   --signal-dim: #2c8c70;
+  --signal-rgb: 79, 242, 192;
   --amber: #ffb04c;
   --shadow-soft: rgba(0, 0, 0, 0.6);
   --glow: rgba(79, 242, 192, 0.16);
@@ -23,21 +25,42 @@
   color-scheme: dark;
 }
 
+html[data-theme='light'] {
+  --ink: #f5f6fa;
+  --panel: #ffffff;
+  --panel-2: #eef0f6;
+  --line: #dde1ec;
+  --paper: #131722;
+  --mist: #656d84;
+  --signal: #2563eb;
+  --signal-dim: #dbeafe;
+  --signal-rgb: 37, 99, 235;
+  --amber: #b0620a;
+  --shadow-soft: rgba(30, 35, 55, 0.14);
+  --glow: rgba(37, 99, 235, 0.12);
+  --glow-strong: rgba(37, 99, 235, 0.2);
+  --glow-active: rgba(37, 99, 235, 0.26);
+  --nav-bg: rgba(255, 255, 255, 0.85);
+
+  color-scheme: light;
+}
+
 @media (prefers-color-scheme: light) {
-  :root {
+  :root:not([data-theme]) {
     --ink: #f5f6fa;
     --panel: #ffffff;
     --panel-2: #eef0f6;
     --line: #dde1ec;
     --paper: #131722;
     --mist: #656d84;
-    --signal: #0e9c73;
-    --signal-dim: #bdeadb;
+    --signal: #2563eb;
+    --signal-dim: #dbeafe;
+    --signal-rgb: 37, 99, 235;
     --amber: #b0620a;
     --shadow-soft: rgba(30, 35, 55, 0.14);
-    --glow: rgba(14, 156, 115, 0.14);
-    --glow-strong: rgba(14, 156, 115, 0.22);
-    --glow-active: rgba(14, 156, 115, 0.28);
+    --glow: rgba(37, 99, 235, 0.12);
+    --glow-strong: rgba(37, 99, 235, 0.2);
+    --glow-active: rgba(37, 99, 235, 0.26);
     --nav-bg: rgba(255, 255, 255, 0.85);
 
     color-scheme: light;

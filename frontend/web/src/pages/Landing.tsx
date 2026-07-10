@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import '../App.css'
 import TransferLog from '../components/TransferLog'
+import ThemeToggle from '../components/ThemeToggle'
 
 function Landing() {
   const [loaded, setLoaded] = useState(false)
@@ -23,95 +24,96 @@ function Landing() {
     const node = featuresRef.current
     if (!node) return
     const obs = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting) setFeaturesVisible(true)
-      },
-      { threshold: 0.2 },
+        ([entry]) => {
+          if (entry.isIntersecting) setFeaturesVisible(true)
+        },
+        { threshold: 0.2 },
     )
     obs.observe(node)
     return () => obs.disconnect()
   }, [])
 
   return (
-    <div className="page">
-      <nav className={`nav ${navSolid ? 'nav--solid' : ''}`}>
-        <div className="nav__inner">
-          <Link to="/" className="nav__logo">
-            <span className="nav__logo-mark" aria-hidden="true" />
-            SkysyncR
-          </Link>
-          <div className="nav__actions">
-            <Link to="/login" className="btn btn--ghost">Sign in</Link>
-            <Link to="/register" className="btn btn--solid">Create account</Link>
-          </div>
-        </div>
-      </nav>
-
-      <main id="top" className="hero">
-        <div className={`hero__copy ${loaded ? 'is-in' : ''}`}>
-          <p className="eyebrow">
-            <span className="eyebrow__dot" /> end-to-end encrypted
-          </p>
-          <h1 className="h1">
-            <span className="h1__line">Your files are locked</span>
-            <span className="h1__line">before they leave your device.</span>
-          </h1>
-          <p className="lede">
-            SkysyncR encrypts every file locally with AES-256 before it
-            goes anywhere else. We never see the contents — only that
-            it's safe.
-          </p>
-          <div className="cta-row">
-            <Link to="/register" className="btn btn--solid btn--lg">
-              Create a free account
+      <div className="page">
+        <nav className={`nav ${navSolid ? 'nav--solid' : ''}`}>
+          <div className="nav__inner">
+            <Link to="/" className="nav__logo">
+              <span className="nav__logo-mark" aria-hidden="true" />
+              SkysyncR
             </Link>
-            <Link to="/login" className="btn btn--outline btn--lg">Sign in</Link>
+            <div className="nav__actions">
+              <ThemeToggle className="nav__theme-toggle" />
+              <Link to="/login" className="btn btn--ghost">Sign in</Link>
+              <Link to="/register" className="btn btn--solid">Create account</Link>
+            </div>
           </div>
-          <p className="trust-line">
-            No card required · your private key stays with you
-          </p>
-        </div>
+        </nav>
 
-        <div className={`hero__signature ${loaded ? 'is-in' : ''}`}>
-          <TransferLog />
-        </div>
-      </main>
+        <main id="top" className="hero">
+          <div className={`hero__copy ${loaded ? 'is-in' : ''}`}>
+            <p className="eyebrow">
+              <span className="eyebrow__dot" /> end-to-end encrypted
+            </p>
+            <h1 className="h1">
+              <span className="h1__line">Your files are locked</span>
+              <span className="h1__line">before they leave your device.</span>
+            </h1>
+            <p className="lede">
+              SkysyncR encrypts every file locally with AES-256 before it
+              goes anywhere else. We never see the contents — only that
+              it's safe.
+            </p>
+            <div className="cta-row">
+              <Link to="/register" className="btn btn--solid btn--lg">
+                Create a free account
+              </Link>
+              <Link to="/login" className="btn btn--outline btn--lg">Sign in</Link>
+            </div>
+            <p className="trust-line">
+              No card required · your private key stays with you
+            </p>
+          </div>
 
-      <section className="features" ref={featuresRef}>
-        <div className={`features__grid ${featuresVisible ? 'is-in' : ''}`}>
-          <article className="feature">
-            <p className="feature__index">Encrypted</p>
-            <h3 className="feature__title">Before anything leaves</h3>
-            <p className="feature__body">
-              Every file gets its own AES-256-GCM key, generated on your
-              device. The plain file never travels in the open.
-            </p>
-          </article>
-          <article className="feature">
-            <p className="feature__index">Synced</p>
-            <h3 className="feature__title">Up to date on every device</h3>
-            <p className="feature__body">
-              A change on your laptop shows up on your phone within
-              seconds — still encrypted until the very last step.
-            </p>
-          </article>
-          <article className="feature">
-            <p className="feature__index">Yours</p>
-            <h3 className="feature__title">Private key, private data</h3>
-            <p className="feature__body">
-              The decryption key stays on your side. We don't store it —
-              so we can't hand it to anyone, either.
-            </p>
-          </article>
-        </div>
-      </section>
+          <div className={`hero__signature ${loaded ? 'is-in' : ''}`}>
+            <TransferLog />
+          </div>
+        </main>
 
-      <footer className="footer">
-        <span>© {new Date().getFullYear()} SkysyncR</span>
-        <span className="footer__sep">·</span>
-        <span>Encrypted locally, always.</span>
-      </footer>
-    </div>
+        <section className="features" ref={featuresRef}>
+          <div className={`features__grid ${featuresVisible ? 'is-in' : ''}`}>
+            <article className="feature">
+              <p className="feature__index">Encrypted</p>
+              <h3 className="feature__title">Before anything leaves</h3>
+              <p className="feature__body">
+                Every file gets its own AES-256-GCM key, generated on your
+                device. The plain file never travels in the open.
+              </p>
+            </article>
+            <article className="feature">
+              <p className="feature__index">Synced</p>
+              <h3 className="feature__title">Up to date on every device</h3>
+              <p className="feature__body">
+                A change on your laptop shows up on your phone within
+                seconds — still encrypted until the very last step.
+              </p>
+            </article>
+            <article className="feature">
+              <p className="feature__index">Yours</p>
+              <h3 className="feature__title">Private key, private data</h3>
+              <p className="feature__body">
+                The decryption key stays on your side. We don't store it —
+                so we can't hand it to anyone, either.
+              </p>
+            </article>
+          </div>
+        </section>
+
+        <footer className="footer">
+          <span>© {new Date().getFullYear()} SkysyncR</span>
+          <span className="footer__sep">·</span>
+          <span>Encrypted locally, always.</span>
+        </footer>
+      </div>
   )
 }
 
