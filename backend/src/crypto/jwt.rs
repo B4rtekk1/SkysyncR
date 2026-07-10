@@ -1,5 +1,5 @@
 use chrono::{Duration, Utc};
-use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, Validation};
+use jsonwebtoken::{DecodingKey, EncodingKey, Header, Validation, decode, encode};
 use serde::{Deserialize, Serialize};
 
 pub const ACCESS_TOKEN_DURATION: Duration = Duration::minutes(15);
@@ -34,7 +34,10 @@ pub fn generate_access_token(
     )
 }
 
-pub fn verify_access_token(token: &str, secret: &str) -> Result<Claims, jsonwebtoken::errors::Error> {
+pub fn verify_access_token(
+    token: &str,
+    secret: &str,
+) -> Result<Claims, jsonwebtoken::errors::Error> {
     let token_data = decode::<Claims>(
         token,
         &DecodingKey::from_secret(secret.as_ref()),

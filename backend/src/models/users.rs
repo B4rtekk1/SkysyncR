@@ -25,7 +25,7 @@ pub struct RegisterRequest {
     pub email: String,
     pub display_name: String,
     pub password: String,
-    pub public_key: String
+    pub public_key: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -80,6 +80,13 @@ pub struct UserResponse {
     pub used_storage_bytes: i64,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct CurrentUserResponse {
+    pub id: Uuid,
+    pub display_name: Option<String>,
+    pub public_key: Option<String>,
 }
 
 impl From<User> for UserResponse {

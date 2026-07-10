@@ -1,26 +1,27 @@
-use crate::crypto::jwt::{generate_access_token, ACCESS_TOKEN_DURATION};
+use crate::auth::AuthUser;
+use crate::crypto::jwt::{ACCESS_TOKEN_DURATION, generate_access_token};
 use crate::crypto::refresh_token::generate_refresh_token;
 use crate::db::refresh_tokens::{
-    authenticate_refresh_token, create_refresh_token, revoke_all_user_refresh_tokens,
-    revoke_refresh_token, rotate_refresh_token, RefreshTokenAuth, ValidRefreshToken,
+    RefreshTokenAuth, ValidRefreshToken, authenticate_refresh_token, create_refresh_token,
+    revoke_all_user_refresh_tokens, revoke_refresh_token, rotate_refresh_token,
 };
 use crate::db::users::*;
 use crate::models::users::{
-    LoginRequest, LoginResponse, LogoutRequest, RefreshRequest, RefreshResponse, RegisterRequest,
-    RegisterResponse,
+    CurrentUserResponse, LoginRequest, LoginResponse, LogoutRequest, RefreshRequest,
+    RefreshResponse, RegisterRequest, RegisterResponse,
 };
 use crate::state::AppState;
 use crate::utils::device::DeviceContext;
-use crate::utils::errors::{internal_error, map_db_error, ApiError};
+use crate::utils::errors::{ApiError, internal_error, map_db_error};
 use crate::utils::validation::{
     validate_display_name, validate_email, validate_password, validate_public_key,
 };
 use axum::{
+    Json,
     extract::{ConnectInfo, Query, State},
     http::HeaderMap,
-    Json,
 };
-use bcrypt::{hash, DEFAULT_COST};
+use bcrypt::{DEFAULT_COST, hash};
 use serde::Deserialize;
 use std::net::SocketAddr;
 
@@ -29,6 +30,22 @@ use crate::crypto::email::send_verification_email;
 #[derive(Deserialize)]
 pub struct VerifyParams {
     pub token: String,
+}
+
+pub async fn current_user(
+    State(state): State<AppState>,
+    auth: AuthUser,
+) -> Result<Json<CurrentUserResponse>, ApiError> {
+    let profile = get_current_user_crypto_profile(&state.db_pool, auth.user_id)
+        .await
+        .map_err(|e| internal_error("get current user", e))?
+        .ok_or_else(|| ApiError::Unauthorized("User not found".into()))?;
+
+    Ok(Json(CurrentUserResponse {
+        id: profile.id,
+        display_name: profile.display_name,
+        public_key: profile.public_key,
+    }))
 }
 
 async fn require_refresh_token(
@@ -62,12 +79,11 @@ pub async fn register_user(
     let email = payload.email.trim().to_lowercase();
     validate_email(&email).map_err(|msg| ApiError::BadRequest(msg.into()))?;
     validate_password(&payload.password).map_err(|msg| ApiError::BadRequest(msg.into()))?;
-    validate_display_name(&payload.display_name)
-        .map_err(|msg| ApiError::BadRequest(msg.into()))?;
+    validate_display_name(&payload.display_name).map_err(|msg| ApiError::BadRequest(msg.into()))?;
     validate_public_key(&payload.public_key).map_err(|msg| ApiError::BadRequest(msg.into()))?;
 
-    let hashed = hash(&payload.password, DEFAULT_COST)
-        .map_err(|e| internal_error("password hash", e))?;
+    let hashed =
+        hash(&payload.password, DEFAULT_COST).map_err(|e| internal_error("password hash", e))?;
 
     let display_name = payload.display_name.trim();
 
@@ -159,9 +175,7 @@ pub async fn login_user(
         .await
         .map_err(|e| internal_error("record failed login", e))?;
 
-        return Err(ApiError::Unauthorized(
-            "Invalid email or password".into(),
-        ));
+        return Err(ApiError::Unauthorized("Invalid email or password".into()));
     }
 
     let user_id = get_user_id_by_email(&state.db_pool, &email)
@@ -232,9 +246,7 @@ pub async fn logout_user(
 ) -> Result<&'static str, ApiError> {
     let device = DeviceContext::from_headers(&headers, Some(peer.ip()))?;
 
-    if let Ok(stored) =
-        require_refresh_token(&state, &payload.refresh_token, &device).await
-    {
+    if let Ok(stored) = require_refresh_token(&state, &payload.refresh_token, &device).await {
         revoke_refresh_token(&state.db_pool, stored.id)
             .await
             .map_err(|e| internal_error("revoke refresh token", e))?;
@@ -251,9 +263,7 @@ pub async fn logout_all_sessions(
 ) -> Result<&'static str, ApiError> {
     let device = DeviceContext::from_headers(&headers, Some(peer.ip()))?;
 
-    if let Ok(stored) =
-        require_refresh_token(&state, &payload.refresh_token, &device).await
-    {
+    if let Ok(stored) = require_refresh_token(&state, &payload.refresh_token, &device).await {
         revoke_all_user_refresh_tokens(&state.db_pool, stored.user_id)
             .await
             .map_err(|e| internal_error("revoke all refresh tokens", e))?;
@@ -277,8 +287,6 @@ pub async fn verify_email(
     if verified {
         Ok("Email verified successfully")
     } else {
-        Err(ApiError::BadRequest(
-            "Invalid or expired token".into(),
-        ))
+        Err(ApiError::BadRequest("Invalid or expired token".into()))
     }
 }

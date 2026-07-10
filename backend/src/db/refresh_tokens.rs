@@ -1,6 +1,6 @@
 use chrono::{DateTime, Utc};
-use sqlx::types::ipnetwork::IpNetwork;
 use sqlx::PgPool;
+use sqlx::types::ipnetwork::IpNetwork;
 use uuid::Uuid;
 
 use crate::crypto::refresh_token::{hash_refresh_token, refresh_token_expires_at};
@@ -67,8 +67,8 @@ pub async fn authenticate_refresh_token(
         "#,
         token_hash
     )
-        .fetch_optional(pool)
-        .await?;
+    .fetch_optional(pool)
+    .await?;
 
     let Some(row) = row else {
         return Ok(RefreshTokenAuth::NotFound);
@@ -106,8 +106,8 @@ pub async fn revoke_refresh_token(pool: &PgPool, token_id: Uuid) -> Result<(), s
         "#,
         token_id
     )
-        .execute(pool)
-        .await?;
+    .execute(pool)
+    .await?;
 
     Ok(())
 }
@@ -124,8 +124,8 @@ pub async fn revoke_all_user_refresh_tokens(
         "#,
         user_id
     )
-        .execute(pool)
-        .await?;
+    .execute(pool)
+    .await?;
 
     Ok(())
 }
@@ -147,8 +147,8 @@ pub async fn rotate_refresh_token(
         "#,
         old_token_id
     )
-        .execute(&mut *tx)
-        .await?;
+    .execute(&mut *tx)
+    .await?;
 
     let token_hash = hash_refresh_token(new_raw_token);
     let expires_at: DateTime<Utc> = refresh_token_expires_at();

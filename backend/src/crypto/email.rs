@@ -1,13 +1,13 @@
+use hickory_resolver::TokioResolver;
+use hickory_resolver::proto::rr::RData;
 use lettre::message::header::ContentType;
 use lettre::transport::smtp::authentication::Credentials;
 use lettre::{AsyncSmtpTransport, AsyncTransport, Message, Tokio1Executor};
 use rand::Rng;
 use rand::distributions::Alphanumeric;
-use hickory_resolver::TokioResolver;
-use hickory_resolver::proto::rr::RData;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::TcpStream;
-use tokio::time::{timeout, Duration};
+use tokio::time::{Duration, timeout};
 
 pub fn generate_verification_token() -> String {
     let token: String = rand::thread_rng()
@@ -70,29 +70,56 @@ pub async fn smtp_probe(mx_host: &str, target_email: &str) -> EmailCheckResult {
 
         // Powitanie serwera (220)
         line.clear();
-        reader.read_line(&mut line).await.map_err(|e| EmailCheckResult::Unknown(e.to_string()))?;
+        reader
+            .read_line(&mut line)
+            .await
+            .map_err(|e| EmailCheckResult::Unknown(e.to_string()))?;
         if !line.starts_with("220") {
-            return Err(EmailCheckResult::Unknown(format!("unexpected greeting: {}", line)));
+            return Err(EmailCheckResult::Unknown(format!(
+                "unexpected greeting: {}",
+                line
+            )));
         }
 
-        writer.write_all(b"HELO checker.local\r\n").await.map_err(|e| EmailCheckResult::Unknown(e.to_string()))?;
+        writer
+            .write_all(b"HELO checker.local\r\n")
+            .await
+            .map_err(|e| EmailCheckResult::Unknown(e.to_string()))?;
         line.clear();
-        reader.read_line(&mut line).await.map_err(|e| EmailCheckResult::Unknown(e.to_string()))?;
+        reader
+            .read_line(&mut line)
+            .await
+            .map_err(|e| EmailCheckResult::Unknown(e.to_string()))?;
         if !line.starts_with("250") {
             return Err(EmailCheckResult::Unknown(format!("HELO failed: {}", line)));
         }
 
-        writer.write_all(b"MAIL FROM:<verify@checker.local>\r\n").await.map_err(|e| EmailCheckResult::Unknown(e.to_string()))?;
+        writer
+            .write_all(b"MAIL FROM:<verify@checker.local>\r\n")
+            .await
+            .map_err(|e| EmailCheckResult::Unknown(e.to_string()))?;
         line.clear();
-        reader.read_line(&mut line).await.map_err(|e| EmailCheckResult::Unknown(e.to_string()))?;
+        reader
+            .read_line(&mut line)
+            .await
+            .map_err(|e| EmailCheckResult::Unknown(e.to_string()))?;
         if !line.starts_with("250") {
-            return Err(EmailCheckResult::Unknown(format!("MAIL FROM failed: {}", line)));
+            return Err(EmailCheckResult::Unknown(format!(
+                "MAIL FROM failed: {}",
+                line
+            )));
         }
 
         let rcpt_cmd = format!("RCPT TO:<{}>\r\n", target_email);
-        writer.write_all(rcpt_cmd.as_bytes()).await.map_err(|e| EmailCheckResult::Unknown(e.to_string()))?;
+        writer
+            .write_all(rcpt_cmd.as_bytes())
+            .await
+            .map_err(|e| EmailCheckResult::Unknown(e.to_string()))?;
         line.clear();
-        reader.read_line(&mut line).await.map_err(|e| EmailCheckResult::Unknown(e.to_string()))?;
+        reader
+            .read_line(&mut line)
+            .await
+            .map_err(|e| EmailCheckResult::Unknown(e.to_string()))?;
 
         // Zawsze zamknij grzecznie połączenie
         let _ = writer.write_all(b"QUIT\r\n").await;
@@ -102,7 +129,10 @@ pub async fn smtp_probe(mx_host: &str, target_email: &str) -> EmailCheckResult {
         } else if line.starts_with("550") || line.starts_with("551") || line.starts_with("553") {
             Ok(EmailCheckResult::SmtpRejected)
         } else {
-            Err(EmailCheckResult::Unknown(format!("unexpected RCPT response: {}", line)))
+            Err(EmailCheckResult::Unknown(format!(
+                "unexpected RCPT response: {}",
+                line
+            )))
         }
     };
 
@@ -140,13 +170,15 @@ pub async fn send_verification_email(
     to_email: &str,
     token: &str,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let frontend_url = std::env::var("FRONTEND_URL").unwrap_or_else(|_| "http://localhost:5173".to_string());
+    let frontend_url =
+        std::env::var("FRONTEND_URL").unwrap_or_else(|_| "http://localhost:5173".to_string());
     let link = format!("{}/verify?token={}", frontend_url, token);
 
     let smtp_host = std::env::var("SMTP_HOST")?;
     let smtp_username = std::env::var("SMTP_USERNAME")?;
     let smtp_password = std::env::var("SMTP_PASSWORD")?;
-    let from_email = std::env::var("FROM_EMAIL").unwrap_or_else(|_| "Skysync <bartoszkasyna@gmail.com>".to_string());
+    let from_email = std::env::var("FROM_EMAIL")
+        .unwrap_or_else(|_| "Skysync <bartoszkasyna@gmail.com>".to_string());
 
     let email = Message::builder()
         .from(from_email.parse()?)
@@ -159,9 +191,10 @@ pub async fn send_verification_email(
         ))?;
     let creds = Credentials::new(smtp_username, smtp_password);
 
-    let mailer: AsyncSmtpTransport<Tokio1Executor> = AsyncSmtpTransport::<Tokio1Executor>::relay(&smtp_host)?
-        .credentials(creds)
-        .build();
+    let mailer: AsyncSmtpTransport<Tokio1Executor> =
+        AsyncSmtpTransport::<Tokio1Executor>::relay(&smtp_host)?
+            .credentials(creds)
+            .build();
 
     mailer.send(email).await?;
     Ok(())

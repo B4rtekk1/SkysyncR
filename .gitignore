@@ -1,4 +1,5 @@
 backend/target
+backend/uploads
 infra/env/.env.dev
 infra/env/.env.prod
 .idea

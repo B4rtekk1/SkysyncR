@@ -120,16 +120,19 @@ export async function getStorageQuota(): Promise<StorageQuota> {
 }
 
 export async function uploadFile(params: {
-    file: File
+    encryptedFile: Blob
+    originalFilename: string
+    originalMimeType: string | null
     folderId?: string
-    encryptedKey: ArrayBuffer
+    wrappedKey: ArrayBuffer
     encryptionNonce: ArrayBuffer
 }): Promise<ApiFile> {
     const form = new FormData()
-    form.append('file', params.file)
-    form.append('filename', params.file.name)
+    form.append('file', params.encryptedFile, params.originalFilename)
+    form.append('filename', params.originalFilename)
+    if (params.originalMimeType) form.append('mime_type', params.originalMimeType)
     if (params.folderId) form.append('folder_id', params.folderId)
-    form.append('encrypted_key', arrayBufferToBase64(params.encryptedKey))
+    form.append('encrypted_key', arrayBufferToBase64(params.wrappedKey))
     form.append('encryption_nonce', arrayBufferToBase64(params.encryptionNonce))
 
     const res = await authenticatedFetch(`${API_BASE}files`, {
@@ -152,6 +155,14 @@ export async function restoreFile(id: string): Promise<void> {
         method: 'POST',
     })
     if (!res.ok) throw new Error(await parseErrorMessage(res))
+}
+
+export async function downloadFile(id: string): Promise<Blob> {
+    const res = await authenticatedFetch(`${API_BASE}files/${id}/download`, {
+        method: 'GET',
+    })
+    if (!res.ok) throw new Error(await parseErrorMessage(res))
+    return res.blob()
 }
 
 function arrayBufferToBase64(buf: ArrayBuffer): string {

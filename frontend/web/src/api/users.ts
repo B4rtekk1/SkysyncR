@@ -1,6 +1,6 @@
 const url = 'http://localhost:3000/'
 
-import { saveTokens, type TokenPair } from './auth'
+import { authenticatedFetch, saveTokens, type TokenPair } from './auth'
 import { withDeviceHeaders } from './device'
 
 export interface RegisterPayload {
@@ -20,6 +20,12 @@ export interface RegisterResponse {
 }
 
 export type LoginResponse = TokenPair
+
+export interface CurrentUserResponse {
+  id: string
+  display_name: string | null
+  public_key: string | null
+}
 
 export async function registerUser(
   payload: RegisterPayload,
@@ -67,4 +73,17 @@ export async function verifyUser(token: string): Promise<void> {
     const message = await res.text()
     throw new Error(message || 'Verification failed')
   }
+}
+
+export async function getCurrentUser(): Promise<CurrentUserResponse> {
+  const res = await authenticatedFetch(`${url}users/me`, {
+    method: 'GET',
+  })
+
+  if (!res.ok) {
+    const message = await res.text()
+    throw new Error(message || 'Could not load user profile')
+  }
+
+  return res.json()
 }

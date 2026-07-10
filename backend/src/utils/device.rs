@@ -15,10 +15,7 @@ pub struct DeviceContext {
 }
 
 impl DeviceContext {
-    pub fn from_headers(
-        headers: &HeaderMap,
-        peer_ip: Option<IpAddr>,
-    ) -> Result<Self, ApiError> {
+    pub fn from_headers(headers: &HeaderMap, peer_ip: Option<IpAddr>) -> Result<Self, ApiError> {
         let device_id = headers
             .get(DEVICE_ID_HEADER)
             .and_then(|value| value.to_str().ok())
@@ -26,8 +23,7 @@ impl DeviceContext {
             .filter(|value| !value.is_empty())
             .ok_or_else(|| ApiError::BadRequest("Missing device id".into()))?;
 
-        Uuid::parse_str(device_id)
-            .map_err(|_| ApiError::BadRequest("Invalid device id".into()))?;
+        Uuid::parse_str(device_id).map_err(|_| ApiError::BadRequest("Invalid device id".into()))?;
 
         let user_agent = headers
             .get(axum::http::header::USER_AGENT)
@@ -42,7 +38,6 @@ impl DeviceContext {
     }
 
     pub fn matches_stored(&self, stored_device_id: &str, stored_user_agent: Option<&str>) -> bool {
-        self.device_id == stored_device_id
-            && self.user_agent.as_deref() == stored_user_agent
+        self.device_id == stored_device_id && self.user_agent.as_deref() == stored_user_agent
     }
 }

@@ -1,15 +1,16 @@
+use crate::routes::files::files_routes;
+use crate::routes::storage::storage_routes;
+use crate::routes::users::users_routes;
+use crate::state::{AppConfig, AppState};
+use axum::http::{HeaderValue, Method};
 use axum::routing::get;
 use axum::{Json, Router};
-use axum::http::{HeaderValue, Method};
-use std::net::SocketAddr;
-use tower_governor::governor::GovernorConfigBuilder;
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
+use std::net::SocketAddr;
+use tower_governor::governor::GovernorConfigBuilder;
 use tower_http::cors::{AllowOrigin, Any, CorsLayer};
 use tower_http::set_header::SetResponseHeaderLayer;
-use crate::state::{AppConfig, AppState};
-use crate::routes::users::users_routes;
-use crate::routes::storage::storage_routes;
 
 #[derive(Serialize, Deserialize)]
 struct Message {
@@ -17,8 +18,7 @@ struct Message {
 }
 
 pub async fn connect() -> PgPool {
-    let database_url = std::env::var("DATABASE_URL")
-        .expect("DATABASE_URL must be set");
+    let database_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set");
 
     PgPool::connect(&database_url)
         .await
@@ -50,7 +50,7 @@ fn dev_cors_layer() -> CorsLayer {
 
     CorsLayer::new()
         .allow_origin(allow_origin)
-        .allow_methods([Method::GET, Method::POST, Method::OPTIONS])
+        .allow_methods([Method::GET, Method::POST, Method::DELETE, Method::OPTIONS])
         .allow_headers(Any)
         .expose_headers(Any)
 }
@@ -93,6 +93,7 @@ pub async fn run_server() {
         .route("/", get(hello))
         .merge(auth_routes)
         .merge(storage_routes())
+        .merge(files_routes())
         .with_state(state)
         .layer(tower_governor::GovernorLayer::new(global_governor))
         .layer(security_headers_layer())

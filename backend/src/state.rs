@@ -1,4 +1,5 @@
 use sqlx::PgPool;
+use std::path::PathBuf;
 
 #[derive(Clone)]
 pub struct AppState {
@@ -12,6 +13,8 @@ pub struct AppConfig {
     pub max_failed_login_attempts: i32,
     pub lockout_duration_minutes: i32,
     pub verification_token_ttl_hours: i64,
+    pub upload_dir: PathBuf,
+    pub max_file_size_bytes: u64,
     pub is_dev: bool,
 }
 
@@ -32,6 +35,15 @@ impl AppConfig {
             .and_then(|v| v.parse().ok())
             .unwrap_or(24);
 
+        let upload_dir = std::env::var("UPLOAD_DIR")
+            .map(PathBuf::from)
+            .unwrap_or_else(|_| PathBuf::from("uploads"));
+
+        let max_file_size_bytes = std::env::var("MAX_FILE_SIZE_BYTES")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(1_073_741_824);
+
         let is_dev = std::env::var("APP_ENV")
             .map(|v| v == "development" || v == "dev")
             .unwrap_or(true);
@@ -41,6 +53,8 @@ impl AppConfig {
             max_failed_login_attempts,
             lockout_duration_minutes,
             verification_token_ttl_hours,
+            upload_dir,
+            max_file_size_bytes,
             is_dev,
         }
     }

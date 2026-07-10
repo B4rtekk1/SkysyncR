@@ -1,12 +1,12 @@
 mod app;
 mod auth;
+mod crypto;
 mod db;
-mod state;
+mod handlers;
 mod models;
 mod routes;
-mod handlers;
 mod services;
-mod crypto;
+mod state;
 mod utils;
 
 use app::run_server;

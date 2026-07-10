@@ -1,10 +1,10 @@
-use axum::{extract::State, Json};
+use axum::{Json, extract::State};
 use serde::Serialize;
 
 use crate::auth::AuthUser;
 use crate::db::storage::get_storage_quota;
 use crate::state::AppState;
-use crate::utils::errors::{internal_error, ApiError};
+use crate::utils::errors::{ApiError, internal_error};
 
 #[derive(Serialize)]
 pub struct StorageQuotaResponse {

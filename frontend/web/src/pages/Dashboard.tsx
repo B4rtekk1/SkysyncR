@@ -1,4 +1,13 @@
-import React, { useEffect, useMemo, useRef, useState, type ChangeEvent, type DragEvent } from 'react'
+import React, {
+    useEffect,
+    useLayoutEffect,
+    useMemo,
+    useRef,
+    useState,
+    type ChangeEvent,
+    type DragEvent,
+    type MouseEvent as ReactMouseEvent,
+} from 'react'
 import { Link } from 'react-router-dom'
 import '../App.css'
 import '../css/Dashbord.css'
@@ -11,17 +20,66 @@ import {
     softDeleteFile,
     restoreFile,
     uploadFile,
+    downloadFile,
     type ApiFile,
     type SharedFile,
     type StorageQuota,
 } from '../api/files'
 import { logout } from '../api/auth'
-import { generateFileKey, encryptFile, exportRawKey } from '../crypto/fileEncryption'
+import { getCurrentUser } from '../api/users'
+import {
+    generateFileKey,
+    encryptFile,
+    wrapFileKeyForUser,
+} from '../crypto/fileEncryption'
 
 type ViewKey = 'all' | 'favourites' | 'shared' | 'trash'
+type LayoutMode = 'grid' | 'list'
 type Item = ApiFile | SharedFile
 
+type NavIndicator = {
+    x: number
+    y: number
+    width: number
+    height: number
+    visible: boolean
+}
+
 const FAVOURITES_STORAGE_KEY = 'favourite_file_ids'
+const LOCAL_FILE_META_STORAGE_KEY = 'local_file_metadata'
+const LAYOUT_MODE_STORAGE_KEY = 'file_layout_mode'
+
+type LocalFileMeta = {
+    filename: string
+    mime_type: string | null
+}
+
+function loadLocalFileMetadata(): Record<string, LocalFileMeta> {
+    try {
+        const raw = localStorage.getItem(LOCAL_FILE_META_STORAGE_KEY)
+        return raw ? (JSON.parse(raw) as Record<string, LocalFileMeta>) : {}
+    } catch {
+        return {}
+    }
+}
+
+function saveLocalFileMetadata(id: string, metadata: LocalFileMeta) {
+    try {
+        const current = loadLocalFileMetadata()
+        current[id] = metadata
+        localStorage.setItem(LOCAL_FILE_META_STORAGE_KEY, JSON.stringify(current))
+    } catch {
+        // keep server-side encrypted metadata as the fallback
+    }
+}
+
+function applyLocalFileMetadata<T extends Item>(data: T[]): T[] {
+    const metadata = loadLocalFileMetadata()
+    return data.map((item) => {
+        const local = metadata[item.id]
+        return local ? { ...item, filename: local.filename, mime_type: local.mime_type } : item
+    })
+}
 
 function loadFavouriteIds(): Set<string> {
     try {
@@ -35,6 +93,23 @@ function loadFavouriteIds(): Set<string> {
 function saveFavouriteIds(ids: Set<string>) {
     try {
         localStorage.setItem(FAVOURITES_STORAGE_KEY, JSON.stringify(Array.from(ids)))
+    } catch {
+        // ignore storage failures (e.g. private browsing)
+    }
+}
+
+function loadLayoutMode(): LayoutMode {
+    try {
+        const raw = localStorage.getItem(LAYOUT_MODE_STORAGE_KEY)
+        return raw === 'list' || raw === 'grid' ? raw : 'grid'
+    } catch {
+        return 'grid'
+    }
+}
+
+function saveLayoutMode(mode: LayoutMode) {
+    try {
+        localStorage.setItem(LAYOUT_MODE_STORAGE_KEY, mode)
     } catch {
         // ignore storage failures (e.g. private browsing)
     }
@@ -72,6 +147,33 @@ function applySavedOrder<T extends Item>(data: T[], view: ViewKey): T[] {
 
 const NAV_ORDER_STORAGE_KEY = 'nav_order'
 const DEFAULT_NAV_ORDER: ViewKey[] = ['all', 'favourites', 'shared', 'trash']
+const SIDEBAR_WIDTH_STORAGE_KEY = 'sidebar_width'
+const SIDEBAR_HIDDEN_STORAGE_KEY = 'sidebar_hidden'
+const MIN_SIDEBAR_WIDTH = 72
+const MAX_SIDEBAR_WIDTH = 340
+const DEFAULT_SIDEBAR_WIDTH = 240
+const COMPACT_SIDEBAR_WIDTH = 128
+
+function clampSidebarWidth(width: number) {
+    return Math.min(MAX_SIDEBAR_WIDTH, Math.max(MIN_SIDEBAR_WIDTH, Math.round(width)))
+}
+
+function loadSidebarWidth() {
+    try {
+        const raw = localStorage.getItem(SIDEBAR_WIDTH_STORAGE_KEY)
+        return raw ? clampSidebarWidth(Number(raw)) : DEFAULT_SIDEBAR_WIDTH
+    } catch {
+        return DEFAULT_SIDEBAR_WIDTH
+    }
+}
+
+function loadSidebarHidden() {
+    try {
+        return localStorage.getItem(SIDEBAR_HIDDEN_STORAGE_KEY) === 'true'
+    } catch {
+        return false
+    }
+}
 
 function loadNavOrder(): ViewKey[] {
     try {
@@ -167,30 +269,139 @@ function formatRelative(iso: string) {
     return new Date(iso).toLocaleDateString()
 }
 
-type FileKind = 'sheet' | 'doc' | 'archive' | 'video' | 'text' | 'image'
+type FileKind = 'sheet' | 'document' | 'presentation' | 'pdf' | 'archive' | 'video' | 'audio' | 'text' | 'image' | 'code' | 'file'
 
 function kindFromFile(filename: string, mime: string | null): FileKind {
     const ext = filename.split('.').pop()?.toLowerCase() ?? ''
-    if (mime?.startsWith('image/') || ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg'].includes(ext))
-        return 'image'
-    if (mime?.startsWith('video/') || ['mp4', 'mov', 'mkv', 'avi'].includes(ext)) return 'video'
-    if (['xlsx', 'xls', 'csv'].includes(ext)) return 'sheet'
-    if (['zip', 'rar', '7z', 'tar', 'gz'].includes(ext)) return 'archive'
-    if (['txt', 'md'].includes(ext)) return 'text'
-    return 'doc'
+    const normalizedMime = mime?.toLowerCase() ?? ''
+
+    if (normalizedMime.startsWith('image/') || ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'avif'].includes(ext)) return 'image'
+    if (normalizedMime.startsWith('video/') || ['mp4', 'mov', 'mkv', 'avi', 'webm'].includes(ext)) return 'video'
+    if (normalizedMime.startsWith('audio/') || ['mp3', 'wav', 'ogg', 'flac', 'm4a'].includes(ext)) return 'audio'
+    if (normalizedMime === 'application/pdf' || ext === 'pdf') return 'pdf'
+    if (
+        normalizedMime.includes('spreadsheet') ||
+        normalizedMime.includes('excel') ||
+        normalizedMime === 'text/csv' ||
+        ['xlsx', 'xls', 'csv', 'ods'].includes(ext)
+    ) {
+        return 'sheet'
+    }
+    if (normalizedMime.includes('presentation') || ['ppt', 'pptx', 'odp'].includes(ext)) return 'presentation'
+    if (['zip', 'rar', '7z', 'tar', 'gz', 'bz2'].includes(ext)) return 'archive'
+    if (
+        normalizedMime.startsWith('text/') ||
+        ['txt', 'md', 'rtf'].includes(ext)
+    ) {
+        return ['js', 'jsx', 'ts', 'tsx', 'json', 'html', 'css', 'rs', 'py', 'java', 'go'].includes(ext) ? 'code' : 'text'
+    }
+    if (['js', 'jsx', 'ts', 'tsx', 'json', 'html', 'css', 'rs', 'py', 'java', 'go', 'xml', 'yaml', 'yml'].includes(ext)) return 'code'
+    if (['doc', 'docx', 'odt'].includes(ext) || normalizedMime.includes('wordprocessingml')) return 'document'
+    return 'file'
 }
 
 const KIND_ACCENT: Record<FileKind, string> = {
     sheet: 'var(--signal)',
-    doc: 'var(--mist)',
+    document: 'var(--mist)',
+    presentation: 'var(--amber)',
+    pdf: '#ff6b6b',
     archive: 'var(--amber)',
     video: 'var(--amber)',
+    audio: 'var(--signal)',
     text: 'var(--mist)',
     image: 'var(--signal)',
+    code: 'var(--mist)',
+    file: 'var(--mist)',
+}
+
+const KIND_LABELS: Record<FileKind, string> = {
+    sheet: 'Sheets',
+    document: 'Docs',
+    presentation: 'Slides',
+    pdf: 'PDFs',
+    archive: 'Archives',
+    video: 'Videos',
+    audio: 'Audio',
+    text: 'Text',
+    image: 'Images',
+    code: 'Code',
+    file: 'Files',
 }
 
 function FileIcon({ kind }: { kind: FileKind }) {
     const accent = KIND_ACCENT[kind]
+    const common = {
+        stroke: accent,
+        strokeWidth: '1.4',
+        fill: 'none',
+    }
+
+    if (kind === 'image') {
+        return (
+            <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true">
+                <rect x="3.5" y="5" width="17" height="14" rx="2" {...common} />
+                <circle cx="8.5" cy="9.5" r="1.4" {...common} />
+                <path d="M5.5 17l4.2-4.4 3 3 2.1-2.2 3.7 3.6" {...common} />
+            </svg>
+        )
+    }
+    if (kind === 'video') {
+        return (
+            <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true">
+                <rect x="4" y="6" width="12" height="12" rx="2" {...common} />
+                <path d="M16 10l4-2.3v8.6L16 14" {...common} />
+            </svg>
+        )
+    }
+    if (kind === 'audio') {
+        return (
+            <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M9 17V7l8-2v10" {...common} />
+                <circle cx="7" cy="17" r="2" {...common} />
+                <circle cx="15" cy="15" r="2" {...common} />
+            </svg>
+        )
+    }
+    if (kind === 'archive') {
+        return (
+            <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M6 3h12v18H6z" {...common} />
+                <path d="M10 3v4h2V3M12 7v4h2V7M10 11v4h2v-4M12 15v3" {...common} />
+            </svg>
+        )
+    }
+    if (kind === 'sheet') {
+        return (
+            <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M6 2.5h8l4 4v14a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V3.5a1 1 0 0 1 1-1Z" {...common} />
+                <path d="M14 2.5V7a1 1 0 0 0 1 1h4.5M8 12h8M8 15h8M11 9v9" {...common} />
+            </svg>
+        )
+    }
+    if (kind === 'pdf') {
+        return (
+            <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M6 2.5h8l4 4v14a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V3.5a1 1 0 0 1 1-1Z" {...common} />
+                <path d="M8 16c1.8-3.3 3.2-6.5 3.1-8.2-.1-1.4-1.8-1.2-1.6.2.3 2.5 2.8 6.8 5.7 7.6 1.3.4 1.8-.9.6-1.3-1.8-.6-5.2.4-7.8 1.7Z" {...common} />
+            </svg>
+        )
+    }
+    if (kind === 'code') {
+        return (
+            <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M8.5 8L5 12l3.5 4M15.5 8L19 12l-3.5 4M13 6.5l-2 11" {...common} />
+            </svg>
+        )
+    }
+    if (kind === 'presentation') {
+        return (
+            <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M4 4h16v11H4zM12 15v5M8.5 20h7" {...common} />
+                <path d="M8 11l2.5-2.5 2 2L16 7" {...common} />
+            </svg>
+        )
+    }
+
     return (
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
             <path
@@ -235,17 +446,56 @@ const NAV_ICONS: Record<ViewKey, React.ReactElement> = {
 }
 
 const STAR_ICON_FILLED = (
-    <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+    <svg width="19" height="19" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
         <path d="M12 3.5l2.55 5.17 5.7.83-4.13 4.02.98 5.68L12 16.4l-5.1 2.8.98-5.68-4.13-4.02 5.7-.83L12 3.5Z" />
     </svg>
 )
 
 const STAR_ICON_OUTLINE = (
-    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+    <svg width="19" height="19" viewBox="0 0 24 24" fill="none" aria-hidden="true">
         <path
             d="M12 3.5l2.55 5.17 5.7.83-4.13 4.02.98 5.68L12 16.4l-5.1 2.8.98-5.68-4.13-4.02 5.7-.83L12 3.5Z"
             stroke="currentColor"
             strokeWidth="1.4"
+        />
+    </svg>
+)
+
+const TRASH_OPEN_ICON = (
+    <svg className="trash-open-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path
+            className="trash-open-icon__lid"
+            d="M8.5 6.5h7M10 4.5h4"
+            stroke="currentColor"
+            strokeWidth="1.6"
+            strokeLinecap="round"
+        />
+        <path
+            d="M6.5 8h11l-.8 11.2a1.5 1.5 0 0 1-1.5 1.4H8.8a1.5 1.5 0 0 1-1.5-1.4L6.5 8Z"
+            stroke="currentColor"
+            strokeWidth="1.6"
+            strokeLinejoin="round"
+        />
+        <path d="M10 11v6M14 11v6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+    </svg>
+)
+
+const DOWNLOAD_ICON = (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path
+            className="download-icon__arrow"
+            d="M12 4v10M8.25 10.25 12 14l3.75-3.75"
+            stroke="currentColor"
+            strokeWidth="1.7"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+        />
+        <path
+            className="download-icon__tray"
+            d="M5 18.5h14"
+            stroke="currentColor"
+            strokeWidth="1.7"
+            strokeLinecap="round"
         />
     </svg>
 )
@@ -278,6 +528,52 @@ const DRAG_HANDLE_ICON = (
     </svg>
 )
 
+const SIDEBAR_HIDE_ICON = (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <rect x="3.75" y="4.5" width="16.5" height="15" rx="2.4" stroke="currentColor" strokeWidth="1.6" />
+        <path d="M8.5 4.5v15" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+        <path
+            d="M15.25 8.75 12 12l3.25 3.25"
+            stroke="currentColor"
+            strokeWidth="1.8"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+        />
+    </svg>
+)
+
+const SIDEBAR_SHOW_ICON = (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <rect x="3.75" y="4.5" width="16.5" height="15" rx="2.4" stroke="currentColor" strokeWidth="1.6" />
+        <path d="M8.5 4.5v15" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+        <path
+            d="m12.75 8.75 3.25 3.25-3.25 3.25"
+            stroke="currentColor"
+            strokeWidth="1.8"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+        />
+    </svg>
+)
+
+const GRID_VIEW_ICON = (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <rect x="4" y="4" width="6" height="6" rx="1.2" stroke="currentColor" strokeWidth="1.5" />
+        <rect x="14" y="4" width="6" height="6" rx="1.2" stroke="currentColor" strokeWidth="1.5" />
+        <rect x="4" y="14" width="6" height="6" rx="1.2" stroke="currentColor" strokeWidth="1.5" />
+        <rect x="14" y="14" width="6" height="6" rx="1.2" stroke="currentColor" strokeWidth="1.5" />
+    </svg>
+)
+
+const LIST_VIEW_ICON = (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path d="M8 6h12M8 12h12M8 18h12" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+        <circle cx="4.5" cy="6" r="1.2" fill="currentColor" />
+        <circle cx="4.5" cy="12" r="1.2" fill="currentColor" />
+        <circle cx="4.5" cy="18" r="1.2" fill="currentColor" />
+    </svg>
+)
+
 function isShared(item: Item): item is SharedFile {
     return 'permission' in item
 }
@@ -288,6 +584,7 @@ function FileCard({
                       pending,
                       onDelete,
                       onRestore,
+                      onDownload,
                       view,
                       isFavourite,
                       onToggleFavourite,
@@ -305,6 +602,7 @@ function FileCard({
     pending: boolean
     onDelete?: (id: string) => void
     onRestore?: (id: string) => void
+    onDownload?: (item: Item) => void
     view: ViewKey
     isFavourite?: boolean
     onToggleFavourite?: (id: string) => void
@@ -319,10 +617,17 @@ function FileCard({
 }) {
     const display = useDecryptReveal(item.filename, index * 60)
     const kind = kindFromFile(item.filename, item.mime_type)
+    const typeLabel = KIND_LABELS[kind]
+    const [favouriteTouched, setFavouriteTouched] = useState(false)
+    const canToggleFavourite = Boolean(onToggleFavourite && !isShared(item))
+    const canDownload = Boolean(onDownload && view !== 'trash')
+    const hasAction = Boolean(canDownload || (view === 'all' && onDelete) || (view === 'trash' && onRestore))
 
     return (
         <article
-            className={`file-card ${isDragging ? 'is-dragging-card' : ''} ${isDropTarget ? 'is-drop-target' : ''}`}
+            className={`file-card ${canToggleFavourite ? 'file-card--has-favourite' : ''} ${
+                hasAction ? 'file-card--has-action' : ''
+            } ${isDragging ? 'is-dragging-card' : ''} ${isDropTarget ? 'is-drop-target' : ''}`}
             draggable={draggable && !pending}
             onDragStart={(e) => onDragStartCard?.(item.id, e)}
             onDragEnter={(e) => {
@@ -343,10 +648,15 @@ function FileCard({
                     {DRAG_HANDLE_ICON}
                 </span>
             )}
-            {onToggleFavourite && !isShared(item) && (
+            {canToggleFavourite && (
                 <button
-                    className={`file-card__fav ${isFavourite ? 'is-active' : ''}`}
-                    onClick={() => onToggleFavourite(item.id)}
+                    className={`file-card__fav ${isFavourite ? 'is-active' : ''} ${
+                        favouriteTouched ? 'has-favourite-motion' : ''
+                    }`}
+                    onClick={() => {
+                        setFavouriteTouched(true)
+                        onToggleFavourite?.(item.id)
+                    }}
                     aria-label={isFavourite ? 'Remove from favourites' : 'Add to favourites'}
                     aria-pressed={isFavourite}
                     type="button"
@@ -376,18 +686,39 @@ function FileCard({
                 {display}
             </p>
             <p className="file-card__meta">
-                {formatBytes(item.size_bytes)} · {formatRelative(item.updated_at)}
+                {typeLabel} · {formatBytes(item.size_bytes)} · {formatRelative(item.updated_at)}
                 {isShared(item) && item.shared_by_user_name ? ` · shared by ${item.shared_by_user_name}` : ''}
             </p>
-            {view === 'all' && onDelete && (
-                <button className="file-card__action" onClick={() => onDelete(item.id)}>
-                    Move to trash
-                </button>
-            )}
-            {view === 'trash' && onRestore && (
-                <button className="file-card__action" onClick={() => onRestore(item.id)}>
-                    Restore
-                </button>
+            {hasAction && (
+                <div className="file-card__actions">
+                    {canDownload && (
+                        <button
+                            className="file-card__action file-card__action--download"
+                            onClick={() => onDownload?.(item)}
+                            aria-label={`Download ${item.filename}`}
+                            title="Download"
+                            type="button"
+                        >
+                            {DOWNLOAD_ICON}
+                        </button>
+                    )}
+                    {view === 'all' && onDelete && (
+                        <button
+                            className="file-card__action file-card__action--trash"
+                            onClick={() => onDelete(item.id)}
+                            aria-label={`Move ${item.filename} to trash`}
+                            title="Move to trash"
+                            type="button"
+                        >
+                            {TRASH_OPEN_ICON}
+                        </button>
+                    )}
+                    {view === 'trash' && onRestore && (
+                        <button className="file-card__action" onClick={() => onRestore(item.id)}>
+                            Restore
+                        </button>
+                    )}
+                </div>
             )}
         </article>
     )
@@ -409,6 +740,7 @@ function Dashboard() {
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState<string | null>(null)
     const [quota, setQuota] = useState<StorageQuota | null>(null)
+    const [storageItems, setStorageItems] = useState<ApiFile[]>([])
     const [query, setQuery] = useState('')
     const [menuOpen, setMenuOpen] = useState(false)
     const [dragActive, setDragActive] = useState(false)
@@ -418,7 +750,21 @@ function Dashboard() {
     const [navOrder, setNavOrder] = useState<ViewKey[]>(() => loadNavOrder())
     const [draggedNavKey, setDraggedNavKey] = useState<ViewKey | null>(null)
     const [dropNavTarget, setDropNavTarget] = useState<ViewKey | null>(null)
+    const [sidebarWidth, setSidebarWidth] = useState(() => loadSidebarWidth())
+    const [sidebarHidden, setSidebarHidden] = useState(() => loadSidebarHidden())
+    const [layoutMode, setLayoutMode] = useState<LayoutMode>(() => loadLayoutMode())
+    const [publicKey, setPublicKey] = useState<string | null>(null)
     const menuRef = useRef<HTMLDivElement>(null)
+    const navListRef = useRef<HTMLElement>(null)
+    const navItemRefs = useRef<Partial<Record<ViewKey, HTMLButtonElement>>>({})
+    const [navIndicator, setNavIndicator] = useState<NavIndicator>({
+        x: 0,
+        y: 0,
+        width: 0,
+        height: 0,
+        visible: false,
+    })
+    const [navIndicatorPulling, setNavIndicatorPulling] = useState(false)
 
     // TODO: replace with a real "current user" fetch once api/users.ts exposes one.
     const displayName = useMemo(() => {
@@ -427,8 +773,9 @@ function Dashboard() {
 
     const refreshQuota = async () => {
         try {
-            const data = await getStorageQuota()
-            setQuota(data)
+            const [quotaData, fileData] = await Promise.all([getStorageQuota(), listFiles()])
+            setQuota(quotaData)
+            setStorageItems(applyLocalFileMetadata(fileData))
         } catch {
             setQuota(null)
         }
@@ -437,6 +784,73 @@ function Dashboard() {
     useEffect(() => {
         void refreshQuota()
     }, [])
+
+    useEffect(() => {
+        let active = true
+        getCurrentUser()
+            .then((user) => {
+                if (active) setPublicKey(user.public_key)
+            })
+            .catch(() => {
+                if (active) setPublicKey(null)
+            })
+
+        return () => {
+            active = false
+        }
+    }, [])
+
+    useLayoutEffect(() => {
+        function updateNavIndicator() {
+            const nav = navListRef.current
+            const activeItem = navItemRefs.current[view]
+            if (!nav || !activeItem || sidebarHidden) {
+                setNavIndicator((prev) => ({ ...prev, visible: false }))
+                return
+            }
+
+            const navRect = nav.getBoundingClientRect()
+            const itemRect = activeItem.getBoundingClientRect()
+            setNavIndicator({
+                x: itemRect.left - navRect.left,
+                y: itemRect.top - navRect.top,
+                width: itemRect.width,
+                height: itemRect.height,
+                visible: true,
+            })
+        }
+
+        updateNavIndicator()
+        window.addEventListener('resize', updateNavIndicator)
+        return () => window.removeEventListener('resize', updateNavIndicator)
+    }, [view, navOrder, sidebarWidth, sidebarHidden])
+
+    useEffect(() => {
+        setNavIndicatorPulling(false)
+        const frame = requestAnimationFrame(() => setNavIndicatorPulling(true))
+        const timeout = window.setTimeout(() => setNavIndicatorPulling(false), 540)
+
+        return () => {
+            cancelAnimationFrame(frame)
+            window.clearTimeout(timeout)
+        }
+    }, [view])
+
+    useEffect(() => {
+        try {
+            localStorage.setItem(SIDEBAR_WIDTH_STORAGE_KEY, String(sidebarWidth))
+        } catch {
+            // ignore storage failures (e.g. private browsing)
+        }
+    }, [sidebarWidth])
+
+    useEffect(() => {
+        try {
+            localStorage.setItem(SIDEBAR_HIDDEN_STORAGE_KEY, String(sidebarHidden))
+        } catch {
+            // ignore storage failures (e.g. private browsing)
+        }
+    }, [sidebarHidden])
 
     useEffect(() => {
         let active = true
@@ -453,7 +867,13 @@ function Dashboard() {
                         : listSharedFilesWithMe()
             })
             .then((data) => {
-                if (active && data) setItems(applySavedOrder(data, view))
+                if (active && data) {
+                    const withLocalMetadata = applyLocalFileMetadata(data)
+                    setItems(applySavedOrder(withLocalMetadata, view))
+                    if (view === 'all' || view === 'favourites') {
+                        setStorageItems(withLocalMetadata as ApiFile[])
+                    }
+                }
             })
             .catch((e) => {
                 if (active) setError(e instanceof Error ? e.message : 'Could not load your files.')
@@ -500,21 +920,34 @@ function Dashboard() {
             setPendingIds((prev) => new Set(prev).add(tempId))
 
             try {
+                if (!publicKey) {
+                    throw new Error('Encryption key unavailable. Sign in again before uploading.')
+                }
+
                 const key = await generateFileKey()
                 const { ciphertext, nonce } = await encryptFile(file, key)
-                const rawKey = await exportRawKey(key)
-                // NOTE: rawKey should be wrapped with the user's RSA public key
-                // (crypto/keys.ts) before this point in production — sending the
-                // unwrapped key is a placeholder until that helper is confirmed.
-                const encryptedBlob = new File([ciphertext], file.name, { type: 'application/octet-stream' })
+                const wrappedKey = await wrapFileKeyForUser(key, publicKey)
+                const originalMimeType = file.type || null
+                const encryptedBlob = new Blob([ciphertext], { type: originalMimeType || 'application/octet-stream' })
 
                 const saved = await uploadFile({
-                    file: encryptedBlob,
-                    encryptedKey: rawKey,
+                    encryptedFile: encryptedBlob,
+                    originalFilename: file.name,
+                    originalMimeType,
+                    wrappedKey,
                     encryptionNonce: nonce.buffer as ArrayBuffer,
                 })
 
-                setItems((prev) => prev.map((i) => (i.id === tempId ? saved : i)))
+                const visibleSaved = {
+                    ...saved,
+                    filename: file.name,
+                    mime_type: file.type || null,
+                }
+                saveLocalFileMetadata(saved.id, {
+                    filename: file.name,
+                    mime_type: file.type || null,
+                })
+                setItems((prev) => prev.map((i) => (i.id === tempId ? visibleSaved : i)))
             } catch (e) {
                 setItems((prev) => prev.filter((i) => i.id !== tempId))
                 setError(e instanceof Error ? e.message : `Failed to upload ${file.name}.`)
@@ -569,6 +1002,22 @@ function Dashboard() {
         }
     }
 
+    async function handleDownload(item: Item) {
+        try {
+            const blob = await downloadFile(item.id)
+            const url = URL.createObjectURL(blob)
+            const link = document.createElement('a')
+            link.href = url
+            link.download = item.filename
+            document.body.appendChild(link)
+            link.click()
+            link.remove()
+            URL.revokeObjectURL(url)
+        } catch (e) {
+            setError(e instanceof Error ? e.message : 'Could not download that file.')
+        }
+    }
+
     function toggleFavourite(id: string) {
         setFavouriteIds((prev) => {
             const next = new Set(prev)
@@ -580,6 +1029,11 @@ function Dashboard() {
             saveFavouriteIds(next)
             return next
         })
+    }
+
+    function changeLayoutMode(mode: LayoutMode) {
+        setLayoutMode(mode)
+        saveLayoutMode(mode)
     }
 
     function handleCardDragStart(id: string, e: DragEvent<HTMLElement>) {
@@ -656,6 +1110,25 @@ function Dashboard() {
         setDropNavTarget(null)
     }
 
+    function startSidebarResize(e: ReactMouseEvent<HTMLButtonElement>) {
+        e.preventDefault()
+        setSidebarHidden(false)
+
+        function onMove(event: MouseEvent) {
+            setSidebarWidth(clampSidebarWidth(event.clientX))
+        }
+
+        function onUp() {
+            window.removeEventListener('mousemove', onMove)
+            window.removeEventListener('mouseup', onUp)
+            document.body.classList.remove('is-resizing-sidebar')
+        }
+
+        document.body.classList.add('is-resizing-sidebar')
+        window.addEventListener('mousemove', onMove)
+        window.addEventListener('mouseup', onUp)
+    }
+
     async function signOut() {
         await logout()
         window.location.href = '/login'
@@ -666,19 +1139,88 @@ function Dashboard() {
         .filter((i) => (view === 'favourites' ? favouriteIds.has(i.id) : true))
 
     const usedPct = quota ? Math.min(100, Math.round((quota.used_bytes / quota.total_bytes) * 100)) : 0
+    const storageStatus = usedPct >= 90 ? 'critical' : usedPct >= 80 ? 'warning' : 'healthy'
+    const storageStatusText =
+        storageStatus === 'critical'
+            ? 'Storage almost full'
+            : storageStatus === 'warning'
+                ? 'Storage getting full'
+                : 'Plenty of room'
+    const storageBreakdown = Object.entries(
+        storageItems.reduce(
+            (acc, item) => {
+                const kind = kindFromFile(item.filename, item.mime_type)
+                acc[kind] = (acc[kind] ?? 0) + item.size_bytes
+                return acc
+            },
+            {} as Record<FileKind, number>,
+        ),
+    )
+        .map(([kind, bytes]) => ({
+            kind: kind as FileKind,
+            bytes,
+        }))
+        .sort((a, b) => b.bytes - a.bytes)
+        .slice(0, 4)
+    const storageBreakdownTotal = storageBreakdown.reduce((sum, item) => sum + item.bytes, 0)
+    const sidebarCompact = !sidebarHidden && sidebarWidth <= COMPACT_SIDEBAR_WIDTH
 
     return (
-        <div className="shell">
-            <aside className="shell__sidebar">
+        <div
+            className={`shell ${sidebarHidden ? 'is-sidebar-hidden' : ''} ${sidebarCompact ? 'is-sidebar-compact' : ''}`}
+            style={{ '--sidebar-width': sidebarHidden ? '0px' : `${sidebarWidth}px` } as React.CSSProperties}
+        >
+            <aside className="shell__sidebar" aria-hidden={sidebarHidden}>
                 <Link to="/" className="shell__logo">
                     <span className="nav__logo-mark" aria-hidden="true" />
-                    SkysyncR
+                    <span className="shell__sidebar-label">SkysyncR</span>
                 </Link>
 
-                <nav className="shell__navlist">
+                <button
+                    className="shell__sidebar-toggle"
+                    type="button"
+                    onClick={() => setSidebarHidden(true)}
+                    aria-label="Hide navigation"
+                    title="Hide navigation"
+                >
+                    {SIDEBAR_HIDE_ICON}
+                </button>
+
+                <button
+                    className="shell__resize-handle"
+                    type="button"
+                    onMouseDown={startSidebarResize}
+                    aria-label="Resize navigation"
+                    title="Drag to resize navigation"
+                />
+
+                <nav
+                    className="shell__navlist shell__navlist--primary"
+                    ref={navListRef}
+                    style={
+                        {
+                            '--nav-indicator-x': `${navIndicator.x}px`,
+                            '--nav-indicator-y': `${navIndicator.y}px`,
+                            '--nav-indicator-width': `${navIndicator.width}px`,
+                            '--nav-indicator-height': `${navIndicator.height}px`,
+                            '--nav-indicator-opacity': navIndicator.visible ? 1 : 0,
+                        } as React.CSSProperties
+                    }
+                >
+                    <span
+                        className={`shell__nav-indicator ${navIndicatorPulling ? 'is-pulling' : ''}`}
+                        aria-hidden="true"
+                    />
                     {navOrder.map((key) => (
                         <button
                             key={key}
+                            ref={(node) => {
+                                if (node) {
+                                    navItemRefs.current[key] = node
+                                } else {
+                                    delete navItemRefs.current[key]
+                                }
+                            }}
                             className={`shell__navitem ${view === key ? 'is-active' : ''} ${
                                 draggedNavKey === key ? 'is-dragging-nav' : ''
                             } ${dropNavTarget === key ? 'is-drop-target-nav' : ''}`}
@@ -700,7 +1242,7 @@ function Dashboard() {
                         >
                             <span className="shell__navicon shell__navicon--handle">{DRAG_HANDLE_ICON}</span>
                             <span className="shell__navicon">{NAV_ICONS[key]}</span>
-                            {NAV_LABELS[key]}
+                            <span className="shell__sidebar-label">{NAV_LABELS[key]}</span>
                         </button>
                     ))}
                 </nav>
@@ -708,7 +1250,7 @@ function Dashboard() {
                 <nav className="shell__navlist shell__navlist--footer">
                     <Link to="/settings" className="shell__navitem">
                         <span className="shell__navicon">{SETTINGS_ICON}</span>
-                        Settings
+                        <span className="shell__sidebar-label">Settings</span>
                     </Link>
                 </nav>
 
@@ -719,14 +1261,62 @@ function Dashboard() {
               {quota ? `${formatBytes(quota.used_bytes)} / ${formatBytes(quota.total_bytes)}` : '—'}
             </span>
                     </div>
+                    <div className="shell__storage-summary">
+                        <strong>{quota ? `${usedPct}% used` : 'Quota unavailable'}</strong>
+                        <span className={`shell__storage-status shell__storage-status--${storageStatus}`}>
+                            {quota ? storageStatusText : 'Check connection'}
+                        </span>
+                    </div>
                     <div className="shell__storage-bar">
-                        <div className="shell__storage-fill" style={{ width: `${usedPct}%` }} />
+                        <div
+                            className={`shell__storage-fill shell__storage-fill--${storageStatus}`}
+                            style={{ width: `${usedPct}%` }}
+                        />
+                    </div>
+                    <div className="shell__storage-breakdown" aria-label="Storage by file type">
+                        {storageBreakdown.length > 0 ? (
+                            storageBreakdown.map((item) => {
+                                const percent = storageBreakdownTotal
+                                    ? Math.max(3, Math.round((item.bytes / storageBreakdownTotal) * 100))
+                                    : 0
+                                return (
+                                    <div className="shell__storage-type" key={item.kind}>
+                                        <div className="shell__storage-type-row">
+                                            <span>{KIND_LABELS[item.kind]}</span>
+                                            <span>{formatBytes(item.bytes)}</span>
+                                        </div>
+                                        <div className="shell__storage-type-bar">
+                                            <div
+                                                className="shell__storage-type-fill"
+                                                style={{
+                                                    width: `${percent}%`,
+                                                    background: KIND_ACCENT[item.kind],
+                                                }}
+                                            />
+                                        </div>
+                                    </div>
+                                )
+                            })
+                        ) : (
+                            <p className="shell__storage-empty">No files counted yet</p>
+                        )}
                     </div>
                 </div>
             </aside>
 
             <div className="shell__main">
                 <header className="shell__topbar">
+                    {sidebarHidden && (
+                        <button
+                            className="shell__show-sidebar"
+                            type="button"
+                            onClick={() => setSidebarHidden(false)}
+                            aria-label="Show navigation"
+                            title="Show navigation"
+                        >
+                            {SIDEBAR_SHOW_ICON}
+                        </button>
+                    )}
                     <label className="shell__search">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                             <circle cx="10.5" cy="10.5" r="6.5" stroke="currentColor" strokeWidth="1.6" />
@@ -793,12 +1383,37 @@ function Dashboard() {
                             </h1>
                         </div>
 
-                        {view === 'all' && (
-                            <label className="btn btn--solid">
-                                Upload
-                                <input type="file" multiple onChange={onUploadChange} style={{ display: 'none' }} />
-                            </label>
-                        )}
+                        <div className="shell__content-actions">
+                            <div className="view-toggle" role="group" aria-label="File layout">
+                                <button
+                                    className={`view-toggle__button ${layoutMode === 'grid' ? 'is-active' : ''}`}
+                                    type="button"
+                                    onClick={() => changeLayoutMode('grid')}
+                                    aria-label="Grid view"
+                                    aria-pressed={layoutMode === 'grid'}
+                                    title="Grid view"
+                                >
+                                    {GRID_VIEW_ICON}
+                                </button>
+                                <button
+                                    className={`view-toggle__button ${layoutMode === 'list' ? 'is-active' : ''}`}
+                                    type="button"
+                                    onClick={() => changeLayoutMode('list')}
+                                    aria-label="List view"
+                                    aria-pressed={layoutMode === 'list'}
+                                    title="List view"
+                                >
+                                    {LIST_VIEW_ICON}
+                                </button>
+                            </div>
+
+                            {view === 'all' && (
+                                <label className="btn btn--solid">
+                                    Upload
+                                    <input type="file" multiple onChange={onUploadChange} style={{ display: 'none' }} />
+                                </label>
+                            )}
+                        </div>
                     </div>
 
                     {error && (
@@ -842,7 +1457,7 @@ function Dashboard() {
                     )}
 
                     {!loading && visibleItems.length > 0 && (
-                        <div className="file-grid">
+                        <div className={`file-grid file-grid--${layoutMode}`}>
                             {visibleItems.map((item, i) => (
                                 <FileCard
                                     key={item.id}
@@ -852,6 +1467,7 @@ function Dashboard() {
                                     view={view}
                                     onDelete={view === 'all' ? handleDelete : undefined}
                                     onRestore={view === 'trash' ? handleRestore : undefined}
+                                    onDownload={view !== 'trash' ? handleDownload : undefined}
                                     isFavourite={favouriteIds.has(item.id)}
                                     onToggleFavourite={
                                         view === 'all' || view === 'favourites' ? toggleFavourite : undefined
