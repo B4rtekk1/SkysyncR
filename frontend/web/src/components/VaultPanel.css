@@ -161,7 +161,7 @@
   display: flex;
   justify-content: space-between;
   margin: 0;
-  font-family: var(--font-mono);
+  font-family: var(--font-mono), monospace;
   font-size: 0.78rem;
   padding-bottom: 8px;
   border-bottom: 1px dashed var(--line);

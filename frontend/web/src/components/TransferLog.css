@@ -26,7 +26,7 @@
 
 .log__title {
   margin: 0 0 0 8px;
-  font-family: var(--font-mono);
+  font-family: var(--font-mono), monospace;
   font-size: 0.75rem;
   color: var(--mist);
 }
@@ -43,7 +43,7 @@
   display: grid;
   grid-template-columns: 1fr auto;
   grid-template-rows: auto auto;
-  font-family: var(--font-mono);
+  font-family: var(--font-mono), monospace;
   font-size: 0.8rem;
   padding-bottom: 8px;
   border-bottom: 1px dashed var(--line);
