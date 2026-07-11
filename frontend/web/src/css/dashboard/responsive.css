@@ -234,7 +234,6 @@
 }
 
 .image-preview__stage {
-    min-height: 260px;
     min-width: 0;
     min-height: 0;
     display: grid;
