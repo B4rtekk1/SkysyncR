@@ -1,111 +1,26 @@
-import { useEffect, useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
-import "../App.css";
-import "../css/Login.css";
-import { verifyUser } from "../api/users";
-import ThemeToggle from "../components/ThemeToggle";
-
-type Status = "idle" | "verifying" | "success" | "error";
+import { useSearchParams } from 'react-router-dom'
+import '../App.css'
+import '../css/Login.css'
+import VerifyNav from './verify/VerifyNav'
+import VerifyStatusCard from './verify/VerifyStatusCard'
+import { useEmailVerification } from './verify/useEmailVerification'
 
 function VerifyEmail() {
-    const [searchParams] = useSearchParams();
-    const token = searchParams.get("token");
+  const [searchParams] = useSearchParams()
+  const token = searchParams.get('token')
+  const { status, error } = useEmailVerification(token)
 
-    const [status, setStatus] = useState<Status>("idle");
-    const [error, setError] = useState<string | null>(null);
+  return (
+      <div className="auth-page">
+        <VerifyNav />
 
-    useEffect(() => {
-        if (!token) return;
-
-        async function verify(verificationToken: string) {
-            setStatus('verifying');
-
-            try {
-                await verifyUser(verificationToken);
-                setStatus('success');
-            } catch (err) {
-                setError(
-                    err instanceof Error
-                        ? err.message
-                        : 'Something went wrong. Please try again.'
-                );
-                setStatus('error');
-            }
-        }
-
-        void verify(token);
-    }, [token]);
-
-    return (
-        <div className="auth-page">
-            <nav className="auth-nav">
-                <Link to="/" className="auth-nav__logo">
-                    <span className="auth-nav__logo-mark" aria-hidden="true" />
-                    SkysyncR
-                </Link>
-                <ThemeToggle className="nav__theme-toggle" />
-            </nav>
-
-            <main className="auth" style={{ gridTemplateColumns: "1fr" }}>
-                <section
-                    className="auth__form-wrap"
-                    style={{ justifyContent: "center" }}
-                >
-                    <div
-                        className="auth__form-card"
-                        style={{ textAlign: "center" }}
-                    >
-                        {status === "verifying" && (
-                            <>
-                                <h1 className="auth__title">Verifying your email…</h1>
-                                <p className="auth__subtitle">Just a moment.</p>
-                            </>
-                        )}
-
-                        {status === "success" && (
-                            <>
-                                <h1 className="auth__title">Email verified</h1>
-                                <p className="auth__subtitle">
-                                    Your email has been successfully verified.
-                                </p>
-
-                                <Link
-                                    to="/login"
-                                    className="btn btn--solid btn--lg"
-                                    style={{
-                                        width: "100%",
-                                        display: "block",
-                                        textAlign: "center",
-                                    }}
-                                >
-                                    Sign in
-                                </Link>
-                            </>
-                        )}
-
-                        {status === "error" && (
-                            <>
-                                <h1 className="auth__title">Verification failed</h1>
-                                <p className="auth__subtitle">{error}</p>
-
-                                <Link
-                                    to="/login"
-                                    className="btn btn--outline btn--lg"
-                                    style={{
-                                        width: "100%",
-                                        display: "block",
-                                        textAlign: "center",
-                                    }}
-                                >
-                                    Back to sign in
-                                </Link>
-                            </>
-                        )}
-                    </div>
-                </section>
-            </main>
-        </div>
-    );
+        <main className="auth auth--verify">
+          <section className="auth__form-wrap auth__form-wrap--centered">
+            <VerifyStatusCard status={status} error={error} />
+          </section>
+        </main>
+      </div>
+  )
 }
 
-export default VerifyEmail;
+export default VerifyEmail

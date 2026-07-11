@@ -1,0 +1,17 @@
+.auth--verify {
+  grid-template-columns: 1fr;
+}
+
+.auth__form-wrap--centered {
+  justify-content: center;
+}
+
+.verify-card {
+  text-align: center;
+}
+
+.verify-card__action {
+  width: 100%;
+  display: block;
+  text-align: center;
+}

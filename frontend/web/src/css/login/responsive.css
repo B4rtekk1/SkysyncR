@@ -1,0 +1,36 @@
+@media (max-width: 880px) {
+  .auth {
+    grid-template-columns: 1fr;
+    padding: 8px 24px 64px;
+    gap: 8px;
+  }
+
+  .auth__visual {
+    transform: scale(0.85);
+    margin-bottom: -24px;
+  }
+
+  .auth__form-wrap {
+    justify-content: center;
+  }
+}
+
+@media (max-width: 480px) {
+  .auth__form-card {
+    padding: 32px 22px;
+  }
+
+  .auth-nav {
+    padding: 16px 20px;
+  }
+
+  .password-requirements__list {
+    grid-template-columns: 1fr;
+  }
+
+  .password-requirements__header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+  }
+}

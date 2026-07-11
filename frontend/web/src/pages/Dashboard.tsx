@@ -6,7 +6,6 @@ import React, {
     useState,
     type ChangeEvent,
     type DragEvent,
-    type MouseEvent as ReactMouseEvent,
 } from 'react'
 import { Link } from 'react-router-dom'
 import '../App.css'
@@ -20,17 +19,14 @@ import {
     softDeleteFile,
     restoreFile,
     uploadFile,
-    downloadFile,
     type ApiFile,
     type StorageQuota,
 } from '../api/files'
 import { logout } from '../api/auth'
 import { getCurrentUser } from '../api/users'
 import {
-    decryptFile,
     generateFileKey,
     encryptFile,
-    unwrapFileKeyForUser,
     wrapFileKeyForUser,
 } from '../crypto/fileEncryption'
 import { loadActivePrivateKey } from '../crypto/storage'
@@ -51,35 +47,26 @@ import {
     KIND_ACCENT,
     KIND_LABELS,
     formatBytes,
-    kindFromFile,
-    type FileKind,
 } from './dashboard/fileUtils'
 import {
-    COMPACT_SIDEBAR_WIDTH,
-    LAYOUT_SWITCH_MS,
     NAV_LABELS,
-    SEARCH_FILTER_EXIT_MS,
-    SIDEBAR_HIDDEN_STORAGE_KEY,
-    SIDEBAR_WIDTH_STORAGE_KEY,
     applyLocalFileMetadata,
     applySavedOrder,
-    clampSidebarWidth,
     loadActiveView,
     loadFavouriteIds,
-    loadGroups,
-    loadLayoutMode,
-    loadNavOrder,
-    loadSidebarHidden,
-    loadSidebarWidth,
     saveActiveView,
     saveFavouriteIds,
-    saveGroups,
-    saveLayoutMode,
     saveLocalFileMetadata,
-    saveNavOrder,
     saveOrderIds,
 } from './dashboard/storage'
-import type { Group, GroupInviteRole, ImagePreviewState, Item, LayoutMode, NavIndicator, ViewKey } from './dashboard/types'
+import { useAnimatedItems } from './dashboard/hooks/useAnimatedItems'
+import { useDashboardGroups } from './dashboard/hooks/useDashboardGroups'
+import { useFilePreview } from './dashboard/hooks/useFilePreview'
+import { useLayoutModeSwitch } from './dashboard/hooks/useLayoutModeSwitch'
+import { useNavOrdering } from './dashboard/hooks/useNavOrdering'
+import { useSidebarState } from './dashboard/hooks/useSidebarState'
+import { useStorageSummary } from './dashboard/hooks/useStorageSummary'
+import type { Item, NavIndicator, ViewKey } from './dashboard/types'
 function Dashboard() {
     const [view, setView] = useState<ViewKey>(() => loadActiveView())
     const [items, setItems] = useState<Item[]>([])
@@ -94,30 +81,10 @@ function Dashboard() {
     const [favouriteIds, setFavouriteIds] = useState<Set<string>>(() => loadFavouriteIds())
     const [draggedCardId, setDraggedCardId] = useState<string | null>(null)
     const [dropTargetId, setDropTargetId] = useState<string | null>(null)
-    const [navOrder, setNavOrder] = useState<ViewKey[]>(() => loadNavOrder())
-    const [draggedNavKey, setDraggedNavKey] = useState<ViewKey | null>(null)
-    const [dropNavTarget, setDropNavTarget] = useState<ViewKey | null>(null)
-    const [sidebarWidth, setSidebarWidth] = useState(() => loadSidebarWidth())
-    const [sidebarHidden, setSidebarHidden] = useState(() => loadSidebarHidden())
-    const [layoutMode, setLayoutMode] = useState<LayoutMode>(() => loadLayoutMode())
-    const [layoutSwitchTarget, setLayoutSwitchTarget] = useState<LayoutMode | null>(null)
-    const [groups, setGroups] = useState<Group[]>(() => loadGroups())
-    const [activeGroupId, setActiveGroupId] = useState<string | null>(null)
-    const [groupCreateOpen, setGroupCreateOpen] = useState(false)
-    const [groupInviteOpen, setGroupInviteOpen] = useState(false)
     const [publicKey, setPublicKey] = useState<string | null>(null)
     const [privateKey, setPrivateKey] = useState<CryptoKey | null>(null)
-    const [imagePreview, setImagePreview] = useState<ImagePreviewState | null>(null)
     const normalizedQuery = query.trim().toLowerCase()
-    const previousSearchQueryRef = useRef(normalizedQuery)
-    const [animatedFiles, setAnimatedFiles] = useState<{ ids: string[]; exitingIds: Set<string> }>({
-        ids: [],
-        exitingIds: new Set(),
-    })
     const menuRef = useRef<HTMLDivElement>(null)
-    const layoutSwitchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-    const imagePreviewUrlRef = useRef<string | null>(null)
-    const imagePreviewRequestRef = useRef(0)
     const navListRef = useRef<HTMLElement>(null)
     const navItemRefs = useRef<Partial<Record<ViewKey, HTMLButtonElement>>>({})
     const [navIndicator, setNavIndicator] = useState<NavIndicator>({
@@ -128,6 +95,53 @@ function Dashboard() {
         visible: false,
     })
     const [navIndicatorPulling, setNavIndicatorPulling] = useState(false)
+    const {
+        navOrder,
+        draggedNavKey,
+        dropNavTarget,
+        handleNavDragStart,
+        handleNavDragEnter,
+        handleNavDragLeave,
+        handleNavDrop,
+        handleNavDragEnd,
+    } = useNavOrdering()
+    const {
+        sidebarWidth,
+        sidebarHidden,
+        sidebarCompact,
+        setSidebarHidden,
+        startSidebarResize,
+    } = useSidebarState()
+    const { layoutMode, layoutSwitchTarget, changeLayoutMode } = useLayoutModeSwitch()
+    const {
+        groups,
+        activeGroupId,
+        groupCreateOpen,
+        groupInviteOpen,
+        setGroupCreateOpen,
+        setGroupInviteOpen,
+        createGroup,
+        openGroup,
+        backToGroups,
+        addGroupInvite,
+        updateGroup,
+        deleteGroup,
+        removeGroupInvite,
+    } = useDashboardGroups()
+    const { imagePreview, closeImagePreview, handleDownload, handleImagePreview } = useFilePreview(privateKey, setError)
+    const { visibleItems, renderedItems, animatedFiles } = useAnimatedItems({
+        items,
+        view,
+        favouriteIds,
+        normalizedQuery,
+    })
+    const {
+        usedPct,
+        storageStatus,
+        storageStatusText,
+        storageBreakdown,
+        storageBreakdownTotal,
+    } = useStorageSummary(quota, storageItems)
 
     // TODO: replace with a real "current user" fetch once api/users.ts exposes one.
     const displayName = useMemo(() => {
@@ -148,24 +162,6 @@ function Dashboard() {
         const timeout = setTimeout(() => void refreshQuota(), 0)
         return () => clearTimeout(timeout)
     }, [])
-
-    useEffect(() => {
-        return () => {
-            if (layoutSwitchTimeoutRef.current) clearTimeout(layoutSwitchTimeoutRef.current)
-            if (imagePreviewUrlRef.current) URL.revokeObjectURL(imagePreviewUrlRef.current)
-        }
-    }, [])
-
-    useEffect(() => {
-        if (!imagePreview) return
-
-        function onKeyDown(e: globalThis.KeyboardEvent) {
-            if (e.key === 'Escape') closeImagePreview()
-        }
-
-        document.addEventListener('keydown', onKeyDown)
-        return () => document.removeEventListener('keydown', onKeyDown)
-    }, [imagePreview])
 
     useEffect(() => {
         let active = true
@@ -229,22 +225,6 @@ function Dashboard() {
             window.clearTimeout(timeout)
         }
     }, [view])
-
-    useEffect(() => {
-        try {
-            localStorage.setItem(SIDEBAR_WIDTH_STORAGE_KEY, String(sidebarWidth))
-        } catch {
-            // ignore storage failures (e.g. private browsing)
-        }
-    }, [sidebarWidth])
-
-    useEffect(() => {
-        try {
-            localStorage.setItem(SIDEBAR_HIDDEN_STORAGE_KEY, String(sidebarHidden))
-        } catch {
-            // ignore storage failures (e.g. private browsing)
-        }
-    }, [sidebarHidden])
 
     useEffect(() => {
         saveActiveView(view)
@@ -403,76 +383,6 @@ function Dashboard() {
         }
     }
 
-    async function handleDownload(item: Item) {
-        try {
-            const blob = await decryptDownloadedFile(item)
-            const url = URL.createObjectURL(blob)
-            const link = document.createElement('a')
-            link.href = url
-            link.download = item.filename
-            document.body.appendChild(link)
-            link.click()
-            link.remove()
-            URL.revokeObjectURL(url)
-        } catch (e) {
-            setError(e instanceof Error ? e.message : 'Could not download that file.')
-        }
-    }
-
-    async function decryptDownloadedFile(item: Item): Promise<Blob> {
-        if (!privateKey) {
-            throw new Error('Private key is locked. Sign in again to unlock your vault.')
-        }
-        if (!item.encrypted_key || !item.encryption_nonce) {
-            throw new Error('File encryption metadata is missing.')
-        }
-
-        const encryptedBlob = await downloadFile(item.id)
-        const fileKey = await unwrapFileKeyForUser(item.encrypted_key, privateKey)
-        return decryptFile(encryptedBlob, fileKey, item.encryption_nonce, item.mime_type)
-    }
-
-    function clearImagePreviewUrl() {
-        if (imagePreviewUrlRef.current) {
-            URL.revokeObjectURL(imagePreviewUrlRef.current)
-            imagePreviewUrlRef.current = null
-        }
-    }
-
-    function closeImagePreview() {
-        imagePreviewRequestRef.current += 1
-        clearImagePreviewUrl()
-        setImagePreview(null)
-    }
-
-    async function handleImagePreview(item: Item) {
-        if (kindFromFile(item.filename, item.mime_type) !== 'image') return
-
-        const requestId = imagePreviewRequestRef.current + 1
-        imagePreviewRequestRef.current = requestId
-        clearImagePreviewUrl()
-        setError(null)
-        setImagePreview({ item, url: null, loading: true })
-
-        try {
-            const previewBlob = await decryptDownloadedFile(item)
-            const url = URL.createObjectURL(previewBlob)
-
-            if (imagePreviewRequestRef.current !== requestId) {
-                URL.revokeObjectURL(url)
-                return
-            }
-
-            imagePreviewUrlRef.current = url
-            setImagePreview({ item, url, loading: false })
-        } catch (e) {
-            if (imagePreviewRequestRef.current === requestId) {
-                setImagePreview(null)
-                setError(e instanceof Error ? e.message : 'Could not preview that image.')
-            }
-        }
-    }
-
     function toggleFavourite(id: string) {
         setFavouriteIds((prev) => {
             const next = new Set(prev)
@@ -484,20 +394,6 @@ function Dashboard() {
             saveFavouriteIds(next)
             return next
         })
-    }
-
-    function changeLayoutMode(mode: LayoutMode) {
-        if (mode === layoutMode) return
-        if (layoutSwitchTimeoutRef.current) clearTimeout(layoutSwitchTimeoutRef.current)
-
-        setLayoutSwitchTarget(mode)
-        setLayoutMode(mode)
-        saveLayoutMode(mode)
-
-        layoutSwitchTimeoutRef.current = setTimeout(() => {
-            setLayoutSwitchTarget(null)
-            layoutSwitchTimeoutRef.current = null
-        }, LAYOUT_SWITCH_MS)
     }
 
     function handleCardDragStart(id: string, e: DragEvent<HTMLElement>) {
@@ -537,237 +433,10 @@ function Dashboard() {
         setDropTargetId(null)
     }
 
-    function handleNavDragStart(key: ViewKey, e: DragEvent<HTMLElement>) {
-        e.dataTransfer.effectAllowed = 'move'
-        e.dataTransfer.setData('text/plain', key)
-        setDraggedNavKey(key)
-    }
-
-    function handleNavDragEnter(key: ViewKey) {
-        if (key !== draggedNavKey) setDropNavTarget(key)
-    }
-
-    function handleNavDragLeave(key: ViewKey) {
-        setDropNavTarget((prev) => (prev === key ? null : prev))
-    }
-
-    function handleNavDrop(targetKey: ViewKey, e: DragEvent<HTMLElement>) {
-        const sourceKey = (e.dataTransfer.getData('text/plain') as ViewKey) || draggedNavKey
-        setDraggedNavKey(null)
-        setDropNavTarget(null)
-        if (!sourceKey || sourceKey === targetKey) return
-
-        setNavOrder((prev) => {
-            const arr = [...prev]
-            const fromIdx = arr.indexOf(sourceKey)
-            const toIdx = arr.indexOf(targetKey)
-            if (fromIdx === -1 || toIdx === -1) return prev
-            const [moved] = arr.splice(fromIdx, 1)
-            arr.splice(toIdx, 0, moved)
-            saveNavOrder(arr)
-            return arr
-        })
-    }
-
-    function handleNavDragEnd() {
-        setDraggedNavKey(null)
-        setDropNavTarget(null)
-    }
-
-    function startSidebarResize(e: ReactMouseEvent<HTMLButtonElement>) {
-        e.preventDefault()
-        setSidebarHidden(false)
-
-        function onMove(event: MouseEvent) {
-            setSidebarWidth(clampSidebarWidth(event.clientX))
-        }
-
-        function onUp() {
-            window.removeEventListener('mousemove', onMove)
-            window.removeEventListener('mouseup', onUp)
-            document.body.classList.remove('is-resizing-sidebar')
-        }
-
-        document.body.classList.add('is-resizing-sidebar')
-        window.addEventListener('mousemove', onMove)
-        window.addEventListener('mouseup', onUp)
-    }
-
     async function signOut() {
         await logout()
         window.location.href = '/login'
     }
-
-    function createGroup(name: string, defaultRole: GroupInviteRole) {
-        setGroups((prev) => {
-            const group: Group = {
-                id: crypto.randomUUID(),
-                name,
-                defaultRole,
-                createdAt: new Date().toISOString(),
-                invites: [],
-            }
-            const next = [group, ...prev]
-            saveGroups(next)
-            setActiveGroupId(group.id)
-            return next
-        })
-    }
-
-    function openGroup(id: string) {
-        setActiveGroupId(id)
-        setGroupCreateOpen(false)
-        setGroupInviteOpen(false)
-    }
-
-    function backToGroups() {
-        setActiveGroupId(null)
-        setGroupCreateOpen(false)
-        setGroupInviteOpen(false)
-    }
-
-    function addGroupInvite(groupId: string, email: string, role: GroupInviteRole) {
-        setGroups((prev) => {
-            const next = prev.map((group) =>
-                group.id === groupId
-                    ? {
-                          ...group,
-                          invites: [
-                              {
-                                  id: crypto.randomUUID(),
-                                  email,
-                                  role,
-                                  createdAt: new Date().toISOString(),
-                              },
-                              ...group.invites,
-                          ],
-                      }
-                    : group,
-            )
-            saveGroups(next)
-            return next
-        })
-    }
-
-    function updateGroup(groupId: string, name: string, defaultRole: GroupInviteRole) {
-        setGroups((prev) => {
-            const next = prev.map((group) =>
-                group.id === groupId
-                    ? {
-                          ...group,
-                          name,
-                          defaultRole,
-                      }
-                    : group,
-            )
-            saveGroups(next)
-            return next
-        })
-    }
-
-    function deleteGroup(groupId: string) {
-        setGroups((prev) => {
-            const next = prev.filter((group) => group.id !== groupId)
-            saveGroups(next)
-            return next
-        })
-        setActiveGroupId(null)
-        setGroupCreateOpen(false)
-        setGroupInviteOpen(false)
-    }
-
-    function removeGroupInvite(groupId: string, inviteId: string) {
-        setGroups((prev) => {
-            const next = prev.map((group) =>
-                group.id === groupId
-                    ? {
-                          ...group,
-                          invites: group.invites.filter((invite) => invite.id !== inviteId),
-                      }
-                    : group,
-            )
-            saveGroups(next)
-            return next
-        })
-    }
-
-    const visibleItems = useMemo(
-        () =>
-            items
-                .filter((i) => i.filename.toLowerCase().includes(normalizedQuery))
-                .filter((i) => (view === 'favourites' ? favouriteIds.has(i.id) : true)),
-        [favouriteIds, items, normalizedQuery, view],
-    )
-    const itemById = useMemo(() => new Map(items.map((item) => [item.id, item])), [items])
-
-    useEffect(() => {
-        const nextIds = visibleItems.map((item) => item.id)
-        const queryChanged = previousSearchQueryRef.current !== normalizedQuery
-        previousSearchQueryRef.current = normalizedQuery
-
-        if (!queryChanged) {
-            setAnimatedFiles({ ids: nextIds, exitingIds: new Set() })
-            return
-        }
-
-        let timeout: ReturnType<typeof setTimeout> | undefined
-        setAnimatedFiles((prev) => {
-            const nextIdSet = new Set(nextIds)
-            const currentItemIds = new Set(items.map((item) => item.id))
-            const exitingIds = prev.ids.filter((id) => !nextIdSet.has(id) && currentItemIds.has(id))
-
-            if (exitingIds.length === 0) {
-                return { ids: nextIds, exitingIds: new Set() }
-            }
-
-            timeout = setTimeout(() => {
-                setAnimatedFiles({ ids: nextIds, exitingIds: new Set() })
-            }, SEARCH_FILTER_EXIT_MS)
-
-            return {
-                ids: [
-                    ...prev.ids.filter((id) => nextIdSet.has(id) || exitingIds.includes(id)),
-                    ...nextIds.filter((id) => !prev.ids.includes(id)),
-                ],
-                exitingIds: new Set(exitingIds),
-            }
-        })
-
-        return () => {
-            if (timeout) clearTimeout(timeout)
-        }
-    }, [items, normalizedQuery, visibleItems])
-
-    const renderedItems = animatedFiles.ids
-        .map((id) => itemById.get(id))
-        .filter((item): item is Item => Boolean(item))
-
-    const usedPct = quota ? Math.min(100, Math.round((quota.used_bytes / quota.total_bytes) * 100)) : 0
-    const storageStatus = usedPct >= 90 ? 'critical' : usedPct >= 80 ? 'warning' : 'healthy'
-    const storageStatusText =
-        storageStatus === 'critical'
-            ? 'Storage almost full'
-            : storageStatus === 'warning'
-                ? 'Storage getting full'
-                : 'Plenty of room'
-    const storageBreakdown = Object.entries(
-        storageItems.reduce(
-            (acc, item) => {
-                const kind = kindFromFile(item.filename, item.mime_type)
-                acc[kind] = (acc[kind] ?? 0) + item.size_bytes
-                return acc
-            },
-            {} as Record<FileKind, number>,
-        ),
-    )
-        .map(([kind, bytes]) => ({
-            kind: kind as FileKind,
-            bytes,
-        }))
-        .sort((a, b) => b.bytes - a.bytes)
-        .slice(0, 4)
-    const storageBreakdownTotal = storageBreakdown.reduce((sum, item) => sum + item.bytes, 0)
-    const sidebarCompact = !sidebarHidden && sidebarWidth <= COMPACT_SIDEBAR_WIDTH
 
     return (
         <div
