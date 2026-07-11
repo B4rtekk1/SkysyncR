@@ -21,6 +21,8 @@ export interface ApiFile {
     is_deleted: boolean
     is_public: boolean
     share_token: string | null
+    encrypted_key: string
+    encryption_nonce: string
     created_at: string
     updated_at: string
     deleted_at: string | null

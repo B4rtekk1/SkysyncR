@@ -36,6 +36,41 @@ export async function wrapFileKeyForUser(key: CryptoKey, publicKeyBase64: string
     return crypto.subtle.encrypt({ name: 'RSA-OAEP' }, publicKey, rawKey)
 }
 
+export async function unwrapFileKeyForUser(
+    encryptedKeyBase64: string,
+    privateKey: CryptoKey,
+): Promise<CryptoKey> {
+    const rawKey = await crypto.subtle.decrypt(
+        { name: 'RSA-OAEP' },
+        privateKey,
+        base64ToBuffer(encryptedKeyBase64) as BufferSource,
+    )
+
+    return crypto.subtle.importKey(
+        'raw',
+        rawKey,
+        { name: 'AES-GCM', length: 256 },
+        false,
+        ['decrypt'],
+    )
+}
+
+export async function decryptFile(
+    encryptedBlob: Blob,
+    key: CryptoKey,
+    nonceBase64: string,
+    mimeType: string | null,
+): Promise<Blob> {
+    const ciphertext = await encryptedBlob.arrayBuffer()
+    const plaintext = await crypto.subtle.decrypt(
+        { name: 'AES-GCM', iv: base64ToBuffer(nonceBase64) as BufferSource },
+        key,
+        ciphertext,
+    )
+
+    return new Blob([plaintext], { type: mimeType || 'application/octet-stream' })
+}
+
 export async function encryptText(
     value: string,
     key: CryptoKey,

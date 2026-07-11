@@ -6,6 +6,7 @@ import React, {
     useState,
     type ChangeEvent,
     type DragEvent,
+    type KeyboardEvent as ReactKeyboardEvent,
     type MouseEvent as ReactMouseEvent,
 } from 'react'
 import { Link } from 'react-router-dom'
@@ -28,14 +29,22 @@ import {
 import { logout } from '../api/auth'
 import { getCurrentUser } from '../api/users'
 import {
+    decryptFile,
     generateFileKey,
     encryptFile,
+    unwrapFileKeyForUser,
     wrapFileKeyForUser,
 } from '../crypto/fileEncryption'
+import { loadActivePrivateKey } from '../crypto/storage'
 
 type ViewKey = 'all' | 'favourites' | 'shared' | 'groups' | 'trash'
 type LayoutMode = 'grid' | 'list'
 type Item = ApiFile | SharedFile
+type ImagePreviewState = {
+    item: Item
+    url: string | null
+    loading: boolean
+}
 type GroupInviteRole = 'viewer' | 'editor' | 'admin'
 
 type GroupInvite = {
@@ -203,6 +212,7 @@ function applySavedOrder<T extends Item>(data: T[], view: ViewKey): T[] {
 }
 
 const NAV_ORDER_STORAGE_KEY = 'nav_order'
+const ACTIVE_VIEW_STORAGE_KEY = 'active_view'
 const DEFAULT_NAV_ORDER: ViewKey[] = ['all', 'favourites', 'shared', 'groups', 'trash']
 const SIDEBAR_WIDTH_STORAGE_KEY = 'sidebar_width'
 const SIDEBAR_HIDDEN_STORAGE_KEY = 'sidebar_hidden'
@@ -248,6 +258,23 @@ function loadNavOrder(): ViewKey[] {
 function saveNavOrder(order: ViewKey[]) {
     try {
         localStorage.setItem(NAV_ORDER_STORAGE_KEY, JSON.stringify(order))
+    } catch {
+        // ignore storage failures (e.g. private browsing)
+    }
+}
+
+function loadActiveView(): ViewKey {
+    try {
+        const raw = localStorage.getItem(ACTIVE_VIEW_STORAGE_KEY)
+        return DEFAULT_NAV_ORDER.includes(raw as ViewKey) ? (raw as ViewKey) : 'all'
+    } catch {
+        return 'all'
+    }
+}
+
+function saveActiveView(view: ViewKey) {
+    try {
+        localStorage.setItem(ACTIVE_VIEW_STORAGE_KEY, view)
     } catch {
         // ignore storage failures (e.g. private browsing)
     }
@@ -435,7 +462,8 @@ function FileIcon({ kind }: { kind: FileKind }) {
         return (
             <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true">
                 <path d={DOCUMENT_ICON_PATH} {...common} />
-                <path d={`${DOCUMENT_FOLD_PATH}M8 12h8M8 15h8M11 9v9`} {...common} />
+                <path d={DOCUMENT_FOLD_PATH} {...common} />
+                <path d="M8 11h8M8 14h8M8 17h8M11 9v10M14.5 9v10" {...common} strokeLinecap="round" />
             </svg>
         )
     }
@@ -667,6 +695,7 @@ function FileCard({
                       onDelete,
                       onRestore,
                       onDownload,
+                      onPreview,
                       view,
                       isFavourite,
                       onToggleFavourite,
@@ -687,6 +716,7 @@ function FileCard({
     onDelete?: (id: string) => void
     onRestore?: (id: string) => void
     onDownload?: (item: Item) => void
+    onPreview?: (item: Item) => void
     view: ViewKey
     isFavourite?: boolean
     onToggleFavourite?: (id: string) => void
@@ -707,17 +737,31 @@ function FileCard({
     const [favouriteTouched, setFavouriteTouched] = useState(false)
     const canToggleFavourite = Boolean(onToggleFavourite && !isShared(item))
     const canDownload = Boolean(onDownload && view !== 'trash')
+    const canPreview = Boolean(onPreview && kind === 'image' && view !== 'trash' && !pending)
     const hasAction = Boolean(canDownload || (view === 'all' && onDelete) || (view === 'trash' && onRestore))
+    const handlePreviewKeyDown = (e: ReactKeyboardEvent<HTMLElement>) => {
+        if (!canPreview) return
+        if (e.key !== 'Enter' && e.key !== ' ') return
+        e.preventDefault()
+        onPreview?.(item)
+    }
 
     return (
         <article
-            className={`file-card ${canToggleFavourite ? 'file-card--has-favourite' : ''} ${
+            className={`file-card ${canPreview ? 'file-card--can-preview' : ''} ${
+                canToggleFavourite ? 'file-card--has-favourite' : ''
+            } ${
                 hasAction ? 'file-card--has-action' : ''
             } ${isDragging ? 'is-dragging-card' : ''} ${isDropTarget ? 'is-drop-target' : ''} ${
                 isSearchExiting ? 'is-search-exiting' : ''
             }`}
             style={style}
             draggable={draggable && !pending}
+            role={canPreview ? 'button' : undefined}
+            tabIndex={canPreview ? 0 : undefined}
+            aria-label={canPreview ? `Preview ${item.filename}` : undefined}
+            onClick={canPreview ? () => onPreview?.(item) : undefined}
+            onKeyDown={handlePreviewKeyDown}
             onDragStart={(e) => onDragStartCard?.(item.id, e)}
             onDragEnter={(e) => {
                 e.preventDefault()
@@ -742,7 +786,8 @@ function FileCard({
                     className={`file-card__fav ${isFavourite ? 'is-active' : ''} ${
                         favouriteTouched ? 'has-favourite-motion' : ''
                     }`}
-                    onClick={() => {
+                    onClick={(e) => {
+                        e.stopPropagation()
                         setFavouriteTouched(true)
                         onToggleFavourite?.(item.id)
                     }}
@@ -783,7 +828,10 @@ function FileCard({
                     {canDownload && (
                         <button
                             className="file-card__action file-card__action--download"
-                            onClick={() => onDownload?.(item)}
+                            onClick={(e) => {
+                                e.stopPropagation()
+                                onDownload?.(item)
+                            }}
                             aria-label={`Download ${item.filename}`}
                             title="Download"
                             type="button"
@@ -794,7 +842,10 @@ function FileCard({
                     {view === 'all' && onDelete && (
                         <button
                             className="file-card__action file-card__action--trash"
-                            onClick={() => onDelete(item.id)}
+                            onClick={(e) => {
+                                e.stopPropagation()
+                                onDelete(item.id)
+                            }}
                             aria-label={`Move ${item.filename} to trash`}
                             title="Move to trash"
                             type="button"
@@ -803,13 +854,79 @@ function FileCard({
                         </button>
                     )}
                     {view === 'trash' && onRestore && (
-                        <button className="file-card__action" onClick={() => onRestore(item.id)}>
+                        <button
+                            className="file-card__action"
+                            onClick={(e) => {
+                                e.stopPropagation()
+                                onRestore(item.id)
+                            }}
+                        >
                             Restore
                         </button>
                     )}
                 </div>
             )}
         </article>
+    )
+}
+
+function ImagePreviewModal({
+                               preview,
+                               onClose,
+                               onDownload,
+                           }: {
+    preview: ImagePreviewState
+    onClose: () => void
+    onDownload: (item: Item) => void
+}) {
+    return (
+        <div className="image-preview" role="presentation" onMouseDown={onClose}>
+            <div
+                className="image-preview__dialog"
+                role="dialog"
+                aria-modal="true"
+                aria-label={`Preview ${preview.item.filename}`}
+                onMouseDown={(e) => e.stopPropagation()}
+            >
+                <div className="image-preview__head">
+                    <div className="image-preview__title">
+                        <strong title={preview.item.filename}>{preview.item.filename}</strong>
+                        <span>{formatBytes(preview.item.size_bytes)}</span>
+                    </div>
+                    <div className="image-preview__actions">
+                        <button
+                            className="file-card__action file-card__action--download"
+                            type="button"
+                            onClick={() => onDownload(preview.item)}
+                            aria-label={`Download ${preview.item.filename}`}
+                            title="Download"
+                        >
+                            {DOWNLOAD_ICON}
+                        </button>
+                        <button
+                            className="image-preview__close"
+                            type="button"
+                            onClick={onClose}
+                            aria-label="Close preview"
+                            title="Close"
+                        >
+                            x
+                        </button>
+                    </div>
+                </div>
+                <div className="image-preview__stage">
+                    {preview.loading && (
+                        <div className="image-preview__loading">
+                            <span className="spinner" />
+                            Loading preview...
+                        </div>
+                    )}
+                    {preview.url && (
+                        <img className="image-preview__image" src={preview.url} alt={preview.item.filename} />
+                    )}
+                </div>
+            </div>
+        </div>
     )
 }
 
@@ -893,6 +1010,31 @@ function GroupsPanel({
             if (timeout) clearTimeout(timeout)
         }
     }, [activeGroup])
+
+    useEffect(() => {
+        if (!createOpen && !inviteOpen) return
+
+        function handleKeyDown(event: KeyboardEvent) {
+            if (event.key !== 'Escape') return
+
+            if (inviteOpen) {
+                setEmail('')
+                setRole('viewer')
+                setFormError(null)
+                onCloseInvite()
+            }
+
+            if (createOpen) {
+                setGroupName('')
+                setDefaultRole('viewer')
+                setCreateError(null)
+                onCloseCreate()
+            }
+        }
+
+        window.addEventListener('keydown', handleKeyDown)
+        return () => window.removeEventListener('keydown', handleKeyDown)
+    }, [createOpen, inviteOpen, onCloseCreate, onCloseInvite])
 
     function submitSettings(e: React.FormEvent<HTMLFormElement>) {
         e.preventDefault()
@@ -994,7 +1136,7 @@ function GroupsPanel({
                             </div>
                         </div>
                         <button className="btn btn--solid" type="button" onClick={onOpenInvite}>
-                            <span aria-hidden="true">+</span> Invite member
+                            <span aria-hidden="true">+</span> Add member
                         </button>
                     </div>
 
@@ -1099,7 +1241,7 @@ function GroupsPanel({
                         <div className="groups-members__head">
                             <div>
                                 <p className="groups-panel__eyebrow">Access</p>
-                                <h3>Pending members</h3>
+                                <h3>Members</h3>
                             </div>
                             <span className="groups-members__count">{activeGroup.invites.length}</span>
                         </div>
@@ -1139,23 +1281,28 @@ function GroupsPanel({
                             role="dialog"
                             aria-modal="true"
                             aria-label={`Invite member to ${activeGroup.name}`}
+                            aria-describedby="group-invite-description"
                             onSubmit={submitInvite}
                             onMouseDown={(e) => e.stopPropagation()}
                         >
                             <div className="groups-modal__head">
                                 <div>
-                                    <p className="groups-panel__eyebrow">Invite member</p>
-                                    <h3 className="groups-modal__title">{activeGroup.name}</h3>
+                                    <p className="groups-panel__eyebrow">Add member</p>
+                                    <h3 className="groups-modal__title">Invite to {activeGroup.name}</h3>
                                 </div>
                                 <button
                                     className="groups-modal__close"
                                     type="button"
                                     onClick={closeInvite}
-                                    aria-label="Close invite dialog"
+                                    aria-label="Close add-member dialog"
                                 >
                                     x
                                 </button>
                             </div>
+
+                            <p className="groups-modal__description" id="group-invite-description">
+                                Choose an email address and access level for the new member.
+                            </p>
 
                             <label className="groups-invite__field">
                                 <span>Email</span>
@@ -1187,7 +1334,7 @@ function GroupsPanel({
                                     Cancel
                                 </button>
                                 <button className="btn btn--solid" type="submit">
-                                    Send invite
+                                    Send invitation
                                 </button>
                             </div>
                         </form>
@@ -1199,12 +1346,10 @@ function GroupsPanel({
 
     return (
         <>
-            <section className="groups-panel" aria-label="Groups">
+            <section className="groups-panel groups-panel--listing-view" aria-label="Groups">
                 <div className="groups-panel__head groups-panel__head--listing">
                     <div>
-                        <p className="groups-panel__eyebrow">Collaboration spaces</p>
                         <h2 className="groups-panel__title">Your groups</h2>
-                        <p className="groups-panel__subtitle">Create private spaces and manage access to your shared vault.</p>
                     </div>
                     <button className="btn btn--solid" type="button" onClick={onOpenCreate}>
                         <span aria-hidden="true">+</span> New group
@@ -1249,6 +1394,7 @@ function GroupsPanel({
                         role="dialog"
                         aria-modal="true"
                         aria-label="Create group"
+                        aria-describedby="group-create-description"
                         onSubmit={submitGroup}
                         onMouseDown={(e) => e.stopPropagation()}
                     >
@@ -1266,6 +1412,10 @@ function GroupsPanel({
                                 x
                             </button>
                         </div>
+
+                        <p className="groups-modal__description" id="group-create-description">
+                            Set up a private shared space and choose its default access level.
+                        </p>
 
                         <label className="groups-invite__field">
                             <span>Group name</span>
@@ -1311,7 +1461,7 @@ function GroupsPanel({
 }
 
 function Dashboard() {
-    const [view, setView] = useState<ViewKey>('all')
+    const [view, setView] = useState<ViewKey>(() => loadActiveView())
     const [items, setItems] = useState<Item[]>([])
     const [pendingIds, setPendingIds] = useState<Set<string>>(new Set())
     const [loading, setLoading] = useState(true)
@@ -1336,6 +1486,8 @@ function Dashboard() {
     const [groupCreateOpen, setGroupCreateOpen] = useState(false)
     const [groupInviteOpen, setGroupInviteOpen] = useState(false)
     const [publicKey, setPublicKey] = useState<string | null>(null)
+    const [privateKey, setPrivateKey] = useState<CryptoKey | null>(null)
+    const [imagePreview, setImagePreview] = useState<ImagePreviewState | null>(null)
     const normalizedQuery = query.trim().toLowerCase()
     const previousSearchQueryRef = useRef(normalizedQuery)
     const [animatedFiles, setAnimatedFiles] = useState<{ ids: string[]; exitingIds: Set<string> }>({
@@ -1344,6 +1496,8 @@ function Dashboard() {
     })
     const menuRef = useRef<HTMLDivElement>(null)
     const layoutSwitchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+    const imagePreviewUrlRef = useRef<string | null>(null)
+    const imagePreviewRequestRef = useRef(0)
     const navListRef = useRef<HTMLElement>(null)
     const navItemRefs = useRef<Partial<Record<ViewKey, HTMLButtonElement>>>({})
     const [navIndicator, setNavIndicator] = useState<NavIndicator>({
@@ -1378,17 +1532,37 @@ function Dashboard() {
     useEffect(() => {
         return () => {
             if (layoutSwitchTimeoutRef.current) clearTimeout(layoutSwitchTimeoutRef.current)
+            if (imagePreviewUrlRef.current) URL.revokeObjectURL(imagePreviewUrlRef.current)
         }
     }, [])
+
+    useEffect(() => {
+        if (!imagePreview) return
+
+        function onKeyDown(e: globalThis.KeyboardEvent) {
+            if (e.key === 'Escape') closeImagePreview()
+        }
+
+        document.addEventListener('keydown', onKeyDown)
+        return () => document.removeEventListener('keydown', onKeyDown)
+    }, [imagePreview])
 
     useEffect(() => {
         let active = true
         getCurrentUser()
             .then((user) => {
-                if (active) setPublicKey(user.public_key)
+                if (!active) return
+                setPublicKey(user.public_key)
+                return loadActivePrivateKey(user.id)
+            })
+            .then((key) => {
+                if (active) setPrivateKey(key ?? null)
             })
             .catch(() => {
-                if (active) setPublicKey(null)
+                if (active) {
+                    setPublicKey(null)
+                    setPrivateKey(null)
+                }
             })
 
         return () => {
@@ -1453,6 +1627,10 @@ function Dashboard() {
     }, [sidebarHidden])
 
     useEffect(() => {
+        saveActiveView(view)
+    }, [view])
+
+    useEffect(() => {
         let active = true
 
         Promise.resolve()
@@ -1512,6 +1690,8 @@ function Dashboard() {
                 is_deleted: false,
                 is_public: false,
                 share_token: null,
+                encrypted_key: '',
+                encryption_nonce: '',
                 created_at: now,
                 updated_at: now,
                 deleted_at: null,
@@ -1605,7 +1785,7 @@ function Dashboard() {
 
     async function handleDownload(item: Item) {
         try {
-            const blob = await downloadFile(item.id)
+            const blob = await decryptDownloadedFile(item)
             const url = URL.createObjectURL(blob)
             const link = document.createElement('a')
             link.href = url
@@ -1616,6 +1796,60 @@ function Dashboard() {
             URL.revokeObjectURL(url)
         } catch (e) {
             setError(e instanceof Error ? e.message : 'Could not download that file.')
+        }
+    }
+
+    async function decryptDownloadedFile(item: Item): Promise<Blob> {
+        if (!privateKey) {
+            throw new Error('Private key is locked. Sign in again to unlock your vault.')
+        }
+        if (!item.encrypted_key || !item.encryption_nonce) {
+            throw new Error('File encryption metadata is missing.')
+        }
+
+        const encryptedBlob = await downloadFile(item.id)
+        const fileKey = await unwrapFileKeyForUser(item.encrypted_key, privateKey)
+        return decryptFile(encryptedBlob, fileKey, item.encryption_nonce, item.mime_type)
+    }
+
+    function clearImagePreviewUrl() {
+        if (imagePreviewUrlRef.current) {
+            URL.revokeObjectURL(imagePreviewUrlRef.current)
+            imagePreviewUrlRef.current = null
+        }
+    }
+
+    function closeImagePreview() {
+        imagePreviewRequestRef.current += 1
+        clearImagePreviewUrl()
+        setImagePreview(null)
+    }
+
+    async function handleImagePreview(item: Item) {
+        if (kindFromFile(item.filename, item.mime_type) !== 'image') return
+
+        const requestId = imagePreviewRequestRef.current + 1
+        imagePreviewRequestRef.current = requestId
+        clearImagePreviewUrl()
+        setError(null)
+        setImagePreview({ item, url: null, loading: true })
+
+        try {
+            const previewBlob = await decryptDownloadedFile(item)
+            const url = URL.createObjectURL(previewBlob)
+
+            if (imagePreviewRequestRef.current !== requestId) {
+                URL.revokeObjectURL(url)
+                return
+            }
+
+            imagePreviewUrlRef.current = url
+            setImagePreview({ item, url, loading: false })
+        } catch (e) {
+            if (imagePreviewRequestRef.current === requestId) {
+                setImagePreview(null)
+                setError(e instanceof Error ? e.message : 'Could not preview that image.')
+            }
         }
     }
 
@@ -2258,6 +2492,7 @@ function Dashboard() {
                                     onDelete={view === 'all' ? handleDelete : undefined}
                                     onRestore={view === 'trash' ? handleRestore : undefined}
                                     onDownload={view !== 'trash' ? handleDownload : undefined}
+                                    onPreview={view !== 'trash' ? handleImagePreview : undefined}
                                     isFavourite={favouriteIds.has(item.id)}
                                     onToggleFavourite={
                                         view === 'all' || view === 'favourites' ? toggleFavourite : undefined
@@ -2285,6 +2520,13 @@ function Dashboard() {
                     )}
                 </div>
             </div>
+            {imagePreview && (
+                <ImagePreviewModal
+                    preview={imagePreview}
+                    onClose={closeImagePreview}
+                    onDownload={handleDownload}
+                />
+            )}
         </div>
     )
 }

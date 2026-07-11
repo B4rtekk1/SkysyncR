@@ -1,7 +1,15 @@
+use base64::{Engine as _, engine::general_purpose};
 use chrono::{DateTime, Utc};
-use serde::Serialize;
+use serde::{Serialize, Serializer};
 use sqlx::{FromRow, PgPool};
 use uuid::Uuid;
+
+fn serialize_bytes_base64<S>(bytes: &Vec<u8>, serializer: S) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+{
+    serializer.serialize_str(&general_purpose::STANDARD.encode(bytes))
+}
 
 #[derive(FromRow, Serialize)]
 pub struct FileRecord {
@@ -14,6 +22,10 @@ pub struct FileRecord {
     pub is_deleted: bool,
     pub is_public: bool,
     pub share_token: Option<String>,
+    #[serde(serialize_with = "serialize_bytes_base64")]
+    pub encrypted_key: Vec<u8>,
+    #[serde(serialize_with = "serialize_bytes_base64")]
+    pub encryption_nonce: Vec<u8>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
     pub deleted_at: Option<DateTime<Utc>>,
@@ -64,6 +76,8 @@ pub async fn list_user_files(
             is_deleted,
             is_public,
             share_token,
+            encrypted_key,
+            encryption_nonce,
             created_at,
             updated_at,
             deleted_at
@@ -109,6 +123,8 @@ pub async fn create_file_record(
             is_deleted,
             is_public,
             share_token,
+            encrypted_key,
+            encryption_nonce,
             created_at,
             updated_at,
             deleted_at

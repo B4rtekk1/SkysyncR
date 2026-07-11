@@ -5,7 +5,7 @@ import '../css/Login.css'
 import VaultPanel from '../components/VaultPanel'
 import ThemeToggle from '../components/ThemeToggle'
 import { generateKeyPair, exportPublicKey, encryptPrivateKey } from '../crypto/keys'
-import { storeEncryptedPrivateKey } from '../crypto/storage'
+import { storeActivePrivateKey, storeEncryptedPrivateKey } from '../crypto/storage'
 import { registerUser } from '../api/users'
 
 function EyeIcon({ open }: { open: boolean }) {
@@ -259,6 +259,7 @@ function Register() {
 
       // 3. Store encrypted private key locally
       await storeEncryptedPrivateKey(userId, encryptedPrivateKey);
+      await storeActivePrivateKey(userId, keyPair.privateKey);
 
       window.location.href = '/login';
     } catch (err) {

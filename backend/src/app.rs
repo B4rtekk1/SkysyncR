@@ -1,6 +1,6 @@
 use crate::routes::files::files_routes;
 use crate::routes::storage::storage_routes;
-use crate::routes::users::users_routes;
+use crate::routes::users::{auth_limited_routes, users_routes};
 use crate::state::{AppConfig, AppState};
 use axum::http::{HeaderValue, Method};
 use axum::routing::get;
@@ -70,12 +70,6 @@ pub async fn run_server() {
         println!("Running in development mode");
     }
 
-    let global_governor = GovernorConfigBuilder::default()
-        .per_second(10)
-        .burst_size(20)
-        .finish()
-        .unwrap();
-
     let auth_governor = GovernorConfigBuilder::default()
         .per_second(3)
         .burst_size(6)
@@ -87,15 +81,16 @@ pub async fn run_server() {
         config: config.clone(),
     };
 
-    let auth_routes = users_routes().layer(tower_governor::GovernorLayer::new(auth_governor));
+    let auth_routes =
+        auth_limited_routes().layer(tower_governor::GovernorLayer::new(auth_governor));
 
     let app = Router::new()
         .route("/", get(hello))
         .merge(auth_routes)
+        .merge(users_routes())
         .merge(storage_routes())
         .merge(files_routes())
         .with_state(state)
-        .layer(tower_governor::GovernorLayer::new(global_governor))
         .layer(security_headers_layer())
         .layer(dev_cors_layer());
 

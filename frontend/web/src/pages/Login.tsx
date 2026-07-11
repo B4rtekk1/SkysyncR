@@ -2,9 +2,11 @@ import { type SubmitEvent, useState } from 'react'
 import { Link } from 'react-router-dom'
 import '../App.css'
 import '../css/Login.css'
-import {loginUser} from '../api/users.ts'
+import {getCurrentUser, loginUser} from '../api/users.ts'
 import VaultPanel from '../components/VaultPanel'
 import ThemeToggle from '../components/ThemeToggle'
+import { decryptPrivateKey } from '../crypto/keys'
+import { loadEncryptedPrivateKey, storeActivePrivateKey } from '../crypto/storage'
 
 function EyeIcon({ open }: { open: boolean }) {
   return (
@@ -69,6 +71,15 @@ function Login() {
           },
           remember,
       )
+      const user = await getCurrentUser()
+      const encryptedPrivateKey = await loadEncryptedPrivateKey(user.id)
+
+      if (!encryptedPrivateKey) {
+        throw new Error('Private key is not available on this device.')
+      }
+
+      const privateKey = await decryptPrivateKey(encryptedPrivateKey, password)
+      await storeActivePrivateKey(user.id, privateKey)
 
       window.location.href = '/dashboard'
     } catch (err) {
