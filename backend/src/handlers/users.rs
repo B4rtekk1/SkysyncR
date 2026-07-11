@@ -43,6 +43,7 @@ pub async fn current_user(
 
     Ok(Json(CurrentUserResponse {
         id: profile.id,
+        email: profile.email,
         display_name: profile.display_name,
         public_key: profile.public_key,
     }))

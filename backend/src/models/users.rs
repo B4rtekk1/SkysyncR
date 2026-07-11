@@ -85,6 +85,7 @@ pub struct UserResponse {
 #[derive(Debug, Serialize)]
 pub struct CurrentUserResponse {
     pub id: Uuid,
+    pub email: String,
     pub display_name: Option<String>,
     pub public_key: Option<String>,
 }

@@ -23,6 +23,7 @@ export type LoginResponse = TokenPair
 
 export interface CurrentUserResponse {
   id: string
+  email: string
   display_name: string | null
   public_key: string | null
 }

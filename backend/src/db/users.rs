@@ -110,6 +110,7 @@ pub async fn get_user_id_by_email(pool: &PgPool, email: &str) -> Result<Option<U
 
 pub struct CurrentUserCryptoProfile {
     pub id: Uuid,
+    pub email: String,
     pub display_name: Option<String>,
     pub public_key: Option<String>,
 }
@@ -118,9 +119,9 @@ pub async fn get_current_user_crypto_profile(
     pool: &PgPool,
     user_id: Uuid,
 ) -> Result<Option<CurrentUserCryptoProfile>, sqlx::Error> {
-    let result = sqlx::query_as::<_, (Uuid, Option<String>, Option<String>)>(
+    let result = sqlx::query_as::<_, (Uuid, String, Option<String>, Option<String>)>(
         r#"
-        SELECT id, display_name, public_key
+        SELECT id, email, display_name, public_key
         FROM users
         WHERE id = $1
           AND is_active = TRUE
@@ -130,13 +131,14 @@ pub async fn get_current_user_crypto_profile(
     .fetch_optional(pool)
     .await?;
 
-    Ok(
-        result.map(|(id, display_name, public_key)| CurrentUserCryptoProfile {
+    Ok(result.map(
+        |(id, email, display_name, public_key)| CurrentUserCryptoProfile {
             id,
+            email,
             display_name,
             public_key,
-        }),
-    )
+        },
+    ))
 }
 
 pub async fn update_last_login(pool: &PgPool, email: &str) -> Result<(), sqlx::Error> {

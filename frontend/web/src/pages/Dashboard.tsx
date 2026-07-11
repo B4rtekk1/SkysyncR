@@ -11,6 +11,7 @@ import { Link } from 'react-router-dom'
 import '../App.css'
 import '../css/Dashbord.css'
 import ThemeToggle from '../components/ThemeToggle'
+import SettingsModal from './Settings'
 import {
     listFiles,
     listTrash,
@@ -81,6 +82,7 @@ function Dashboard() {
     const [favouriteIds, setFavouriteIds] = useState<Set<string>>(() => loadFavouriteIds())
     const [draggedCardId, setDraggedCardId] = useState<string | null>(null)
     const [dropTargetId, setDropTargetId] = useState<string | null>(null)
+    const [settingsOpen, setSettingsOpen] = useState(false)
     const [publicKey, setPublicKey] = useState<string | null>(null)
     const [privateKey, setPrivateKey] = useState<CryptoKey | null>(null)
     const normalizedQuery = query.trim().toLowerCase()
@@ -528,10 +530,10 @@ function Dashboard() {
                 </nav>
 
                 <nav className="shell__navlist shell__navlist--footer">
-                    <Link to="/settings" className="shell__navitem">
+                    <button className="shell__navitem" type="button" onClick={() => setSettingsOpen(true)}>
                         <span className="shell__navicon">{SETTINGS_ICON}</span>
                         <span className="shell__sidebar-label">Settings</span>
-                    </Link>
+                    </button>
                 </nav>
 
                 <div className="shell__storage">
@@ -823,6 +825,7 @@ function Dashboard() {
                     onDownload={handleDownload}
                 />
             )}
+            {settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} />}
         </div>
     )
 }
