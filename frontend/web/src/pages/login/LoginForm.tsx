@@ -30,7 +30,8 @@ function LoginForm() {
       const encryptedPrivateKey = await loadEncryptedPrivateKey(user.id)
 
       if (!encryptedPrivateKey) {
-        throw new Error('Private key is not available on this device.')
+        setError('Private key is not available on this device.')
+        return
       }
 
       const privateKey = await decryptPrivateKey(encryptedPrivateKey, password)

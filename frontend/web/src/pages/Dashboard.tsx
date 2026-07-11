@@ -300,11 +300,18 @@ function Dashboard() {
             setItems((prev) => [placeholder, ...prev])
             setPendingIds((prev) => new Set(prev).add(tempId))
 
-            try {
-                if (!publicKey) {
-                    throw new Error('Encryption key unavailable. Sign in again before uploading.')
-                }
+            if (!publicKey) {
+                setItems((prev) => prev.filter((i) => i.id !== tempId))
+                setPendingIds((prev) => {
+                    const next = new Set(prev)
+                    next.delete(tempId)
+                    return next
+                })
+                setError('Encryption key unavailable. Sign in again before uploading.')
+                continue
+            }
 
+            try {
                 const key = await generateFileKey()
                 const { ciphertext, nonce } = await encryptFile(file, key)
                 const wrappedKey = await wrapFileKeyForUser(key, publicKey)
