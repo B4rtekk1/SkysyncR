@@ -33,9 +33,25 @@ import {
     wrapFileKeyForUser,
 } from '../crypto/fileEncryption'
 
-type ViewKey = 'all' | 'favourites' | 'shared' | 'trash'
+type ViewKey = 'all' | 'favourites' | 'shared' | 'groups' | 'trash'
 type LayoutMode = 'grid' | 'list'
 type Item = ApiFile | SharedFile
+type GroupInviteRole = 'viewer' | 'editor' | 'admin'
+
+type GroupInvite = {
+    id: string
+    email: string
+    role: GroupInviteRole
+    createdAt: string
+}
+
+type Group = {
+    id: string
+    name: string
+    defaultRole: GroupInviteRole
+    createdAt: string
+    invites: GroupInvite[]
+}
 
 type NavIndicator = {
     x: number
@@ -48,6 +64,8 @@ type NavIndicator = {
 const FAVOURITES_STORAGE_KEY = 'favourite_file_ids'
 const LOCAL_FILE_META_STORAGE_KEY = 'local_file_metadata'
 const LAYOUT_MODE_STORAGE_KEY = 'file_layout_mode'
+const GROUPS_STORAGE_KEY = 'groups'
+const LEGACY_GROUP_INVITES_STORAGE_KEY = 'group_invites'
 
 type LocalFileMeta = {
     filename: string
@@ -115,7 +133,46 @@ function saveLayoutMode(mode: LayoutMode) {
     }
 }
 
+function loadGroups(): Group[] {
+    try {
+        const raw = localStorage.getItem(GROUPS_STORAGE_KEY)
+        if (raw) {
+            return (JSON.parse(raw) as Group[]).map((group) => ({
+                ...group,
+                defaultRole: group.defaultRole ?? 'viewer',
+                invites: group.invites ?? [],
+            }))
+        }
+
+        const legacyRaw = localStorage.getItem(LEGACY_GROUP_INVITES_STORAGE_KEY)
+        const legacyInvites = legacyRaw ? (JSON.parse(legacyRaw) as GroupInvite[]) : []
+        return legacyInvites.length > 0
+            ? [
+                  {
+                      id: crypto.randomUUID(),
+                      name: 'Main group',
+                      defaultRole: 'viewer',
+                      createdAt: new Date().toISOString(),
+                      invites: legacyInvites,
+                  },
+              ]
+            : []
+    } catch {
+        return []
+    }
+}
+
+function saveGroups(groups: Group[]) {
+    try {
+        localStorage.setItem(GROUPS_STORAGE_KEY, JSON.stringify(groups))
+    } catch {
+        // ignore storage failures (e.g. private browsing)
+    }
+}
+
 const ORDER_STORAGE_PREFIX = 'file_order_'
+const SEARCH_FILTER_EXIT_MS = 240
+const LAYOUT_SWITCH_MS = 420
 
 function loadOrderIds(view: ViewKey): string[] {
     try {
@@ -146,7 +203,7 @@ function applySavedOrder<T extends Item>(data: T[], view: ViewKey): T[] {
 }
 
 const NAV_ORDER_STORAGE_KEY = 'nav_order'
-const DEFAULT_NAV_ORDER: ViewKey[] = ['all', 'favourites', 'shared', 'trash']
+const DEFAULT_NAV_ORDER: ViewKey[] = ['all', 'favourites', 'shared', 'groups', 'trash']
 const SIDEBAR_WIDTH_STORAGE_KEY = 'sidebar_width'
 const SIDEBAR_HIDDEN_STORAGE_KEY = 'sidebar_hidden'
 const MIN_SIDEBAR_WIDTH = 72
@@ -200,6 +257,7 @@ const NAV_LABELS: Record<ViewKey, string> = {
     all: 'All files',
     favourites: 'Favourites',
     shared: 'Shared with me',
+    groups: 'Groups',
     trash: 'Trash',
 }
 
@@ -308,7 +366,7 @@ const KIND_ACCENT: Record<FileKind, string> = {
     archive: 'var(--amber)',
     video: 'var(--amber)',
     audio: 'var(--signal)',
-    text: 'var(--mist)',
+    text: 'var(--signal)',
     image: 'var(--signal)',
     code: 'var(--mist)',
     file: 'var(--mist)',
@@ -327,6 +385,9 @@ const KIND_LABELS: Record<FileKind, string> = {
     code: 'Code',
     file: 'Files',
 }
+
+const DOCUMENT_ICON_PATH = 'M6 2.5h8l4 4v14a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V3.5a1 1 0 0 1 1-1Z'
+const DOCUMENT_FOLD_PATH = 'M14 2.5V7a1 1 0 0 0 1 1h4.5'
 
 function FileIcon({ kind }: { kind: FileKind }) {
     const accent = KIND_ACCENT[kind]
@@ -373,16 +434,25 @@ function FileIcon({ kind }: { kind: FileKind }) {
     if (kind === 'sheet') {
         return (
             <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M6 2.5h8l4 4v14a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V3.5a1 1 0 0 1 1-1Z" {...common} />
-                <path d="M14 2.5V7a1 1 0 0 0 1 1h4.5M8 12h8M8 15h8M11 9v9" {...common} />
+                <path d={DOCUMENT_ICON_PATH} {...common} />
+                <path d={`${DOCUMENT_FOLD_PATH}M8 12h8M8 15h8M11 9v9`} {...common} />
             </svg>
         )
     }
     if (kind === 'pdf') {
         return (
             <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M6 2.5h8l4 4v14a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V3.5a1 1 0 0 1 1-1Z" {...common} />
+                <path d={DOCUMENT_ICON_PATH} {...common} />
                 <path d="M8 16c1.8-3.3 3.2-6.5 3.1-8.2-.1-1.4-1.8-1.2-1.6.2.3 2.5 2.8 6.8 5.7 7.6 1.3.4 1.8-.9.6-1.3-1.8-.6-5.2.4-7.8 1.7Z" {...common} />
+            </svg>
+        )
+    }
+    if (kind === 'text') {
+        return (
+            <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true">
+                <path d={DOCUMENT_ICON_PATH} {...common} />
+                <path d={DOCUMENT_FOLD_PATH} {...common} />
+                <path d="M8 11h4.2M14.2 11H16M8 14h8M8 17h3.6M13.5 17H16" {...common} strokeLinecap="round" />
             </svg>
         )
     }
@@ -405,12 +475,12 @@ function FileIcon({ kind }: { kind: FileKind }) {
     return (
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
             <path
-                d="M6 2.5h8l4 4v14a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V3.5a1 1 0 0 1 1-1Z"
+                d={DOCUMENT_ICON_PATH}
                 stroke={accent}
                 strokeWidth="1.4"
                 fill="none"
             />
-            <path d="M14 2.5V7a1 1 0 0 0 1 1h4.5" stroke={accent} strokeWidth="1.4" fill="none" />
+            <path d={DOCUMENT_FOLD_PATH} stroke={accent} strokeWidth="1.4" fill="none" />
         </svg>
     )
 }
@@ -427,6 +497,18 @@ const NAV_ICONS: Record<ViewKey, React.ReactElement> = {
             <circle cx="17" cy="6" r="2.4" stroke="currentColor" strokeWidth="1.4" />
             <circle cx="17" cy="18" r="2.4" stroke="currentColor" strokeWidth="1.4" />
             <path d="M9.1 11l5.8-3.6M9.1 13l5.8 3.6" stroke="currentColor" strokeWidth="1.4" />
+        </svg>
+    ),
+    groups: (
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <circle cx="8" cy="8.5" r="2.8" stroke="currentColor" strokeWidth="1.4" />
+            <circle cx="16.5" cy="9.5" r="2.2" stroke="currentColor" strokeWidth="1.4" />
+            <path
+                d="M3.8 18.5c.6-2.9 2.4-4.6 4.2-4.6s3.6 1.7 4.2 4.6M13.5 17.8c.5-2 1.7-3.1 3-3.1s2.5 1.1 3 3.1"
+                stroke="currentColor"
+                strokeWidth="1.4"
+                strokeLinecap="round"
+            />
         </svg>
     ),
     trash: (
@@ -591,6 +673,8 @@ function FileCard({
                       draggable,
                       isDragging,
                       isDropTarget,
+                      isSearchExiting,
+                      style,
                       onDragStartCard,
                       onDragEnterCard,
                       onDragLeaveCard,
@@ -609,6 +693,8 @@ function FileCard({
     draggable?: boolean
     isDragging?: boolean
     isDropTarget?: boolean
+    isSearchExiting?: boolean
+    style?: React.CSSProperties
     onDragStartCard?: (id: string, e: DragEvent<HTMLElement>) => void
     onDragEnterCard?: (id: string) => void
     onDragLeaveCard?: (id: string) => void
@@ -627,7 +713,10 @@ function FileCard({
         <article
             className={`file-card ${canToggleFavourite ? 'file-card--has-favourite' : ''} ${
                 hasAction ? 'file-card--has-action' : ''
-            } ${isDragging ? 'is-dragging-card' : ''} ${isDropTarget ? 'is-drop-target' : ''}`}
+            } ${isDragging ? 'is-dragging-card' : ''} ${isDropTarget ? 'is-drop-target' : ''} ${
+                isSearchExiting ? 'is-search-exiting' : ''
+            }`}
+            style={style}
             draggable={draggable && !pending}
             onDragStart={(e) => onDragStartCard?.(item.id, e)}
             onDragEnter={(e) => {
@@ -733,6 +822,494 @@ function EmptyPane({ title, body }: { title: string; body: string }) {
     )
 }
 
+function GroupsPanel({
+    groups,
+    activeGroupId,
+    createOpen,
+    inviteOpen,
+    onCreateGroup,
+    onOpenCreate,
+    onCloseCreate,
+    onOpenGroup,
+    onBackToGroups,
+    onOpenInvite,
+    onCloseInvite,
+    onInvite,
+    onRemoveInvite,
+    onUpdateGroup,
+    onDeleteGroup,
+}: {
+    groups: Group[]
+    activeGroupId: string | null
+    createOpen: boolean
+    inviteOpen: boolean
+    onCreateGroup: (name: string, defaultRole: GroupInviteRole) => void
+    onOpenCreate: () => void
+    onCloseCreate: () => void
+    onOpenGroup: (id: string) => void
+    onBackToGroups: () => void
+    onOpenInvite: () => void
+    onCloseInvite: () => void
+    onInvite: (groupId: string, email: string, role: GroupInviteRole) => void
+    onRemoveInvite: (groupId: string, inviteId: string) => void
+    onUpdateGroup: (groupId: string, name: string, defaultRole: GroupInviteRole) => void
+    onDeleteGroup: (groupId: string) => void
+}) {
+    const [email, setEmail] = useState('')
+    const [role, setRole] = useState<GroupInviteRole>('viewer')
+    const [groupName, setGroupName] = useState('')
+    const [defaultRole, setDefaultRole] = useState<GroupInviteRole>('viewer')
+    const [settingsName, setSettingsName] = useState('')
+    const [settingsRole, setSettingsRole] = useState<GroupInviteRole>('viewer')
+    const [formError, setFormError] = useState<string | null>(null)
+    const [createError, setCreateError] = useState<string | null>(null)
+    const [settingsError, setSettingsError] = useState<string | null>(null)
+    const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
+    const activeGroup = activeGroupId ? groups.find((group) => group.id === activeGroupId) ?? null : null
+
+    useEffect(() => {
+        let timeout: ReturnType<typeof setTimeout> | undefined
+        if (activeGroup && inviteOpen) {
+            timeout = setTimeout(() => setRole(activeGroup.defaultRole), 0)
+        }
+
+        return () => {
+            if (timeout) clearTimeout(timeout)
+        }
+    }, [activeGroup, inviteOpen])
+
+    useEffect(() => {
+        let timeout: ReturnType<typeof setTimeout> | undefined
+        if (activeGroup) {
+            timeout = setTimeout(() => {
+                setSettingsName(activeGroup.name)
+                setSettingsRole(activeGroup.defaultRole)
+                setSettingsError(null)
+                setDeleteConfirmOpen(false)
+            }, 0)
+        }
+
+        return () => {
+            if (timeout) clearTimeout(timeout)
+        }
+    }, [activeGroup])
+
+    function submitSettings(e: React.FormEvent<HTMLFormElement>) {
+        e.preventDefault()
+        if (!activeGroup) return
+
+        const normalizedName = settingsName.trim()
+
+        if (normalizedName.length < 2) {
+            setSettingsError('Enter a group name.')
+            return
+        }
+
+        if (
+            groups.some(
+                (group) => group.id !== activeGroup.id && group.name.toLowerCase() === normalizedName.toLowerCase(),
+            )
+        ) {
+            setSettingsError('A group with this name already exists.')
+            return
+        }
+
+        onUpdateGroup(activeGroup.id, normalizedName, settingsRole)
+        setSettingsError(null)
+    }
+
+    function submitGroup(e: React.FormEvent<HTMLFormElement>) {
+        e.preventDefault()
+        const normalizedName = groupName.trim()
+
+        if (normalizedName.length < 2) {
+            setCreateError('Enter a group name.')
+            return
+        }
+
+        if (groups.some((group) => group.name.toLowerCase() === normalizedName.toLowerCase())) {
+            setCreateError('A group with this name already exists.')
+            return
+        }
+
+        onCreateGroup(normalizedName, defaultRole)
+        setGroupName('')
+        setDefaultRole('viewer')
+        setCreateError(null)
+        onCloseCreate()
+    }
+
+    function closeCreate() {
+        setGroupName('')
+        setDefaultRole('viewer')
+        setCreateError(null)
+        onCloseCreate()
+    }
+
+    function submitInvite(e: React.FormEvent<HTMLFormElement>) {
+        e.preventDefault()
+        if (!activeGroup) return
+
+        const normalizedEmail = email.trim().toLowerCase()
+
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
+            setFormError('Enter a valid email address.')
+            return
+        }
+
+        if (activeGroup.invites.some((invite) => invite.email === normalizedEmail)) {
+            setFormError('This person is already invited.')
+            return
+        }
+
+        onInvite(activeGroup.id, normalizedEmail, role)
+        setEmail('')
+        setRole('viewer')
+        setFormError(null)
+        onCloseInvite()
+    }
+
+    function closeInvite() {
+        setEmail('')
+        setRole('viewer')
+        setFormError(null)
+        onCloseInvite()
+    }
+
+    if (activeGroup) {
+        return (
+            <>
+                <section className="groups-panel" aria-label={`${activeGroup.name} group`}>
+                    <div className="groups-panel__head groups-panel__head--detail">
+                        <div className="groups-hero">
+                            <button className="groups-panel__back" type="button" onClick={onBackToGroups}>
+                                <span aria-hidden="true">←</span> All groups
+                            </button>
+                            <div className="groups-hero__identity">
+                                <div className="groups-hero__mark" aria-hidden="true">{activeGroup.name.charAt(0).toUpperCase()}</div>
+                                <div>
+                                    <p className="groups-panel__eyebrow">Shared workspace</p>
+                                    <h2 className="groups-panel__title">{activeGroup.name}</h2>
+                                </div>
+                            </div>
+                        </div>
+                        <button className="btn btn--solid" type="button" onClick={onOpenInvite}>
+                            <span aria-hidden="true">+</span> Invite member
+                        </button>
+                    </div>
+
+                    <div className="groups-summary">
+                        <div className="groups-summary__item">
+                            <span className="groups-summary__icon" aria-hidden="true">+</span>
+                            <div>
+                                <strong>{activeGroup.invites.length}</strong>
+                                <span>Pending invitations</span>
+                            </div>
+                        </div>
+                        <div className="groups-summary__item">
+                            <span className="groups-summary__icon" aria-hidden="true">•</span>
+                            <div>
+                                <strong>{formatRelative(activeGroup.createdAt)}</strong>
+                                <span>Created</span>
+                            </div>
+                        </div>
+                        <div className="groups-summary__item">
+                            <span className="groups-summary__icon" aria-hidden="true">✓</span>
+                            <div>
+                                <strong className={`groups-role groups-role--${activeGroup.defaultRole}`}>{activeGroup.defaultRole}</strong>
+                                <span>Default access</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <form className="groups-settings" onSubmit={submitSettings}>
+                        <div className="groups-settings__head">
+                            <div>
+                                <p className="groups-panel__eyebrow">Settings</p>
+                                <h3 className="groups-settings__title">Group settings</h3>
+                            </div>
+                            <button className="btn btn--outline" type="submit">
+                                Save changes
+                            </button>
+                        </div>
+
+                        <div className="groups-settings__grid">
+                            <label className="groups-invite__field">
+                                <span>Group name</span>
+                                <input
+                                    type="text"
+                                    value={settingsName}
+                                    onChange={(e) => setSettingsName(e.target.value)}
+                                />
+                            </label>
+                            <label className="groups-invite__field">
+                                <span>Default user role</span>
+                                <select
+                                    value={settingsRole}
+                                    onChange={(e) => setSettingsRole(e.target.value as GroupInviteRole)}
+                                >
+                                    <option value="viewer">Viewer</option>
+                                    <option value="editor">Editor</option>
+                                    <option value="admin">Admin</option>
+                                </select>
+                            </label>
+                        </div>
+
+                        {settingsError && (
+                            <p className="groups-invite__error" role="alert">
+                                {settingsError}
+                            </p>
+                        )}
+
+                        <div className="groups-danger">
+                            <div>
+                                <strong>Delete group</strong>
+                                <span>Removes the group and all pending invitations from this device.</span>
+                            </div>
+                            {deleteConfirmOpen ? (
+                                <div className="groups-danger__actions">
+                                    <button
+                                        className="btn btn--ghost"
+                                        type="button"
+                                        onClick={() => setDeleteConfirmOpen(false)}
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        className="groups-danger__delete"
+                                        type="button"
+                                        onClick={() => onDeleteGroup(activeGroup.id)}
+                                    >
+                                        Confirm delete
+                                    </button>
+                                </div>
+                            ) : (
+                                <button
+                                    className="groups-danger__delete"
+                                    type="button"
+                                    onClick={() => setDeleteConfirmOpen(true)}
+                                >
+                                    Delete
+                                </button>
+                            )}
+                        </div>
+                    </form>
+
+                    <div className="groups-members">
+                        <div className="groups-members__head">
+                            <div>
+                                <p className="groups-panel__eyebrow">Access</p>
+                                <h3>Pending members</h3>
+                            </div>
+                            <span className="groups-members__count">{activeGroup.invites.length}</span>
+                        </div>
+                    <div className="groups-invites">
+                        {activeGroup.invites.length > 0 ? (
+                            activeGroup.invites.map((invite) => (
+                                <div className="groups-invites__row" key={invite.id}>
+                                    <div className="groups-invites__avatar" aria-hidden="true">
+                                        {invite.email.charAt(0).toUpperCase()}
+                                    </div>
+                                    <div className="groups-invites__person">
+                                        <strong>{invite.email}</strong>
+                                        <span>Invited {formatRelative(invite.createdAt)}</span>
+                                    </div>
+                                    <span className={`groups-role groups-role--${invite.role}`}>{invite.role}</span>
+                                    <button
+                                        className="groups-invites__remove"
+                                        type="button"
+                                        onClick={() => onRemoveInvite(activeGroup.id, invite.id)}
+                                        aria-label={`Cancel invitation for ${invite.email}`}
+                                    >
+                                        Cancel
+                                    </button>
+                                </div>
+                            ))
+                        ) : (
+                            <p className="groups-invites__empty">No invitations yet. Add the first member to start collaborating.</p>
+                        )}
+                    </div>
+                    </div>
+                </section>
+
+                {inviteOpen && (
+                    <div className="groups-modal" role="presentation" onMouseDown={closeInvite}>
+                        <form
+                            className="groups-modal__dialog"
+                            role="dialog"
+                            aria-modal="true"
+                            aria-label={`Invite member to ${activeGroup.name}`}
+                            onSubmit={submitInvite}
+                            onMouseDown={(e) => e.stopPropagation()}
+                        >
+                            <div className="groups-modal__head">
+                                <div>
+                                    <p className="groups-panel__eyebrow">Invite member</p>
+                                    <h3 className="groups-modal__title">{activeGroup.name}</h3>
+                                </div>
+                                <button
+                                    className="groups-modal__close"
+                                    type="button"
+                                    onClick={closeInvite}
+                                    aria-label="Close invite dialog"
+                                >
+                                    x
+                                </button>
+                            </div>
+
+                            <label className="groups-invite__field">
+                                <span>Email</span>
+                                <input
+                                    type="email"
+                                    value={email}
+                                    onChange={(e) => setEmail(e.target.value)}
+                                    placeholder="name@example.com"
+                                    autoFocus
+                                />
+                            </label>
+                            <label className="groups-invite__field">
+                                <span>Role</span>
+                                <select value={role} onChange={(e) => setRole(e.target.value as GroupInviteRole)}>
+                                    <option value="viewer">Viewer</option>
+                                    <option value="editor">Editor</option>
+                                    <option value="admin">Admin</option>
+                                </select>
+                            </label>
+
+                            {formError && (
+                                <p className="groups-invite__error" role="alert">
+                                    {formError}
+                                </p>
+                            )}
+
+                            <div className="groups-modal__actions">
+                                <button className="btn btn--outline" type="button" onClick={closeInvite}>
+                                    Cancel
+                                </button>
+                                <button className="btn btn--solid" type="submit">
+                                    Send invite
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                )}
+            </>
+        )
+    }
+
+    return (
+        <>
+            <section className="groups-panel" aria-label="Groups">
+                <div className="groups-panel__head groups-panel__head--listing">
+                    <div>
+                        <p className="groups-panel__eyebrow">Collaboration spaces</p>
+                        <h2 className="groups-panel__title">Your groups</h2>
+                        <p className="groups-panel__subtitle">Create private spaces and manage access to your shared vault.</p>
+                    </div>
+                    <button className="btn btn--solid" type="button" onClick={onOpenCreate}>
+                        <span aria-hidden="true">+</span> New group
+                    </button>
+                </div>
+
+                {groups.length > 0 ? (
+                    <div className="groups-list">
+                        {groups.map((group) => (
+                            <button
+                                className="groups-list__item"
+                                key={group.id}
+                                type="button"
+                                onClick={() => onOpenGroup(group.id)}
+                            >
+                                <div className="groups-list__mark" aria-hidden="true">{group.name.charAt(0).toUpperCase()}</div>
+                                <div className="groups-list__body">
+                                    <div className="groups-list__title-row"><strong>{group.name}</strong><span className={`groups-role groups-role--${group.defaultRole}`}>{group.defaultRole}</span></div>
+                                    <div className="groups-list__meta">
+                                        <span>{group.invites.length === 1 ? '1 pending invitation' : `${group.invites.length} pending invitations`}</span>
+                                        <span>Created {formatRelative(group.createdAt)}</span>
+                                    </div>
+                                </div>
+                                <span className="groups-list__chevron" aria-hidden="true">→</span>
+                            </button>
+                        ))}
+                    </div>
+                ) : (
+                    <div className="groups-empty">
+                        <div className="groups-empty__icon" aria-hidden="true">+</div>
+                        <p className="empty-pane__title">Create your first group</p>
+                        <p className="empty-pane__body">Give your team a private shared space with access you control.</p>
+                        <button className="btn btn--solid" type="button" onClick={onOpenCreate}>Create group</button>
+                    </div>
+                )}
+            </section>
+
+            {createOpen && (
+                <div className="groups-modal" role="presentation" onMouseDown={closeCreate}>
+                    <form
+                        className="groups-modal__dialog"
+                        role="dialog"
+                        aria-modal="true"
+                        aria-label="Create group"
+                        onSubmit={submitGroup}
+                        onMouseDown={(e) => e.stopPropagation()}
+                    >
+                        <div className="groups-modal__head">
+                            <div>
+                                <p className="groups-panel__eyebrow">New group</p>
+                                <h3 className="groups-modal__title">Create group</h3>
+                            </div>
+                            <button
+                                className="groups-modal__close"
+                                type="button"
+                                onClick={closeCreate}
+                                aria-label="Close group dialog"
+                            >
+                                x
+                            </button>
+                        </div>
+
+                        <label className="groups-invite__field">
+                            <span>Group name</span>
+                            <input
+                                type="text"
+                                value={groupName}
+                                onChange={(e) => setGroupName(e.target.value)}
+                                placeholder="Design team"
+                                autoFocus
+                            />
+                        </label>
+                        <label className="groups-invite__field">
+                            <span>Default user role</span>
+                            <select
+                                value={defaultRole}
+                                onChange={(e) => setDefaultRole(e.target.value as GroupInviteRole)}
+                            >
+                                <option value="viewer">Viewer</option>
+                                <option value="editor">Editor</option>
+                                <option value="admin">Admin</option>
+                            </select>
+                        </label>
+
+                        {createError && (
+                            <p className="groups-invite__error" role="alert">
+                                {createError}
+                            </p>
+                        )}
+
+                        <div className="groups-modal__actions">
+                            <button className="btn btn--outline" type="button" onClick={closeCreate}>
+                                Cancel
+                            </button>
+                            <button className="btn btn--solid" type="submit">
+                                Create group
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            )}
+        </>
+    )
+}
+
 function Dashboard() {
     const [view, setView] = useState<ViewKey>('all')
     const [items, setItems] = useState<Item[]>([])
@@ -753,8 +1330,20 @@ function Dashboard() {
     const [sidebarWidth, setSidebarWidth] = useState(() => loadSidebarWidth())
     const [sidebarHidden, setSidebarHidden] = useState(() => loadSidebarHidden())
     const [layoutMode, setLayoutMode] = useState<LayoutMode>(() => loadLayoutMode())
+    const [layoutSwitchTarget, setLayoutSwitchTarget] = useState<LayoutMode | null>(null)
+    const [groups, setGroups] = useState<Group[]>(() => loadGroups())
+    const [activeGroupId, setActiveGroupId] = useState<string | null>(null)
+    const [groupCreateOpen, setGroupCreateOpen] = useState(false)
+    const [groupInviteOpen, setGroupInviteOpen] = useState(false)
     const [publicKey, setPublicKey] = useState<string | null>(null)
+    const normalizedQuery = query.trim().toLowerCase()
+    const previousSearchQueryRef = useRef(normalizedQuery)
+    const [animatedFiles, setAnimatedFiles] = useState<{ ids: string[]; exitingIds: Set<string> }>({
+        ids: [],
+        exitingIds: new Set(),
+    })
     const menuRef = useRef<HTMLDivElement>(null)
+    const layoutSwitchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
     const navListRef = useRef<HTMLElement>(null)
     const navItemRefs = useRef<Partial<Record<ViewKey, HTMLButtonElement>>>({})
     const [navIndicator, setNavIndicator] = useState<NavIndicator>({
@@ -782,7 +1371,14 @@ function Dashboard() {
     }
 
     useEffect(() => {
-        void refreshQuota()
+        const timeout = setTimeout(() => void refreshQuota(), 0)
+        return () => clearTimeout(timeout)
+    }, [])
+
+    useEffect(() => {
+        return () => {
+            if (layoutSwitchTimeoutRef.current) clearTimeout(layoutSwitchTimeoutRef.current)
+        }
     }, [])
 
     useEffect(() => {
@@ -826,12 +1422,16 @@ function Dashboard() {
     }, [view, navOrder, sidebarWidth, sidebarHidden])
 
     useEffect(() => {
-        setNavIndicatorPulling(false)
-        const frame = requestAnimationFrame(() => setNavIndicatorPulling(true))
+        let pullFrame: number | undefined
+        const frame = requestAnimationFrame(() => {
+            setNavIndicatorPulling(false)
+            pullFrame = requestAnimationFrame(() => setNavIndicatorPulling(true))
+        })
         const timeout = window.setTimeout(() => setNavIndicatorPulling(false), 540)
 
         return () => {
             cancelAnimationFrame(frame)
+            if (pullFrame) cancelAnimationFrame(pullFrame)
             window.clearTimeout(timeout)
         }
     }, [view])
@@ -860,6 +1460,7 @@ function Dashboard() {
                 if (!active) return undefined
                 setLoading(true)
                 setError(null)
+                if (view === 'groups') return []
                 return view === 'all' || view === 'favourites'
                     ? listFiles()
                     : view === 'trash'
@@ -1032,8 +1633,17 @@ function Dashboard() {
     }
 
     function changeLayoutMode(mode: LayoutMode) {
+        if (mode === layoutMode) return
+        if (layoutSwitchTimeoutRef.current) clearTimeout(layoutSwitchTimeoutRef.current)
+
+        setLayoutSwitchTarget(mode)
         setLayoutMode(mode)
         saveLayoutMode(mode)
+
+        layoutSwitchTimeoutRef.current = setTimeout(() => {
+            setLayoutSwitchTarget(null)
+            layoutSwitchTimeoutRef.current = null
+        }, LAYOUT_SWITCH_MS)
     }
 
     function handleCardDragStart(id: string, e: DragEvent<HTMLElement>) {
@@ -1134,9 +1744,149 @@ function Dashboard() {
         window.location.href = '/login'
     }
 
-    const visibleItems = items
-        .filter((i) => i.filename.toLowerCase().includes(query.trim().toLowerCase()))
-        .filter((i) => (view === 'favourites' ? favouriteIds.has(i.id) : true))
+    function createGroup(name: string, defaultRole: GroupInviteRole) {
+        setGroups((prev) => {
+            const group: Group = {
+                id: crypto.randomUUID(),
+                name,
+                defaultRole,
+                createdAt: new Date().toISOString(),
+                invites: [],
+            }
+            const next = [group, ...prev]
+            saveGroups(next)
+            setActiveGroupId(group.id)
+            return next
+        })
+    }
+
+    function openGroup(id: string) {
+        setActiveGroupId(id)
+        setGroupCreateOpen(false)
+        setGroupInviteOpen(false)
+    }
+
+    function backToGroups() {
+        setActiveGroupId(null)
+        setGroupCreateOpen(false)
+        setGroupInviteOpen(false)
+    }
+
+    function addGroupInvite(groupId: string, email: string, role: GroupInviteRole) {
+        setGroups((prev) => {
+            const next = prev.map((group) =>
+                group.id === groupId
+                    ? {
+                          ...group,
+                          invites: [
+                              {
+                                  id: crypto.randomUUID(),
+                                  email,
+                                  role,
+                                  createdAt: new Date().toISOString(),
+                              },
+                              ...group.invites,
+                          ],
+                      }
+                    : group,
+            )
+            saveGroups(next)
+            return next
+        })
+    }
+
+    function updateGroup(groupId: string, name: string, defaultRole: GroupInviteRole) {
+        setGroups((prev) => {
+            const next = prev.map((group) =>
+                group.id === groupId
+                    ? {
+                          ...group,
+                          name,
+                          defaultRole,
+                      }
+                    : group,
+            )
+            saveGroups(next)
+            return next
+        })
+    }
+
+    function deleteGroup(groupId: string) {
+        setGroups((prev) => {
+            const next = prev.filter((group) => group.id !== groupId)
+            saveGroups(next)
+            return next
+        })
+        setActiveGroupId(null)
+        setGroupCreateOpen(false)
+        setGroupInviteOpen(false)
+    }
+
+    function removeGroupInvite(groupId: string, inviteId: string) {
+        setGroups((prev) => {
+            const next = prev.map((group) =>
+                group.id === groupId
+                    ? {
+                          ...group,
+                          invites: group.invites.filter((invite) => invite.id !== inviteId),
+                      }
+                    : group,
+            )
+            saveGroups(next)
+            return next
+        })
+    }
+
+    const visibleItems = useMemo(
+        () =>
+            items
+                .filter((i) => i.filename.toLowerCase().includes(normalizedQuery))
+                .filter((i) => (view === 'favourites' ? favouriteIds.has(i.id) : true)),
+        [favouriteIds, items, normalizedQuery, view],
+    )
+    const itemById = useMemo(() => new Map(items.map((item) => [item.id, item])), [items])
+
+    useEffect(() => {
+        const nextIds = visibleItems.map((item) => item.id)
+        const queryChanged = previousSearchQueryRef.current !== normalizedQuery
+        previousSearchQueryRef.current = normalizedQuery
+
+        if (!queryChanged) {
+            setAnimatedFiles({ ids: nextIds, exitingIds: new Set() })
+            return
+        }
+
+        let timeout: ReturnType<typeof setTimeout> | undefined
+        setAnimatedFiles((prev) => {
+            const nextIdSet = new Set(nextIds)
+            const currentItemIds = new Set(items.map((item) => item.id))
+            const exitingIds = prev.ids.filter((id) => !nextIdSet.has(id) && currentItemIds.has(id))
+
+            if (exitingIds.length === 0) {
+                return { ids: nextIds, exitingIds: new Set() }
+            }
+
+            timeout = setTimeout(() => {
+                setAnimatedFiles({ ids: nextIds, exitingIds: new Set() })
+            }, SEARCH_FILTER_EXIT_MS)
+
+            return {
+                ids: [
+                    ...prev.ids.filter((id) => nextIdSet.has(id) || exitingIds.includes(id)),
+                    ...nextIds.filter((id) => !prev.ids.includes(id)),
+                ],
+                exitingIds: new Set(exitingIds),
+            }
+        })
+
+        return () => {
+            if (timeout) clearTimeout(timeout)
+        }
+    }, [items, normalizedQuery, visibleItems])
+
+    const renderedItems = animatedFiles.ids
+        .map((id) => itemById.get(id))
+        .filter((item): item is Item => Boolean(item))
 
     const usedPct = quota ? Math.min(100, Math.round((quota.used_bytes / quota.total_bytes) * 100)) : 0
     const storageStatus = usedPct >= 90 ? 'critical' : usedPct >= 80 ? 'warning' : 'healthy'
@@ -1379,12 +2129,19 @@ function Dashboard() {
                                 {view === 'all' && 'All files'}
                                 {view === 'favourites' && 'Favourites'}
                                 {view === 'shared' && 'Shared with me'}
+                                {view === 'groups' && 'Groups'}
                                 {view === 'trash' && 'Trash'}
                             </h1>
                         </div>
 
                         <div className="shell__content-actions">
-                            <div className="view-toggle" role="group" aria-label="File layout">
+                            <div
+                                className={`view-toggle view-toggle--${layoutMode} ${
+                                    layoutSwitchTarget ? 'is-switching' : ''
+                                }`}
+                                role="group"
+                                aria-label="File layout"
+                            >
                                 <button
                                     className={`view-toggle__button ${layoutMode === 'grid' ? 'is-active' : ''}`}
                                     type="button"
@@ -1424,28 +2181,54 @@ function Dashboard() {
 
                     {loading && <p className="shell__loading">Loading…</p>}
 
-                    {!loading && view === 'shared' && visibleItems.length === 0 && (
+                    {!loading && view === 'shared' && visibleItems.length === 0 && renderedItems.length === 0 && (
                         <EmptyPane
                             title="Nothing shared yet"
                             body="Files someone shares with you will show up here, still encrypted end-to-end."
                         />
                     )}
 
-                    {!loading && view === 'favourites' && visibleItems.length === 0 && (
+                    {!loading && view === 'groups' && (
+                        <GroupsPanel
+                            groups={groups}
+                            activeGroupId={activeGroupId}
+                            createOpen={groupCreateOpen}
+                            inviteOpen={groupInviteOpen}
+                            onCreateGroup={createGroup}
+                            onOpenCreate={() => {
+                                setGroupCreateOpen(true)
+                                setGroupInviteOpen(false)
+                            }}
+                            onCloseCreate={() => setGroupCreateOpen(false)}
+                            onOpenGroup={openGroup}
+                            onBackToGroups={backToGroups}
+                            onOpenInvite={() => {
+                                setGroupInviteOpen(true)
+                                setGroupCreateOpen(false)
+                            }}
+                            onCloseInvite={() => setGroupInviteOpen(false)}
+                            onInvite={addGroupInvite}
+                            onRemoveInvite={removeGroupInvite}
+                            onUpdateGroup={updateGroup}
+                            onDeleteGroup={deleteGroup}
+                        />
+                    )}
+
+                    {!loading && view === 'favourites' && visibleItems.length === 0 && renderedItems.length === 0 && (
                         <EmptyPane
                             title={query ? 'No favourites match your search' : 'No favourites yet'}
                             body="Tap the star on any file to pin it here for quick access."
                         />
                     )}
 
-                    {!loading && view === 'trash' && visibleItems.length === 0 && (
+                    {!loading && view === 'trash' && visibleItems.length === 0 && renderedItems.length === 0 && (
                         <EmptyPane
                             title="Trash is empty"
                             body="Deleted files stay here for 30 days before they're gone for good."
                         />
                     )}
 
-                    {!loading && view === 'all' && visibleItems.length === 0 && (
+                    {!loading && view === 'all' && visibleItems.length === 0 && renderedItems.length === 0 && (
                         <EmptyPane
                             title={query ? 'No files match your search' : 'Drop files to encrypt and sync'}
                             body={
@@ -1456,9 +2239,16 @@ function Dashboard() {
                         />
                     )}
 
-                    {!loading && visibleItems.length > 0 && (
-                        <div className={`file-grid file-grid--${layoutMode}`}>
-                            {visibleItems.map((item, i) => (
+                    {!loading && renderedItems.length > 0 && (
+                        <div
+                            className={`file-grid file-grid--${layoutMode} ${
+                                layoutSwitchTarget ? `is-layout-switching is-switching-to-${layoutSwitchTarget}` : ''
+                            }`}
+                        >
+                            {renderedItems.map((item, i) => {
+                                const isSearchExiting = animatedFiles.exitingIds.has(item.id)
+
+                                return (
                                 <FileCard
                                     key={item.id}
                                     item={item}
@@ -1472,16 +2262,19 @@ function Dashboard() {
                                     onToggleFavourite={
                                         view === 'all' || view === 'favourites' ? toggleFavourite : undefined
                                     }
-                                    draggable={!pendingIds.has(item.id)}
+                                    draggable={!pendingIds.has(item.id) && !isSearchExiting}
                                     isDragging={draggedCardId === item.id}
                                     isDropTarget={dropTargetId === item.id}
+                                    isSearchExiting={isSearchExiting}
+                                    style={{ '--file-index': i } as React.CSSProperties}
                                     onDragStartCard={handleCardDragStart}
                                     onDragEnterCard={handleCardDragEnter}
                                     onDragLeaveCard={handleCardDragLeave}
                                     onDropCard={handleCardDrop}
                                     onDragEndCard={handleCardDragEnd}
                                 />
-                            ))}
+                                )
+                            })}
                         </div>
                     )}
 
