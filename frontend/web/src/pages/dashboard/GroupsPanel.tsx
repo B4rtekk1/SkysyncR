@@ -1,23 +1,24 @@
 import { useEffect, useState } from 'react'
+import type * as React from 'react'
 import type { Group, GroupInviteRole } from './types'
 import { formatRelative } from './fileUtils'
 export function GroupsPanel({
-    groups,
-    activeGroupId,
-    createOpen,
-    inviteOpen,
-    onCreateGroup,
-    onOpenCreate,
-    onCloseCreate,
-    onOpenGroup,
-    onBackToGroups,
-    onOpenInvite,
-    onCloseInvite,
-    onInvite,
-    onRemoveInvite,
-    onUpdateGroup,
-    onDeleteGroup,
-}: {
+                                groups,
+                                activeGroupId,
+                                createOpen,
+                                inviteOpen,
+                                onCreateGroup,
+                                onOpenCreate,
+                                onCloseCreate,
+                                onOpenGroup,
+                                onBackToGroups,
+                                onOpenInvite,
+                                onCloseInvite,
+                                onInvite,
+                                onRemoveInvite,
+                                onUpdateGroup,
+                                onDeleteGroup,
+                            }: {
     groups: Group[]
     activeGroupId: string | null
     createOpen: boolean
@@ -98,7 +99,7 @@ export function GroupsPanel({
         return () => window.removeEventListener('keydown', handleKeyDown)
     }, [createOpen, inviteOpen, onCloseCreate, onCloseInvite])
 
-    function submitSettings(e: React.FormEvent<HTMLFormElement>) {
+    function submitSettings(e: React.SubmitEvent<HTMLFormElement>) {
         e.preventDefault()
         if (!activeGroup) return
 
@@ -122,7 +123,7 @@ export function GroupsPanel({
         setSettingsError(null)
     }
 
-    function submitGroup(e: React.FormEvent<HTMLFormElement>) {
+    function submitGroup(e: React.SubmitEvent<HTMLFormElement>) {
         e.preventDefault()
         const normalizedName = groupName.trim()
 
@@ -150,7 +151,7 @@ export function GroupsPanel({
         onCloseCreate()
     }
 
-    function submitInvite(e: React.FormEvent<HTMLFormElement>) {
+    function submitInvite(e: React.SubmitEvent<HTMLFormElement>) {
         e.preventDefault()
         if (!activeGroup) return
 
@@ -307,32 +308,32 @@ export function GroupsPanel({
                             </div>
                             <span className="groups-members__count">{activeGroup.invites.length}</span>
                         </div>
-                    <div className="groups-invites">
-                        {activeGroup.invites.length > 0 ? (
-                            activeGroup.invites.map((invite) => (
-                                <div className="groups-invites__row" key={invite.id}>
-                                    <div className="groups-invites__avatar" aria-hidden="true">
-                                        {invite.email.charAt(0).toUpperCase()}
+                        <div className="groups-invites">
+                            {activeGroup.invites.length > 0 ? (
+                                activeGroup.invites.map((invite) => (
+                                    <div className="groups-invites__row" key={invite.id}>
+                                        <div className="groups-invites__avatar" aria-hidden="true">
+                                            {invite.email.charAt(0).toUpperCase()}
+                                        </div>
+                                        <div className="groups-invites__person">
+                                            <strong>{invite.email}</strong>
+                                            <span>Invited {formatRelative(invite.createdAt)}</span>
+                                        </div>
+                                        <span className={`groups-role groups-role--${invite.role}`}>{invite.role}</span>
+                                        <button
+                                            className="groups-invites__remove"
+                                            type="button"
+                                            onClick={() => onRemoveInvite(activeGroup.id, invite.id)}
+                                            aria-label={`Cancel invitation for ${invite.email}`}
+                                        >
+                                            Cancel
+                                        </button>
                                     </div>
-                                    <div className="groups-invites__person">
-                                        <strong>{invite.email}</strong>
-                                        <span>Invited {formatRelative(invite.createdAt)}</span>
-                                    </div>
-                                    <span className={`groups-role groups-role--${invite.role}`}>{invite.role}</span>
-                                    <button
-                                        className="groups-invites__remove"
-                                        type="button"
-                                        onClick={() => onRemoveInvite(activeGroup.id, invite.id)}
-                                        aria-label={`Cancel invitation for ${invite.email}`}
-                                    >
-                                        Cancel
-                                    </button>
-                                </div>
-                            ))
-                        ) : (
-                            <p className="groups-invites__empty">No invitations yet. Add the first member to start collaborating.</p>
-                        )}
-                    </div>
+                                ))
+                            ) : (
+                                <p className="groups-invites__empty">No invitations yet. Add the first member to start collaborating.</p>
+                            )}
+                        </div>
                     </div>
                 </section>
 
@@ -521,5 +522,3 @@ export function GroupsPanel({
         </>
     )
 }
-
-
