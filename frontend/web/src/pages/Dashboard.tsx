@@ -130,7 +130,7 @@ function Dashboard() {
         deleteGroup,
         removeGroupInvite,
     } = useDashboardGroups()
-    const { imagePreview, closeImagePreview, handleDownload, handleImagePreview } = useFilePreview(privateKey, setError)
+    const { filePreview, closeFilePreview, handleDownload, handleFilePreview } = useFilePreview(privateKey, setError)
     const { visibleItems, renderedItems, animatedFiles } = useAnimatedItems({
         items,
         view,
@@ -790,7 +790,7 @@ function Dashboard() {
                                     onDelete={view === 'all' ? handleDelete : undefined}
                                     onRestore={view === 'trash' ? handleRestore : undefined}
                                     onDownload={view !== 'trash' ? handleDownload : undefined}
-                                    onPreview={view !== 'trash' ? handleImagePreview : undefined}
+                                    onPreview={view !== 'trash' ? handleFilePreview : undefined}
                                     isFavourite={favouriteIds.has(item.id)}
                                     onToggleFavourite={
                                         view === 'all' || view === 'favourites' ? toggleFavourite : undefined
@@ -818,10 +818,10 @@ function Dashboard() {
                     )}
                 </div>
             </div>
-            {imagePreview && (
+            {filePreview && (
                 <ImagePreviewModal
-                    preview={imagePreview}
-                    onClose={closeImagePreview}
+                    preview={filePreview}
+                    onClose={closeFilePreview}
                     onDownload={handleDownload}
                 />
             )}

@@ -2,9 +2,12 @@ import type { ApiFile, SharedFile } from '../../api/files'
 export type ViewKey = 'all' | 'favourites' | 'shared' | 'groups' | 'trash'
 export type LayoutMode = 'grid' | 'list'
 export type Item = ApiFile | SharedFile
-export type ImagePreviewState = {
+export type FilePreviewKind = 'image' | 'text'
+export type FilePreviewState = {
     item: Item
+    kind: FilePreviewKind
     url: string | null
+    text: string | null
     loading: boolean
 }
 export type GroupInviteRole = 'viewer' | 'editor' | 'admin'

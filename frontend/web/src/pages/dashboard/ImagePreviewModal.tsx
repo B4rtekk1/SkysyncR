@@ -1,15 +1,19 @@
 import { DOWNLOAD_ICON } from './icons'
-import type { ImagePreviewState, Item } from './types'
+import type { FilePreviewState, Item } from './types'
 import { formatBytes } from './fileUtils'
+import { TextFilePreview, TextFilePreviewModeToggle, useTextFilePreview } from './TextFilePreview'
+
 export function ImagePreviewModal({
                                preview,
                                onClose,
                                onDownload,
                            }: {
-    preview: ImagePreviewState
+    preview: FilePreviewState
     onClose: () => void
     onDownload: (item: Item) => void
 }) {
+    const { canRenderMarkdown, setTextMode, textMode } = useTextFilePreview(preview.item, preview.text)
+
     return (
         <div className="image-preview" role="presentation" onMouseDown={onClose}>
             <div
@@ -25,6 +29,9 @@ export function ImagePreviewModal({
                         <span>{formatBytes(preview.item.size_bytes)}</span>
                     </div>
                     <div className="image-preview__actions">
+                        {canRenderMarkdown && (
+                            <TextFilePreviewModeToggle setTextMode={setTextMode} textMode={textMode} />
+                        )}
                         <button
                             className="file-card__action file-card__action--download"
                             type="button"
@@ -54,6 +61,13 @@ export function ImagePreviewModal({
                     )}
                     {preview.url && (
                         <img className="image-preview__image" src={preview.url} alt={preview.item.filename} />
+                    )}
+                    {preview.text !== null && (
+                        <TextFilePreview
+                            canRenderMarkdown={canRenderMarkdown}
+                            text={preview.text}
+                            textMode={textMode}
+                        />
                     )}
                 </div>
             </div>

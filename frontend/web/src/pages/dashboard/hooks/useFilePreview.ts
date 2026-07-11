@@ -1,13 +1,22 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { downloadFile } from '../../../api/files'
 import { decryptFile, unwrapFileKeyForUser } from '../../../crypto/fileEncryption'
-import { kindFromFile } from '../fileUtils'
-import type { ImagePreviewState, Item } from '../types'
+import { type FileKind, kindFromFile } from '../fileUtils'
+import type { FilePreviewState, Item } from '../types'
+
+const MAX_TEXT_PREVIEW_BYTES = 1024 * 1024
+
+function previewKindFromFile(filename: string, mime: string | null): FilePreviewState['kind'] | null {
+    const kind: FileKind = kindFromFile(filename, mime)
+    if (kind === 'image') return 'image'
+    if (kind === 'text' || kind === 'code') return 'text'
+    return null
+}
 
 export function useFilePreview(privateKey: CryptoKey | null, setError: (error: string | null) => void) {
-    const [imagePreview, setImagePreview] = useState<ImagePreviewState | null>(null)
-    const imagePreviewUrlRef = useRef<string | null>(null)
-    const imagePreviewRequestRef = useRef(0)
+    const [filePreview, setFilePreview] = useState<FilePreviewState | null>(null)
+    const filePreviewUrlRef = useRef<string | null>(null)
+    const filePreviewRequestRef = useRef(0)
 
     const decryptDownloadedFile = useCallback(async (item: Item): Promise<Blob> => {
         if (!privateKey) {
@@ -22,35 +31,35 @@ export function useFilePreview(privateKey: CryptoKey | null, setError: (error: s
         return decryptFile(encryptedBlob, fileKey, item.encryption_nonce, item.mime_type)
     }, [privateKey])
 
-    const clearImagePreviewUrl = useCallback(() => {
-        if (imagePreviewUrlRef.current) {
-            URL.revokeObjectURL(imagePreviewUrlRef.current)
-            imagePreviewUrlRef.current = null
+    const clearFilePreviewUrl = useCallback(() => {
+        if (filePreviewUrlRef.current) {
+            URL.revokeObjectURL(filePreviewUrlRef.current)
+            filePreviewUrlRef.current = null
         }
     }, [])
 
-    const closeImagePreview = useCallback(() => {
-        imagePreviewRequestRef.current += 1
-        clearImagePreviewUrl()
-        setImagePreview(null)
-    }, [clearImagePreviewUrl])
+    const closeFilePreview = useCallback(() => {
+        filePreviewRequestRef.current += 1
+        clearFilePreviewUrl()
+        setFilePreview(null)
+    }, [clearFilePreviewUrl])
 
     useEffect(() => {
         return () => {
-            if (imagePreviewUrlRef.current) URL.revokeObjectURL(imagePreviewUrlRef.current)
+            if (filePreviewUrlRef.current) URL.revokeObjectURL(filePreviewUrlRef.current)
         }
     }, [])
 
     useEffect(() => {
-        if (!imagePreview) return
+        if (!filePreview) return
 
         function onKeyDown(e: globalThis.KeyboardEvent) {
-            if (e.key === 'Escape') closeImagePreview()
+            if (e.key === 'Escape') closeFilePreview()
         }
 
         document.addEventListener('keydown', onKeyDown)
         return () => document.removeEventListener('keydown', onKeyDown)
-    }, [closeImagePreview, imagePreview])
+    }, [closeFilePreview, filePreview])
 
     async function handleDownload(item: Item) {
         try {
@@ -68,38 +77,53 @@ export function useFilePreview(privateKey: CryptoKey | null, setError: (error: s
         }
     }
 
-    async function handleImagePreview(item: Item) {
-        if (kindFromFile(item.filename, item.mime_type) !== 'image') return
+    async function handleFilePreview(item: Item) {
+        const previewKind = previewKindFromFile(item.filename, item.mime_type)
+        if (!previewKind) return
 
-        const requestId = imagePreviewRequestRef.current + 1
-        imagePreviewRequestRef.current = requestId
-        clearImagePreviewUrl()
+        if (previewKind === 'text' && item.size_bytes > MAX_TEXT_PREVIEW_BYTES) {
+            setError('Text preview is available for files up to 1 MB. Download this file to view it.')
+            return
+        }
+
+        const requestId = filePreviewRequestRef.current + 1
+        filePreviewRequestRef.current = requestId
+        clearFilePreviewUrl()
         setError(null)
-        setImagePreview({ item, url: null, loading: true })
+        setFilePreview({ item, kind: previewKind, url: null, text: null, loading: true })
 
         try {
             const previewBlob = await decryptDownloadedFile(item)
-            const url = URL.createObjectURL(previewBlob)
 
-            if (imagePreviewRequestRef.current !== requestId) {
-                URL.revokeObjectURL(url)
+            if (previewKind === 'image') {
+                const url = URL.createObjectURL(previewBlob)
+
+                if (filePreviewRequestRef.current !== requestId) {
+                    URL.revokeObjectURL(url)
+                    return
+                }
+
+                filePreviewUrlRef.current = url
+                setFilePreview({ item, kind: previewKind, url, text: null, loading: false })
                 return
             }
 
-            imagePreviewUrlRef.current = url
-            setImagePreview({ item, url, loading: false })
+            const text = await previewBlob.text()
+            if (filePreviewRequestRef.current !== requestId) return
+
+            setFilePreview({ item, kind: previewKind, url: null, text, loading: false })
         } catch (e) {
-            if (imagePreviewRequestRef.current === requestId) {
-                setImagePreview(null)
-                setError(e instanceof Error ? e.message : 'Could not preview that image.')
+            if (filePreviewRequestRef.current === requestId) {
+                setFilePreview(null)
+                setError(e instanceof Error ? e.message : 'Could not preview that file.')
             }
         }
     }
 
     return {
-        imagePreview,
-        closeImagePreview,
+        filePreview,
+        closeFilePreview,
         handleDownload,
-        handleImagePreview,
+        handleFilePreview,
     }
 }

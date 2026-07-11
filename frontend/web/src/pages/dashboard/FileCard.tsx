@@ -57,7 +57,7 @@ export function FileCard({
     const [favouriteTouched, setFavouriteTouched] = useState(false)
     const canToggleFavourite = Boolean(onToggleFavourite && !isShared(item))
     const canDownload = Boolean(onDownload && view !== 'trash')
-    const canPreview = Boolean(onPreview && kind === 'image' && view !== 'trash' && !pending)
+    const canPreview = Boolean(onPreview && ['image', 'text', 'code'].includes(kind) && view !== 'trash' && !pending)
     const hasAction = Boolean(canDownload || (view === 'all' && onDelete) || (view === 'trash' && onRestore))
     const handlePreviewKeyDown = (e: ReactKeyboardEvent<HTMLElement>) => {
         if (!canPreview) return

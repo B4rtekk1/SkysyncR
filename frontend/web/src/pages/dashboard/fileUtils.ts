@@ -96,6 +96,12 @@ export function kindFromFile(filename: string, mime: string | null): FileKind {
     return 'file'
 }
 
+export function isMarkdownFile(filename: string, mime: string | null) {
+    const ext = filename.split('.').pop()?.toLowerCase() ?? ''
+    const normalizedMime = mime?.toLowerCase() ?? ''
+    return normalizedMime === 'text/markdown' || normalizedMime === 'text/x-markdown' || ['md', 'markdown', 'mdown'].includes(ext)
+}
+
 export const KIND_ACCENT: Record<FileKind, string> = {
     sheet: 'var(--signal)',
     document: 'var(--mist)',
