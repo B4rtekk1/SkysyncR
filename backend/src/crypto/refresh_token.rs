@@ -2,8 +2,8 @@ use chrono::{Duration, Utc};
 use rand::RngCore;
 use sha2::{Digest, Sha256};
 
-pub const REFRESH_TOKEN_DURATION: Duration = Duration::minutes(15);
 pub const REFRESH_SESSION_DURATION: Duration = Duration::days(90);
+pub const REFRESH_TOKEN_DURATION: Duration = REFRESH_SESSION_DURATION;
 
 pub fn generate_refresh_token() -> String {
     let mut bytes = [0u8; 32];

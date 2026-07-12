@@ -6,6 +6,9 @@ import { apiFetch } from './http'
 const ACCESS_TOKEN_KEY = 'access_token'
 const REFRESH_TOKEN_KEY = 'refresh_token'
 const TOKEN_EXPIRES_AT_KEY = 'token_expires_at'
+const REFRESH_LOCK_KEY = 'refresh_token_lock'
+const REFRESH_LOCK_TTL_MS = 10_000
+const REFRESH_WAIT_TIMEOUT_MS = 12_000
 
 export interface TokenPair {
   access_token: string
@@ -14,6 +17,15 @@ export interface TokenPair {
 }
 
 type StorageKind = 'local' | 'session'
+
+type RefreshLock = {
+  owner: string
+  expiresAt: number
+}
+
+function randomId(): string {
+  return crypto.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`
+}
 
 function getActiveStorage(): Storage | null {
   if (localStorage.getItem(ACCESS_TOKEN_KEY)) return localStorage
@@ -75,10 +87,15 @@ function isAccessTokenExpiringSoon(bufferMs = 60_000): boolean {
 
 let refreshPromise: Promise<string | null> | null = null
 
-async function refreshAccessToken(): Promise<string | null> {
-  const refreshToken = getRefreshToken()
-  if (!refreshToken) return null
+function persistTokens(tokens: TokenPair) {
+  const storage = getActiveStorage() ?? localStorage
+  const expiresAt = Date.now() + tokens.expires_in * 1000
+  storage.setItem(ACCESS_TOKEN_KEY, tokens.access_token)
+  storage.setItem(REFRESH_TOKEN_KEY, tokens.refresh_token)
+  storage.setItem(TOKEN_EXPIRES_AT_KEY, String(expiresAt))
+}
 
+async function requestTokenRefresh(refreshToken: string): Promise<string | null> {
   const res = await apiFetch(`${API_BASE}users/refresh`, {
     method: 'POST',
     headers: withDeviceHeaders({ 'Content-Type': 'application/json' }),
@@ -91,13 +108,105 @@ async function refreshAccessToken(): Promise<string | null> {
   }
 
   const tokens: TokenPair = await res.json()
-  const storage = getActiveStorage() ?? localStorage
-  const expiresAt = Date.now() + tokens.expires_in * 1000
-  storage.setItem(ACCESS_TOKEN_KEY, tokens.access_token)
-  storage.setItem(REFRESH_TOKEN_KEY, tokens.refresh_token)
-  storage.setItem(TOKEN_EXPIRES_AT_KEY, String(expiresAt))
-
+  persistTokens(tokens)
   return tokens.access_token
+}
+
+function readRefreshLock(): RefreshLock | null {
+  const raw = localStorage.getItem(REFRESH_LOCK_KEY)
+  if (!raw) return null
+
+  try {
+    const lock = JSON.parse(raw) as Partial<RefreshLock>
+    if (typeof lock.owner === 'string' && typeof lock.expiresAt === 'number') {
+      return { owner: lock.owner, expiresAt: lock.expiresAt }
+    }
+  } catch {
+    localStorage.removeItem(REFRESH_LOCK_KEY)
+  }
+
+  return null
+}
+
+function tryAcquireRefreshLock(owner: string): boolean {
+  const now = Date.now()
+  const lock = readRefreshLock()
+  if (lock && lock.expiresAt > now && lock.owner !== owner) {
+    return false
+  }
+
+  localStorage.setItem(
+    REFRESH_LOCK_KEY,
+    JSON.stringify({ owner, expiresAt: now + REFRESH_LOCK_TTL_MS }),
+  )
+
+  return readRefreshLock()?.owner === owner
+}
+
+function releaseRefreshLock(owner: string) {
+  if (readRefreshLock()?.owner === owner) {
+    localStorage.removeItem(REFRESH_LOCK_KEY)
+  }
+}
+
+function shouldCoordinateRefresh(refreshToken: string): boolean {
+  return localStorage.getItem(REFRESH_TOKEN_KEY) === refreshToken
+}
+
+function waitForRefreshedToken(previousRefreshToken: string): Promise<string | null> {
+  return new Promise((resolve) => {
+    let done = false
+
+    function finish(token: string | null) {
+      if (done) return
+      done = true
+      window.removeEventListener('storage', check)
+      window.clearInterval(interval)
+      window.clearTimeout(timeout)
+      resolve(token)
+    }
+
+    function check() {
+      const current = getAccessToken()
+      const refreshToken = getRefreshToken()
+      if (current && refreshToken !== previousRefreshToken && !isAccessTokenExpiringSoon()) {
+        finish(current)
+      }
+    }
+
+    const interval = window.setInterval(check, 100)
+    const timeout = window.setTimeout(() => finish(null), REFRESH_WAIT_TIMEOUT_MS)
+    window.addEventListener('storage', check)
+    check()
+  })
+}
+
+async function refreshAccessToken(): Promise<string | null> {
+  let refreshToken = getRefreshToken()
+  if (!refreshToken) return null
+
+  if (!shouldCoordinateRefresh(refreshToken)) {
+    return requestTokenRefresh(refreshToken)
+  }
+
+  const owner = randomId()
+
+  while (!tryAcquireRefreshLock(owner)) {
+    const token = await waitForRefreshedToken(refreshToken)
+    if (token) return token
+  }
+
+  try {
+    const current = getAccessToken()
+    if (current && !isAccessTokenExpiringSoon()) {
+      return current
+    }
+
+    refreshToken = getRefreshToken()
+    return refreshToken ? requestTokenRefresh(refreshToken) : null
+  } finally {
+    releaseRefreshLock(owner)
+  }
 }
 
 export async function getValidAccessToken(): Promise<string | null> {

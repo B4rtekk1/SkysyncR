@@ -1,5 +1,6 @@
-import { type SubmitEvent, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { type SubmitEvent, useEffect, useState } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
+import { getValidAccessToken } from '../../api/auth.ts'
 import { ApiRequestError, getCurrentUser, loginUser } from '../../api/users.ts'
 import { isNetworkError } from '../../api/http.ts'
 import { decryptPrivateKey } from '../../crypto/keys'
@@ -20,12 +21,31 @@ function messageFromError(err: unknown): string {
 }
 
 function LoginForm() {
+  const navigate = useNavigate()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [remember, setRemember] = useState(true)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<LoginError | null>(null)
   const [showPassword, setShowPassword] = useState(false)
+
+  useEffect(() => {
+    let active = true
+
+    getValidAccessToken()
+      .then((token) => {
+        if (active && token) {
+          navigate('/dashboard', { replace: true })
+        }
+      })
+      .catch(() => {
+        // Stay on the login form when the saved session cannot be restored.
+      })
+
+    return () => {
+      active = false
+    }
+  }, [navigate])
 
   function clearErrorFor(field?: 'email' | 'password') {
     setError((current) => {
