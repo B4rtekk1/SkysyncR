@@ -43,17 +43,36 @@ export const NAV_ICONS: Record<ViewKey, React.ReactElement> = {
 }
 
 export const STAR_ICON_FILLED = (
-    <svg width="19" height="19" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-        <path d="M12 3.5l2.55 5.17 5.7.83-4.13 4.02.98 5.68L12 16.4l-5.1 2.8.98-5.68-4.13-4.02 5.7-.83L12 3.5Z" />
+    <svg className="star-icon star-icon--filled" width="19" height="19" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+        <path
+            className="star-icon__shape"
+            d="M12 3.5l2.55 5.17 5.7.83-4.13 4.02.98 5.68L12 16.4l-5.1 2.8.98-5.68-4.13-4.02 5.7-.83L12 3.5Z"
+        />
+        <path
+            className="star-icon__burst"
+            d="M12 1.8v2M20.2 5.1l-1.5 1.35M22.1 13.2h-2M17.6 21.2l-1-1.7M6.4 21.2l1-1.7M1.9 13.2h2M3.8 5.1l1.5 1.35"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.4"
+            strokeLinecap="round"
+        />
     </svg>
 )
 
 export const STAR_ICON_OUTLINE = (
-    <svg width="19" height="19" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+    <svg className="star-icon star-icon--outline" width="19" height="19" viewBox="0 0 24 24" fill="none" aria-hidden="true">
         <path
+            className="star-icon__shape"
             d="M12 3.5l2.55 5.17 5.7.83-4.13 4.02.98 5.68L12 16.4l-5.1 2.8.98-5.68-4.13-4.02 5.7-.83L12 3.5Z"
             stroke="currentColor"
             strokeWidth="1.4"
+        />
+        <path
+            className="star-icon__burst"
+            d="M12 1.8v2M20.2 5.1l-1.5 1.35M22.1 13.2h-2M17.6 21.2l-1-1.7M6.4 21.2l1-1.7M1.9 13.2h2M3.8 5.1l1.5 1.35"
+            stroke="currentColor"
+            strokeWidth="1.4"
+            strokeLinecap="round"
         />
     </svg>
 )
@@ -119,18 +138,27 @@ export const SHARE_ICON = (
 )
 
 export const RENAME_ICON = (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+    <svg className="rename-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
         <path
+            className="rename-icon__line"
             d="M5 18.5h14"
             stroke="currentColor"
             strokeWidth="1.6"
             strokeLinecap="round"
         />
         <path
+            className="rename-icon__pencil"
             d="m13.8 5.2 5 5M4.8 17.2l1.1-4.2 8.7-8.7a2 2 0 0 1 2.8 0l1.1 1.1a2 2 0 0 1 0 2.8L9.8 16.9l-4.2 1.1a.7.7 0 0 1-.8-.8Z"
             stroke="currentColor"
             strokeWidth="1.6"
             strokeLinejoin="round"
+        />
+        <path
+            className="rename-icon__spark"
+            d="M6.2 11.8 4.8 10.4M8.4 9.6 7.7 7.8"
+            stroke="currentColor"
+            strokeWidth="1.4"
+            strokeLinecap="round"
         />
     </svg>
 )
