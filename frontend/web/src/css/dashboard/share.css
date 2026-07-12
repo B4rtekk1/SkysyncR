@@ -323,28 +323,6 @@
     fill: color-mix(in srgb, var(--signal) 72%, var(--paper) 28%);
 }
 
-.share-modal__qr-mark-bg {
-    fill: var(--panel);
-    stroke: rgba(var(--signal-rgb), 0.35);
-    stroke-width: 0.5;
-}
-
-.share-modal__qr-mark {
-    fill: none;
-    stroke: var(--signal);
-    stroke-width: 1.35;
-    stroke-linecap: round;
-    stroke-linejoin: round;
-}
-
-.share-modal__qr-lock {
-    fill: none;
-    stroke: var(--paper);
-    stroke-width: 0.72;
-    stroke-linecap: round;
-    stroke-linejoin: round;
-}
-
 .share-modal__people-list {
     display: grid;
     gap: 8px;

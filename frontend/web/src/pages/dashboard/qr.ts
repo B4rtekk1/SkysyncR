@@ -243,10 +243,17 @@ export function createQrPath(value: string) {
     drawData(matrix, encodeData(value))
     drawFormat(matrix)
 
+    const dotRadius = 0.42
     const modules: string[] = []
     matrix.forEach((row, y) => {
         row.forEach((dark, x) => {
-            if (dark) modules.push(`M${x + 4},${y + 4}h1v1h-1z`)
+            if (!dark) return
+
+            const cx = x + 4.5
+            const cy = y + 4.5
+            modules.push(
+                `M${cx - dotRadius},${cy}a${dotRadius},${dotRadius} 0 1 0 ${dotRadius * 2},0a${dotRadius},${dotRadius} 0 1 0 -${dotRadius * 2},0`,
+            )
         })
     })
 

@@ -268,12 +268,6 @@ export function ShareFileModal({
                                 <svg className="share-modal__qr-svg" viewBox={qr.viewBox} role="img" aria-label="Share link QR code">
                                     <rect className="share-modal__qr-bg" x="0" y="0" width="100%" height="100%" rx="5" />
                                     <path className="share-modal__qr-modules" d={qr.path} />
-                                    <circle className="share-modal__qr-mark-bg" cx="22.5" cy="22.5" r="7" />
-                                    <g transform="translate(17.2 19.6) scale(0.64)">
-                                        <path className="share-modal__qr-mark" d="M2.2 7.1h9.3a2.5 2.5 0 0 0 .3-5 4.1 4.1 0 0 0-7.7-1.2A3.1 3.1 0 0 0 2.2 7.1Z" />
-                                        <rect className="share-modal__qr-lock" x="4.3" y="5.2" width="4.7" height="3.8" rx="0.8" />
-                                        <path className="share-modal__qr-lock" d="M5.4 5.2V3.9a1.3 1.3 0 0 1 2.6 0v1.3" />
-                                    </g>
                                 </svg>
                             ) : (
                                 <span className="spinner" />
