@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type * as React from 'react'
 import type { Group, GroupInviteRole } from './types'
 import { formatRelative } from './fileUtils'
@@ -32,6 +32,91 @@ const CHECK_ICON = (
         <path d="M5 12.5 9.3 17 19 7" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
 )
+
+const ROLE_LABELS: Record<GroupInviteRole, string> = {
+    viewer: 'Viewer',
+    editor: 'Editor',
+    admin: 'Admin',
+}
+
+function RoleDropdown({
+    value,
+    onChange,
+    label,
+}: {
+    value: GroupInviteRole
+    onChange: (role: GroupInviteRole) => void
+    label: string
+}) {
+    const [open, setOpen] = useState(false)
+    const dropdownRef = useRef<HTMLDivElement>(null)
+
+    useEffect(() => {
+        if (!open) return
+
+        function onClickAway(e: MouseEvent) {
+            if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+                setOpen(false)
+            }
+        }
+
+        function onKeyDown(e: KeyboardEvent) {
+            if (e.key === 'Escape') setOpen(false)
+        }
+
+        document.addEventListener('mousedown', onClickAway)
+        window.addEventListener('keydown', onKeyDown)
+        return () => {
+            document.removeEventListener('mousedown', onClickAway)
+            window.removeEventListener('keydown', onKeyDown)
+        }
+    }, [open])
+
+    return (
+        <div className="role-dropdown" ref={dropdownRef}>
+            <button
+                className={`role-dropdown__trigger ${open ? 'is-open' : ''}`}
+                type="button"
+                onClick={() => setOpen((current) => !current)}
+                aria-haspopup="listbox"
+                aria-expanded={open}
+                aria-label={label}
+            >
+                <span className={`groups-role groups-role--${value}`}>{ROLE_LABELS[value]}</span>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <path
+                        d="m7 10 5 5 5-5"
+                        stroke="currentColor"
+                        strokeWidth="1.8"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                    />
+                </svg>
+            </button>
+
+            {open && (
+                <div className="role-dropdown__menu" role="listbox" aria-label={label}>
+                    {(Object.keys(ROLE_LABELS) as GroupInviteRole[]).map((roleOption) => (
+                        <button
+                            key={roleOption}
+                            className={`role-dropdown__option ${value === roleOption ? 'is-selected' : ''}`}
+                            type="button"
+                            role="option"
+                            aria-selected={value === roleOption}
+                            onClick={() => {
+                                onChange(roleOption)
+                                setOpen(false)
+                            }}
+                        >
+                            <span className={`groups-role groups-role--${roleOption}`}>{ROLE_LABELS[roleOption]}</span>
+                            {value === roleOption && CHECK_ICON}
+                        </button>
+                    ))}
+                </div>
+            )}
+        </div>
+    )
+}
 export function GroupsPanel({
                                 groups,
                                 activeGroupId,
@@ -277,17 +362,14 @@ export function GroupsPanel({
                                     onChange={(e) => setSettingsName(e.target.value)}
                                 />
                             </label>
-                            <label className="groups-invite__field">
+                            <div className="groups-invite__field">
                                 <span>Default user role</span>
-                                <select
+                                <RoleDropdown
                                     value={settingsRole}
-                                    onChange={(e) => setSettingsRole(e.target.value as GroupInviteRole)}
-                                >
-                                    <option value="viewer">Viewer</option>
-                                    <option value="editor">Editor</option>
-                                    <option value="admin">Admin</option>
-                                </select>
-                            </label>
+                                    onChange={setSettingsRole}
+                                    label="Default user role"
+                                />
+                            </div>
                         </div>
 
                         {settingsError && (
@@ -407,14 +489,10 @@ export function GroupsPanel({
                                     autoFocus
                                 />
                             </label>
-                            <label className="groups-invite__field">
+                            <div className="groups-invite__field">
                                 <span>Role</span>
-                                <select value={role} onChange={(e) => setRole(e.target.value as GroupInviteRole)}>
-                                    <option value="viewer">Viewer</option>
-                                    <option value="editor">Editor</option>
-                                    <option value="admin">Admin</option>
-                                </select>
-                            </label>
+                                <RoleDropdown value={role} onChange={setRole} label="Role" />
+                            </div>
 
                             {formError && (
                                 <p className="groups-invite__error" role="alert">
@@ -520,17 +598,14 @@ export function GroupsPanel({
                                 autoFocus
                             />
                         </label>
-                        <label className="groups-invite__field">
+                        <div className="groups-invite__field">
                             <span>Default user role</span>
-                            <select
+                            <RoleDropdown
                                 value={defaultRole}
-                                onChange={(e) => setDefaultRole(e.target.value as GroupInviteRole)}
-                            >
-                                <option value="viewer">Viewer</option>
-                                <option value="editor">Editor</option>
-                                <option value="admin">Admin</option>
-                            </select>
-                        </label>
+                                onChange={setDefaultRole}
+                                label="Default user role"
+                            />
+                        </div>
 
                         {createError && (
                             <p className="groups-invite__error" role="alert">
