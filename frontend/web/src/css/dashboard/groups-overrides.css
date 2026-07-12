@@ -700,6 +700,7 @@ html[data-theme='light'] .groups-list__mark {
 }
 
 .groups-panel .btn svg {
+    display: block;
     flex-shrink: 0;
 }
 
@@ -834,6 +835,36 @@ html[data-theme='light'] .groups-hero__mark {
     border-radius: 8px;
     background: var(--panel);
     box-shadow: 0 0 0 1px var(--line);
+}
+
+.groups-panel .btn svg,
+.groups-summary__icon svg,
+.groups-empty__icon svg,
+.groups-list__chevron svg,
+.groups-panel__back svg,
+.groups-modal__close svg,
+.role-dropdown__trigger > svg,
+.role-dropdown__option > svg {
+    display: block;
+}
+
+.groups-summary__icon svg {
+    width: 18px;
+    height: 18px;
+}
+
+.groups-empty__icon svg {
+    width: 19px;
+    height: 19px;
+}
+
+.groups-list__chevron svg,
+.groups-panel__back svg,
+.groups-modal__close svg,
+.role-dropdown__trigger > svg,
+.role-dropdown__option > svg {
+    width: 16px;
+    height: 16px;
 }
 
 .groups-summary strong {
