@@ -1,4 +1,4 @@
-const url = 'http://localhost:3000/'
+const url = import.meta.env.VITE_API_BASE ?? 'http://localhost:3000/'
 
 import { authenticatedFetch, saveTokens, type TokenPair } from './auth'
 import { withDeviceHeaders } from './device'
@@ -28,6 +28,44 @@ export interface CurrentUserResponse {
   public_key: string | null
 }
 
+export class ApiRequestError extends Error {
+  status: number
+  statusText: string
+
+  constructor(status: number, statusText: string, message: string) {
+    super(message)
+    this.name = 'ApiRequestError'
+    this.status = status
+    this.statusText = statusText
+  }
+}
+
+async function readErrorMessage(res: Response, fallback: string): Promise<string> {
+  const contentType = res.headers.get('content-type') ?? ''
+
+  if (contentType.includes('application/json')) {
+    try {
+      const body = (await res.json()) as { message?: unknown; error?: unknown }
+      if (typeof body.message === 'string' && body.message.trim()) {
+        return body.message
+      }
+      if (typeof body.error === 'string' && body.error.trim()) {
+        return body.error
+      }
+    } catch {
+      return fallback
+    }
+  }
+
+  const message = await res.text()
+  return message || fallback
+}
+
+async function throwApiError(res: Response, fallback: string): Promise<never> {
+  const message = await readErrorMessage(res, fallback)
+  throw new ApiRequestError(res.status, res.statusText, message)
+}
+
 export async function registerUser(
   payload: RegisterPayload,
 ): Promise<RegisterResponse> {
@@ -38,8 +76,7 @@ export async function registerUser(
   })
 
   if (!res.ok) {
-    const message = await res.text()
-    throw new Error(message || 'Registration failed')
+    await throwApiError(res, 'Registration failed')
   }
 
   return res.json()
@@ -56,8 +93,7 @@ export async function loginUser(
   })
 
   if (!res.ok) {
-    const message = await res.text()
-    throw new Error(message || 'Login failed')
+    await throwApiError(res, 'Login failed')
   }
 
   const tokens: LoginResponse = await res.json()
@@ -71,8 +107,7 @@ export async function verifyUser(token: string): Promise<void> {
   })
 
   if (!res.ok) {
-    const message = await res.text()
-    throw new Error(message || 'Verification failed')
+    await throwApiError(res, 'Verification failed')
   }
 }
 
@@ -82,8 +117,7 @@ export async function getCurrentUser(): Promise<CurrentUserResponse> {
   })
 
   if (!res.ok) {
-    const message = await res.text()
-    throw new Error(message || 'Could not load user profile')
+    await throwApiError(res, 'Could not load user profile')
   }
 
   return res.json()

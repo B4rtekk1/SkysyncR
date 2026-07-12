@@ -89,12 +89,14 @@ export function TextFilePreview({
 }
 
 export function TextFileEditor({
+    canRenderMarkdown,
     error,
     onChange,
     onSave,
     saving,
     text,
 }: {
+    canRenderMarkdown: boolean
     error: string | null
     onChange: (text: string) => void
     onSave: () => void
@@ -102,21 +104,28 @@ export function TextFileEditor({
     text: string
 }) {
     return (
-        <div className="image-preview__editor-wrap">
-            <textarea
-                className="image-preview__editor"
-                value={text}
-                onChange={(e) => onChange(e.target.value)}
-                onKeyDown={(e) => {
-                    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
-                        e.preventDefault()
-                        onSave()
-                    }
-                }}
-                disabled={saving}
-                autoFocus
-                spellCheck={false}
-            />
+        <div className={`image-preview__editor-wrap ${canRenderMarkdown ? 'image-preview__editor-wrap--markdown' : ''}`}>
+            <div className="image-preview__editor-pane">
+                <textarea
+                    className="image-preview__editor"
+                    value={text}
+                    onChange={(e) => onChange(e.target.value)}
+                    onKeyDown={(e) => {
+                        if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+                            e.preventDefault()
+                            onSave()
+                        }
+                    }}
+                    disabled={saving}
+                    autoFocus
+                    spellCheck={false}
+                />
+            </div>
+            {canRenderMarkdown && (
+                <div className="image-preview__editor-pane image-preview__editor-pane--preview" aria-live="polite">
+                    <MarkdownPreview text={text} />
+                </div>
+            )}
             {error && <p className="image-preview__editor-error">{error}</p>}
         </div>
     )

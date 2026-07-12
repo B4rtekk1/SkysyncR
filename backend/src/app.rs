@@ -50,7 +50,14 @@ fn dev_cors_layer() -> CorsLayer {
 
     CorsLayer::new()
         .allow_origin(allow_origin)
-        .allow_methods([Method::GET, Method::POST, Method::DELETE, Method::OPTIONS])
+        .allow_methods([
+            Method::GET,
+            Method::POST,
+            Method::PUT,
+            Method::PATCH,
+            Method::DELETE,
+            Method::OPTIONS,
+        ])
         .allow_headers(Any)
         .expose_headers(Any)
 }

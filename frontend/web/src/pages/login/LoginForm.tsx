@@ -1,21 +1,140 @@
 import { type SubmitEvent, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { getCurrentUser, loginUser } from '../../api/users.ts'
+import { ApiRequestError, getCurrentUser, loginUser } from '../../api/users.ts'
 import { decryptPrivateKey } from '../../crypto/keys'
 import { loadEncryptedPrivateKey, storeActivePrivateKey } from '../../crypto/storage'
 import EyeIcon from './EyeIcon'
+
+type LoginError = {
+  title: string
+  message: string
+  action?: string
+  field?: 'email' | 'password'
+}
+
+function isNetworkError(err: unknown): boolean {
+  return err instanceof TypeError
+}
+
+function messageFromError(err: unknown): string {
+  return err instanceof Error && err.message
+      ? err.message
+      : 'Something went wrong. Please try again.'
+}
 
 function LoginForm() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [remember, setRemember] = useState(true)
   const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<LoginError | null>(null)
   const [showPassword, setShowPassword] = useState(false)
+
+  function clearErrorFor(field?: 'email' | 'password') {
+    setError((current) => {
+      if (!current) return null
+      if (!field || !current.field || current.field === field) return null
+      return current
+    })
+  }
+
+  function validateForm(): LoginError | null {
+    if (!email.trim()) {
+      return {
+        title: 'Email is required',
+        message: 'Enter the email address connected to your SkysyncR account.',
+        field: 'email',
+      }
+    }
+
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+      return {
+        title: 'Check the email address',
+        message: 'Use a full email address, for example you@example.com.',
+        field: 'email',
+      }
+    }
+
+    if (!password) {
+      return {
+        title: 'Password is required',
+        message: 'Enter your password to unlock this device.',
+        field: 'password',
+      }
+    }
+
+    return null
+  }
+
+  function getLoginError(err: unknown): LoginError {
+    if (isNetworkError(err)) {
+      return {
+        title: 'Cannot reach the server',
+        message: 'Check your connection or make sure the API is running, then try again.',
+        action: 'No login attempt was completed.',
+      }
+    }
+
+    if (err instanceof ApiRequestError) {
+      if (err.status === 400) {
+        return {
+          title: 'Check your details',
+          message: err.message,
+          field: err.message.toLowerCase().includes('email') ? 'email' : 'password',
+        }
+      }
+
+      if (err.status === 401) {
+        return {
+          title: 'Invalid email or password',
+          message: 'The credentials do not match an account. Check both fields and try again.',
+          action: 'Failed attempts may temporarily lock this account.',
+          field: 'password',
+        }
+      }
+
+      if (err.status === 403) {
+        return {
+          title: 'Email is not verified',
+          message: 'Verify this email address before signing in.',
+          action: 'Open the verification link from your email inbox.',
+          field: 'email',
+        }
+      }
+
+      if (err.status === 429) {
+        return {
+          title: 'Too many attempts',
+          message: 'This account is temporarily locked after several failed logins.',
+          action: 'Wait a few minutes before trying again.',
+        }
+      }
+
+      if (err.status >= 500) {
+        return {
+          title: 'Server error',
+          message: 'The server could not complete the login right now.',
+          action: 'Try again in a moment.',
+        }
+      }
+    }
+
+    return {
+      title: 'Login failed',
+      message: messageFromError(err),
+    }
+  }
 
   async function handleSubmit(e: SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
     setError(null)
+
+    const validationError = validateForm()
+    if (validationError) {
+      setError(validationError)
+      return
+    }
+
     setLoading(true)
 
     try {
@@ -30,20 +149,32 @@ function LoginForm() {
       const encryptedPrivateKey = await loadEncryptedPrivateKey(user.id)
 
       if (!encryptedPrivateKey) {
-        setError('Private key is not available on this device.')
+        setError({
+          title: 'This device cannot unlock the vault',
+          message: 'The encrypted private key is not stored in this browser.',
+          action: 'Sign in on the device where the account was created or restore the key first.',
+        })
         return
       }
 
-      const privateKey = await decryptPrivateKey(encryptedPrivateKey, password)
+      let privateKey: CryptoKey
+      try {
+        privateKey = await decryptPrivateKey(encryptedPrivateKey, password)
+      } catch {
+        setError({
+          title: 'Saved key could not be unlocked',
+          message: 'The local private key does not match this password or is corrupted.',
+          action: 'Try signing in on the original device or recreate the local key backup.',
+          field: 'password',
+        })
+        return
+      }
+
       await storeActivePrivateKey(user.id, privateKey)
 
       window.location.href = '/dashboard'
     } catch (err) {
-      setError(
-          err instanceof Error
-              ? err.message
-              : 'Something went wrong. Please try again.',
-      )
+      setError(getLoginError(err))
     } finally {
       setLoading(false)
     }
@@ -69,7 +200,11 @@ function LoginForm() {
                 autoComplete="email"
                 required
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                aria-invalid={error?.field === 'email'}
+                onChange={(e) => {
+                  setEmail(e.target.value)
+                  clearErrorFor('email')
+                }}
                 placeholder="you@example.com"
             />
           </label>
@@ -90,7 +225,11 @@ function LoginForm() {
                   required
                   minLength={8}
                   value={password}
-                  onChange={(e) => setPassword(e.target.value)}
+                  aria-invalid={error?.field === 'password'}
+                  onChange={(e) => {
+                    setPassword(e.target.value)
+                    clearErrorFor('password')
+                  }}
                   placeholder="••••••••"
               />
               <button
@@ -115,9 +254,11 @@ function LoginForm() {
           </label>
 
           {error && (
-              <p className="auth-form__error" role="alert">
-                {error}
-              </p>
+              <div className="auth-form__error" role="alert">
+                <strong>{error.title}</strong>
+                <span>{error.message}</span>
+                {error.action && <small>{error.action}</small>}
+              </div>
           )}
 
           <button

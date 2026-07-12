@@ -140,6 +140,7 @@ export function ImagePreviewModal({
                     {preview.text !== null && (
                         isEditingText ? (
                             <TextFileEditor
+                                canRenderMarkdown={canRenderMarkdown}
                                 error={editError}
                                 saving={editSaving}
                                 text={editDraft}

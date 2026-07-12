@@ -77,6 +77,11 @@
   box-shadow: 0 0 0 3px rgba(var(--signal-rgb), 0.14);
 }
 
+.field__input[aria-invalid='true'] {
+  border-color: var(--amber);
+  box-shadow: 0 0 0 3px rgba(255, 176, 76, 0.12);
+}
+
 .field__input-group {
   position: relative;
   display: flex;
@@ -175,12 +180,33 @@
 
 .auth-form__error {
   margin: 0;
-  font-size: 0.84rem;
   color: var(--amber);
   background: rgba(255, 176, 76, 0.08);
   border: 1px solid rgba(255, 176, 76, 0.25);
   border-radius: 8px;
-  padding: 10px 12px;
+  padding: 11px 12px;
+  display: grid;
+  gap: 4px;
+}
+
+.auth-form__error strong {
+  color: var(--paper);
+  font-size: 0.86rem;
+  font-weight: 600;
+}
+
+.auth-form__error span,
+.auth-form__error small {
+  line-height: 1.45;
+}
+
+.auth-form__error span {
+  font-size: 0.84rem;
+}
+
+.auth-form__error small {
+  color: var(--mist);
+  font-size: 0.78rem;
 }
 
 .auth-form__submit {
