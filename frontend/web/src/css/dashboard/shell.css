@@ -787,6 +787,202 @@
     flex-shrink: 0;
 }
 
+.file-filter__trigger {
+    min-width: 154px;
+}
+
+.file-filter__trigger.has-filter {
+    border-color: rgba(var(--signal-rgb), 0.5);
+    box-shadow: 0 10px 24px -22px rgba(var(--signal-rgb), 0.48), inset 0 0 0 1px rgba(var(--signal-rgb), 0.08);
+}
+
+.file-filter__trigger.has-filter .sort-dropdown__icon {
+    color: var(--signal);
+    box-shadow: 0 0 0 1px rgba(var(--signal-rgb), 0.34);
+}
+
+.file-filter__menu {
+    width: 340px;
+    max-height: min(560px, calc(100vh - 180px));
+    overflow-y: auto;
+}
+
+.file-filter__search {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 36px;
+    margin-bottom: 8px;
+    padding: 0 10px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--panel-2);
+    color: var(--mist);
+}
+
+.file-filter__search:focus-within {
+    border-color: rgba(var(--signal-rgb), 0.52);
+    box-shadow: 0 0 0 3px rgba(var(--signal-rgb), 0.12);
+}
+
+.file-filter__search input,
+.file-filter__size-row input {
+    width: 100%;
+    min-width: 0;
+    border: none;
+    background: transparent;
+    color: var(--paper);
+    font: inherit;
+    outline: none;
+}
+
+.file-filter__search input::placeholder,
+.file-filter__size-row input::placeholder {
+    color: var(--mist);
+    opacity: 0.8;
+}
+
+.file-filter__section {
+    padding: 10px 0;
+    border-top: 1px solid rgba(148, 163, 184, 0.12);
+}
+
+.file-filter__section-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 8px;
+    color: var(--mist);
+    font-family: var(--font-mono), monospace;
+    font-size: 0.66rem;
+    letter-spacing: 0;
+    text-transform: uppercase;
+}
+
+.file-filter__link,
+.file-filter__clear {
+    border: none;
+    background: transparent;
+    color: var(--signal);
+    font: inherit;
+    cursor: pointer;
+}
+
+.file-filter__link {
+    padding: 0;
+    font-size: 0.72rem;
+}
+
+.file-filter__type-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
+}
+
+.file-filter__check {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    min-height: 34px;
+    padding: 7px 9px;
+    border: 1px solid transparent;
+    border-radius: 7px;
+    color: var(--mist);
+    cursor: pointer;
+    transition: background 0.14s ease, border-color 0.14s ease, color 0.14s ease;
+}
+
+.file-filter__check:hover,
+.file-filter__check.is-selected {
+    border-color: rgba(var(--signal-rgb), 0.28);
+    background: rgba(var(--signal-rgb), 0.08);
+    color: var(--paper);
+}
+
+.file-filter__check input {
+    width: 15px;
+    height: 15px;
+    flex-shrink: 0;
+    accent-color: var(--signal);
+}
+
+.file-filter__check span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.file-filter__segments {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px;
+}
+
+.file-filter__segment {
+    min-height: 34px;
+    border: 1px solid var(--line);
+    border-radius: 7px;
+    background: transparent;
+    color: var(--mist);
+    font: inherit;
+    cursor: pointer;
+    transition: background 0.14s ease, border-color 0.14s ease, color 0.14s ease;
+}
+
+.file-filter__segment:hover,
+.file-filter__segment.is-selected {
+    border-color: rgba(var(--signal-rgb), 0.34);
+    background: rgba(var(--signal-rgb), 0.1);
+    color: var(--signal);
+}
+
+.file-filter__size-row {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+}
+
+.file-filter__size-row input {
+    min-height: 36px;
+    padding: 0 10px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--panel-2);
+}
+
+.file-filter__size-row input:focus {
+    border-color: rgba(var(--signal-rgb), 0.52);
+    box-shadow: 0 0 0 3px rgba(var(--signal-rgb), 0.12);
+}
+
+.file-filter__footer {
+    display: flex;
+    justify-content: flex-end;
+    padding-top: 8px;
+    border-top: 1px solid rgba(148, 163, 184, 0.12);
+}
+
+.file-filter__clear {
+    min-height: 32px;
+    padding: 0 8px;
+    border-radius: 7px;
+}
+
+.file-filter__clear:hover:not(:disabled),
+.file-filter__clear:focus-visible:not(:disabled) {
+    background: rgba(var(--signal-rgb), 0.08);
+    outline: none;
+}
+
+.file-filter__clear:disabled {
+    color: var(--mist);
+    cursor: default;
+    opacity: 0.55;
+}
+
 @keyframes dropdown-in {
     from {
         opacity: 0;

@@ -51,15 +51,18 @@ import {
     KIND_ACCENT,
     KIND_LABELS,
     formatBytes,
+    kindFromFile,
 } from './dashboard/fileUtils'
 import {
     NAV_LABELS,
     applyLocalFileMetadata,
     applySavedOrder,
     loadActiveView,
+    loadFileFilter,
     loadFileSort,
     loadFavouriteIds,
     saveActiveView,
+    saveFileFilter,
     saveFileSort,
     saveFavouriteIds,
     saveLocalFileMetadata,
@@ -72,7 +75,7 @@ import { useLayoutModeSwitch } from './dashboard/hooks/useLayoutModeSwitch'
 import { useNavOrdering } from './dashboard/hooks/useNavOrdering'
 import { useSidebarState } from './dashboard/hooks/useSidebarState'
 import { useStorageSummary } from './dashboard/hooks/useStorageSummary'
-import type { FileSortKey, Item, NavIndicator, ViewKey } from './dashboard/types'
+import type { FileFilters, FileSortKey, FileTypeFilterKey, FileVisibilityFilterKey, Item, NavIndicator, ViewKey } from './dashboard/types'
 
 const FILE_SORT_LABELS: Record<FileSortKey, string> = {
     manual: 'Manual order',
@@ -82,6 +85,82 @@ const FILE_SORT_LABELS: Record<FileSortKey, string> = {
     'updated-asc': 'Oldest first',
     'size-desc': 'Largest first',
     'size-asc': 'Smallest first',
+}
+
+const FILE_TYPE_FILTER_LABELS: Record<FileTypeFilterKey, string> = {
+    image: 'Images',
+    document: 'Docs',
+    pdf: 'PDFs',
+    sheet: 'Sheets',
+    presentation: 'Slides',
+    archive: 'Archives',
+    video: 'Videos',
+    audio: 'Audio',
+    text: 'Text',
+    code: 'Code',
+    file: 'Other files',
+}
+
+const FILE_TYPE_FILTER_OPTIONS: FileTypeFilterKey[] = [
+    'image',
+    'document',
+    'pdf',
+    'sheet',
+    'presentation',
+    'archive',
+    'video',
+    'audio',
+    'text',
+    'code',
+    'file',
+]
+
+const FILE_VISIBILITY_LABELS: Record<FileVisibilityFilterKey, string> = {
+    any: 'Any',
+    public: 'Public',
+    private: 'Private',
+}
+
+function parseSizeMb(value: string) {
+    const normalized = value.trim().replace(',', '.')
+    if (!normalized) return null
+    const parsed = Number(normalized)
+    return Number.isFinite(parsed) && parsed >= 0 ? parsed : null
+}
+
+function hasActiveFileFilters(filters: FileFilters) {
+    return (
+        filters.types.length > 0 ||
+        filters.visibility !== 'any' ||
+        filters.minSizeMb.trim() !== '' ||
+        filters.maxSizeMb.trim() !== ''
+    )
+}
+
+function getFilterSummary(filters: FileFilters) {
+    const activeParts = [
+        filters.types.length > 0 ? `${filters.types.length} type${filters.types.length > 1 ? 's' : ''}` : null,
+        filters.visibility !== 'any' ? FILE_VISIBILITY_LABELS[filters.visibility] : null,
+        filters.minSizeMb.trim() || filters.maxSizeMb.trim() ? 'Size' : null,
+    ].filter(Boolean)
+
+    return activeParts.length > 0 ? activeParts.join(' · ') : 'All files'
+}
+
+function matchesFileFilters(item: Item, filters: FileFilters) {
+    if (filters.types.length > 0 && !filters.types.includes(kindFromFile(item.filename, item.mime_type))) {
+        return false
+    }
+    if (filters.visibility === 'public' && !item.is_public) return false
+    if (filters.visibility === 'private' && item.is_public) return false
+
+    const minSizeMb = parseSizeMb(filters.minSizeMb)
+    const maxSizeMb = parseSizeMb(filters.maxSizeMb)
+    const sizeMb = item.size_bytes / (1024 * 1024)
+
+    if (minSizeMb !== null && sizeMb < minSizeMb) return false
+    if (maxSizeMb !== null && sizeMb > maxSizeMb) return false
+    return true
 }
 
 function compareStrings(a: string, b: string) {
@@ -119,6 +198,7 @@ function Dashboard() {
     const [view, setView] = useState<ViewKey>(() => loadActiveView())
     const [items, setItems] = useState<Item[]>([])
     const [sortKey, setSortKey] = useState<FileSortKey>(() => loadFileSort())
+    const [fileFilters, setFileFilters] = useState<FileFilters>(() => loadFileFilter())
     const [pendingIds, setPendingIds] = useState<Set<string>>(new Set())
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState<string | null>(null)
@@ -127,6 +207,7 @@ function Dashboard() {
     const [query, setQuery] = useState('')
     const [menuOpen, setMenuOpen] = useState(false)
     const [sortMenuOpen, setSortMenuOpen] = useState(false)
+    const [filterMenuOpen, setFilterMenuOpen] = useState(false)
     const [dragActive, setDragActive] = useState(false)
     const [favouriteIds, setFavouriteIds] = useState<Set<string>>(() => loadFavouriteIds())
     const [draggedCardId, setDraggedCardId] = useState<string | null>(null)
@@ -137,8 +218,11 @@ function Dashboard() {
     const [publicKey, setPublicKey] = useState<string | null>(null)
     const [privateKey, setPrivateKey] = useState<CryptoKey | null>(null)
     const normalizedQuery = query.trim().toLowerCase()
+    const hasActiveFilter = hasActiveFileFilters(fileFilters)
+    const filterSummary = getFilterSummary(fileFilters)
     const menuRef = useRef<HTMLDivElement>(null)
     const sortMenuRef = useRef<HTMLDivElement>(null)
+    const filterMenuRef = useRef<HTMLDivElement>(null)
     const navListRef = useRef<HTMLElement>(null)
     const navItemRefs = useRef<Partial<Record<ViewKey, HTMLButtonElement>>>({})
     const [navIndicator, setNavIndicator] = useState<NavIndicator>({
@@ -211,7 +295,11 @@ function Dashboard() {
         setError,
         handleFileUpdated,
     )
-    const sortedItems = useMemo(() => sortFiles(items, sortKey), [items, sortKey])
+    const filteredItems = useMemo(
+        () => items.filter((item) => matchesFileFilters(item, fileFilters)),
+        [fileFilters, items],
+    )
+    const sortedItems = useMemo(() => sortFiles(filteredItems, sortKey), [filteredItems, sortKey])
     const { visibleItems, renderedItems, animatedFiles } = useAnimatedItems({
         items: sortedItems,
         view,
@@ -318,6 +406,10 @@ function Dashboard() {
     }, [sortKey])
 
     useEffect(() => {
+        saveFileFilter(fileFilters)
+    }, [fileFilters])
+
+    useEffect(() => {
         let active = true
 
         Promise.resolve()
@@ -360,6 +452,9 @@ function Dashboard() {
             }
             if (sortMenuRef.current && !sortMenuRef.current.contains(e.target as Node)) {
                 setSortMenuOpen(false)
+            }
+            if (filterMenuRef.current && !filterMenuRef.current.contains(e.target as Node)) {
+                setFilterMenuOpen(false)
             }
         }
         document.addEventListener('mousedown', onClickAway)
@@ -545,6 +640,33 @@ function Dashboard() {
             }
             saveFavouriteIds(next)
             return next
+        })
+    }
+
+    function toggleFileTypeFilter(type: FileTypeFilterKey) {
+        setFileFilters((current) => ({
+            ...current,
+            types: current.types.includes(type)
+                ? current.types.filter((currentType) => currentType !== type)
+                : [...current.types, type],
+        }))
+    }
+
+    function updateVisibilityFilter(visibility: FileVisibilityFilterKey) {
+        setFileFilters((current) => ({ ...current, visibility }))
+    }
+
+    function updateSizeFilter(field: 'minSizeMb' | 'maxSizeMb', value: string) {
+        if (!/^\d*([.,]\d*)?$/.test(value)) return
+        setFileFilters((current) => ({ ...current, [field]: value }))
+    }
+
+    function clearFileFilters() {
+        setFileFilters({
+            types: [],
+            visibility: 'any',
+            minSizeMb: '',
+            maxSizeMb: '',
         })
     }
 
@@ -889,6 +1011,156 @@ function Dashboard() {
                                 </div>
                             )}
 
+                            {view !== 'groups' && (
+                                <div className="sort-dropdown file-filter" ref={filterMenuRef}>
+                                    <button
+                                        className={`sort-dropdown__trigger file-filter__trigger ${
+                                            filterMenuOpen ? 'is-open' : ''
+                                        } ${hasActiveFilter ? 'has-filter' : ''}`}
+                                        type="button"
+                                        onClick={() => setFilterMenuOpen((open) => !open)}
+                                        aria-haspopup="listbox"
+                                        aria-expanded={filterMenuOpen}
+                                        aria-label="Filter files"
+                                        title="Filter files"
+                                    >
+                                        <span className="sort-dropdown__icon" aria-hidden="true">
+                                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none">
+                                                <path
+                                                    d="M4 6h16l-6.2 7.1V18l-3.6 1.8v-6.7L4 6Z"
+                                                    stroke="currentColor"
+                                                    strokeWidth="1.8"
+                                                    strokeLinecap="round"
+                                                    strokeLinejoin="round"
+                                                />
+                                            </svg>
+                                        </span>
+                                        <span className="sort-dropdown__text">
+                                            <span className="sort-dropdown__label">Filter</span>
+                                            <span className="sort-dropdown__value">{filterSummary}</span>
+                                        </span>
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                                            <path
+                                                d="m7 10 5 5 5-5"
+                                                stroke="currentColor"
+                                                strokeWidth="1.8"
+                                                strokeLinecap="round"
+                                                strokeLinejoin="round"
+                                            />
+                                        </svg>
+                                    </button>
+
+                                    {filterMenuOpen && (
+                                        <div
+                                            className="sort-dropdown__menu file-filter__menu"
+                                            aria-label="Filter files"
+                                        >
+                                            <label className="file-filter__search">
+                                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                                                    <circle cx="10.5" cy="10.5" r="6.5" stroke="currentColor" strokeWidth="1.6" />
+                                                    <path d="M20 20l-4.35-4.35" stroke="currentColor" strokeWidth="1.6" />
+                                                </svg>
+                                                <input
+                                                    type="text"
+                                                    placeholder="Search files"
+                                                    value={query}
+                                                    onChange={(e) => setQuery(e.target.value)}
+                                                />
+                                            </label>
+
+                                            <div className="file-filter__section">
+                                                <div className="file-filter__section-head">
+                                                    <span>File types</span>
+                                                    {fileFilters.types.length > 0 && (
+                                                        <button
+                                                            type="button"
+                                                            className="file-filter__link"
+                                                            onClick={() => setFileFilters((current) => ({ ...current, types: [] }))}
+                                                        >
+                                                            Clear
+                                                        </button>
+                                                    )}
+                                                </div>
+                                                <div className="file-filter__type-grid">
+                                                    {FILE_TYPE_FILTER_OPTIONS.map((type) => (
+                                                        <label
+                                                            key={type}
+                                                            className={`file-filter__check ${
+                                                                fileFilters.types.includes(type) ? 'is-selected' : ''
+                                                            }`}
+                                                        >
+                                                            <input
+                                                                type="checkbox"
+                                                                checked={fileFilters.types.includes(type)}
+                                                                onChange={() => toggleFileTypeFilter(type)}
+                                                            />
+                                                            <span>{FILE_TYPE_FILTER_LABELS[type]}</span>
+                                                        </label>
+                                                    ))}
+                                                </div>
+                                            </div>
+
+                                            <div className="file-filter__section">
+                                                <div className="file-filter__section-head">
+                                                    <span>Visibility</span>
+                                                </div>
+                                                <div className="file-filter__segments">
+                                                    {(Object.keys(FILE_VISIBILITY_LABELS) as FileVisibilityFilterKey[]).map(
+                                                        (visibility) => (
+                                                            <button
+                                                                key={visibility}
+                                                                type="button"
+                                                                className={`file-filter__segment ${
+                                                                    fileFilters.visibility === visibility ? 'is-selected' : ''
+                                                                }`}
+                                                                onClick={() => updateVisibilityFilter(visibility)}
+                                                            >
+                                                                {FILE_VISIBILITY_LABELS[visibility]}
+                                                            </button>
+                                                        ),
+                                                    )}
+                                                </div>
+                                            </div>
+
+                                            <div className="file-filter__section">
+                                                <div className="file-filter__section-head">
+                                                    <span>Size MB</span>
+                                                </div>
+                                                <div className="file-filter__size-row">
+                                                    <input
+                                                        type="text"
+                                                        inputMode="decimal"
+                                                        placeholder="Min"
+                                                        value={fileFilters.minSizeMb}
+                                                        onChange={(e) => updateSizeFilter('minSizeMb', e.target.value)}
+                                                        aria-label="Minimum size in MB"
+                                                    />
+                                                    <input
+                                                        type="text"
+                                                        inputMode="decimal"
+                                                        placeholder="Max"
+                                                        value={fileFilters.maxSizeMb}
+                                                        onChange={(e) => updateSizeFilter('maxSizeMb', e.target.value)}
+                                                        aria-label="Maximum size in MB"
+                                                    />
+                                                </div>
+                                            </div>
+
+                                            <div className="file-filter__footer">
+                                                <button
+                                                    type="button"
+                                                    className="file-filter__clear"
+                                                    onClick={clearFileFilters}
+                                                    disabled={!hasActiveFilter}
+                                                >
+                                                    Reset filters
+                                                </button>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
                             <div
                                 className={`view-toggle view-toggle--${layoutMode} ${
                                     layoutSwitchTarget ? 'is-switching' : ''
@@ -937,8 +1209,18 @@ function Dashboard() {
 
                     {!loading && view === 'shared' && visibleItems.length === 0 && renderedItems.length === 0 && (
                         <EmptyPane
-                            title="Nothing shared yet"
-                            body="Files someone shares with you will show up here, still encrypted end-to-end."
+                            title={
+                                query
+                                    ? 'No shared files match your search'
+                                    : hasActiveFilter
+                                        ? 'No shared files match your filters'
+                                        : 'Nothing shared yet'
+                            }
+                            body={
+                                query || hasActiveFilter
+                                    ? 'Adjust the search or filter to see more shared files.'
+                                    : 'Files someone shares with you will show up here, still encrypted end-to-end.'
+                            }
                         />
                     )}
 
@@ -970,24 +1252,44 @@ function Dashboard() {
 
                     {!loading && view === 'favourites' && visibleItems.length === 0 && renderedItems.length === 0 && (
                         <EmptyPane
-                            title={query ? 'No favourites match your search' : 'No favourites yet'}
-                            body="Tap the star on any file to pin it here for quick access."
+                            title={
+                                query
+                                    ? 'No favourites match your search'
+                                    : hasActiveFilter
+                                        ? 'No favourites match your filters'
+                                        : 'No favourites yet'
+                            }
+                            body={
+                                query || hasActiveFilter
+                                    ? 'Adjust the search or filter to see more favourites.'
+                                    : 'Tap the star on any file to pin it here for quick access.'
+                            }
                         />
                     )}
 
                     {!loading && view === 'trash' && visibleItems.length === 0 && renderedItems.length === 0 && (
                         <EmptyPane
-                            title="Trash is empty"
-                            body="Deleted files stay here for 30 days before they're gone for good."
+                            title={hasActiveFilter || query ? 'No deleted files match' : 'Trash is empty'}
+                            body={
+                                hasActiveFilter || query
+                                    ? 'Adjust the search or filter to see more deleted files.'
+                                    : "Deleted files stay here for 30 days before they're gone for good."
+                            }
                         />
                     )}
 
                     {!loading && view === 'all' && visibleItems.length === 0 && renderedItems.length === 0 && (
                         <EmptyPane
-                            title={query ? 'No files match your search' : 'Drop files to encrypt and sync'}
-                            body={
+                            title={
                                 query
-                                    ? 'Try a different name, or clear the search to see everything.'
+                                    ? 'No files match your search'
+                                    : hasActiveFilter
+                                        ? 'No files match your filters'
+                                        : 'Drop files to encrypt and sync'
+                            }
+                            body={
+                                query || hasActiveFilter
+                                    ? 'Try a different name, or clear the filter to see everything.'
                                     : 'Files are locked with AES-256 on this device before they ever reach the network.'
                             }
                         />

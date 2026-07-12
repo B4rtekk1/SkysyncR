@@ -1,8 +1,9 @@
-import type { FileSortKey, Group, GroupInvite, Item, LayoutMode, ViewKey } from './types'
+import type { FileFilters, FileSortKey, FileTypeFilterKey, Group, GroupInvite, Item, LayoutMode, ViewKey } from './types'
 export const FAVOURITES_STORAGE_KEY = 'favourite_file_ids'
 export const LOCAL_FILE_META_STORAGE_KEY = 'local_file_metadata'
 export const LAYOUT_MODE_STORAGE_KEY = 'file_layout_mode'
 export const FILE_SORT_STORAGE_KEY = 'file_sort'
+export const FILE_FILTER_STORAGE_KEY = 'file_filter'
 export const GROUPS_STORAGE_KEY = 'groups'
 export const LEGACY_GROUP_INVITES_STORAGE_KEY = 'group_invites'
 
@@ -98,6 +99,68 @@ function isFileSortKey(value: string | null): value is FileSortKey {
         value === 'updated-asc' ||
         value === 'size-desc' ||
         value === 'size-asc'
+    )
+}
+
+export const DEFAULT_FILE_FILTERS: FileFilters = {
+    types: [],
+    visibility: 'any',
+    minSizeMb: '',
+    maxSizeMb: '',
+}
+
+export function loadFileFilter(): FileFilters {
+    try {
+        const raw = localStorage.getItem(FILE_FILTER_STORAGE_KEY)
+        if (!raw) return DEFAULT_FILE_FILTERS
+
+        if (isLegacyFileFilterKey(raw)) {
+            if (raw === 'shared') return { ...DEFAULT_FILE_FILTERS, visibility: 'public' }
+            if (raw === 'private') return { ...DEFAULT_FILE_FILTERS, visibility: 'private' }
+            if (raw === 'all') return DEFAULT_FILE_FILTERS
+            return { ...DEFAULT_FILE_FILTERS, types: [raw] }
+        }
+
+        const parsed = JSON.parse(raw) as Partial<FileFilters>
+        return {
+            types: Array.isArray(parsed.types) ? parsed.types.filter(isFileTypeFilterKey) : [],
+            visibility:
+                parsed.visibility === 'public' || parsed.visibility === 'private' || parsed.visibility === 'any'
+                    ? parsed.visibility
+                    : 'any',
+            minSizeMb: typeof parsed.minSizeMb === 'string' ? parsed.minSizeMb : '',
+            maxSizeMb: typeof parsed.maxSizeMb === 'string' ? parsed.maxSizeMb : '',
+        }
+    } catch {
+        return DEFAULT_FILE_FILTERS
+    }
+}
+
+export function saveFileFilter(filters: FileFilters) {
+    try {
+        localStorage.setItem(FILE_FILTER_STORAGE_KEY, JSON.stringify(filters))
+    } catch {
+        // ignore storage failures (e.g. private browsing)
+    }
+}
+
+function isLegacyFileFilterKey(value: string | null): value is FileTypeFilterKey | 'all' | 'shared' | 'private' {
+    return value === 'all' || value === 'shared' || value === 'private' || isFileTypeFilterKey(value)
+}
+
+function isFileTypeFilterKey(value: unknown): value is FileTypeFilterKey {
+    return (
+        value === 'image' ||
+        value === 'document' ||
+        value === 'pdf' ||
+        value === 'sheet' ||
+        value === 'presentation' ||
+        value === 'archive' ||
+        value === 'video' ||
+        value === 'audio' ||
+        value === 'text' ||
+        value === 'code' ||
+        value === 'file'
     )
 }
 

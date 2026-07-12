@@ -9,6 +9,25 @@ export type FileSortKey =
     | 'updated-asc'
     | 'size-desc'
     | 'size-asc'
+export type FileTypeFilterKey =
+    | 'image'
+    | 'document'
+    | 'pdf'
+    | 'sheet'
+    | 'presentation'
+    | 'archive'
+    | 'video'
+    | 'audio'
+    | 'text'
+    | 'code'
+    | 'file'
+export type FileVisibilityFilterKey = 'any' | 'public' | 'private'
+export type FileFilters = {
+    types: FileTypeFilterKey[]
+    visibility: FileVisibilityFilterKey
+    minSizeMb: string
+    maxSizeMb: string
+}
 export type Item = ApiFile | SharedFile
 export type FilePreviewKind = 'image' | 'text'
 export type FilePreviewState = {
