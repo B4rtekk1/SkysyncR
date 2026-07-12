@@ -371,6 +371,9 @@
     height: 100%;
     background: var(--signal);
     border-radius: 4px;
+    transform-origin: left center;
+    transition: width 0.65s cubic-bezier(0.22, 1, 0.36, 1), background 0.2s ease;
+    animation: storage-fill-in 0.75s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 .shell__storage-fill--warning {
@@ -424,6 +427,39 @@
 .shell__storage-type-fill {
     height: 100%;
     border-radius: 4px;
+    transform-origin: left center;
+    transition: width 0.55s cubic-bezier(0.22, 1, 0.36, 1), background 0.2s ease;
+    animation: storage-fill-in 0.65s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.shell__storage-type:nth-child(2) .shell__storage-type-fill {
+    animation-delay: 0.08s;
+}
+
+.shell__storage-type:nth-child(3) .shell__storage-type-fill {
+    animation-delay: 0.16s;
+}
+
+.shell__storage-type:nth-child(4) .shell__storage-type-fill {
+    animation-delay: 0.24s;
+}
+
+@keyframes storage-fill-in {
+    from {
+        transform: scaleX(0);
+    }
+
+    to {
+        transform: scaleX(1);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .shell__storage-fill,
+    .shell__storage-type-fill {
+        animation: none;
+        transition: none;
+    }
 }
 
 .shell__storage-empty {
