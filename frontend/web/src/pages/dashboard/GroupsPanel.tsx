@@ -2,6 +2,36 @@ import { useEffect, useState } from 'react'
 import type * as React from 'react'
 import type { Group, GroupInviteRole } from './types'
 import { formatRelative } from './fileUtils'
+
+const PLUS_ICON = (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" />
+    </svg>
+)
+
+const ARROW_LEFT_ICON = (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path d="m15 6-6 6 6 6" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+)
+
+const ARROW_RIGHT_ICON = (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path d="m9 6 6 6-6 6" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+)
+
+const CLOSE_ICON = (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path d="m7 7 10 10M17 7 7 17" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" />
+    </svg>
+)
+
+const CHECK_ICON = (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path d="M5 12.5 9.3 17 19 7" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+)
 export function GroupsPanel({
                                 groups,
                                 activeGroupId,
@@ -188,7 +218,7 @@ export function GroupsPanel({
                     <div className="groups-panel__head groups-panel__head--detail">
                         <div className="groups-hero">
                             <button className="groups-panel__back" type="button" onClick={onBackToGroups}>
-                                <span aria-hidden="true">←</span> All groups
+                                {ARROW_LEFT_ICON} All groups
                             </button>
                             <div className="groups-hero__identity">
                                 <div className="groups-hero__mark" aria-hidden="true">{activeGroup.name.charAt(0).toUpperCase()}</div>
@@ -199,13 +229,13 @@ export function GroupsPanel({
                             </div>
                         </div>
                         <button className="btn btn--solid" type="button" onClick={onOpenInvite}>
-                            <span aria-hidden="true">+</span> Add member
+                            {PLUS_ICON} Add member
                         </button>
                     </div>
 
                     <div className="groups-summary">
                         <div className="groups-summary__item">
-                            <span className="groups-summary__icon" aria-hidden="true">+</span>
+                            <span className="groups-summary__icon" aria-hidden="true">{PLUS_ICON}</span>
                             <div>
                                 <strong>{activeGroup.invites.length}</strong>
                                 <span>Pending invitations</span>
@@ -219,7 +249,7 @@ export function GroupsPanel({
                             </div>
                         </div>
                         <div className="groups-summary__item">
-                            <span className="groups-summary__icon" aria-hidden="true">✓</span>
+                            <span className="groups-summary__icon" aria-hidden="true">{CHECK_ICON}</span>
                             <div>
                                 <strong className={`groups-role groups-role--${activeGroup.defaultRole}`}>{activeGroup.defaultRole}</strong>
                                 <span>Default access</span>
@@ -359,7 +389,7 @@ export function GroupsPanel({
                                     onClick={closeInvite}
                                     aria-label="Close add-member dialog"
                                 >
-                                    x
+                                    {CLOSE_ICON}
                                 </button>
                             </div>
 
@@ -415,7 +445,7 @@ export function GroupsPanel({
                         <h2 className="groups-panel__title">Your groups</h2>
                     </div>
                     <button className="btn btn--solid" type="button" onClick={onOpenCreate}>
-                        <span aria-hidden="true">+</span> New group
+                        {PLUS_ICON} New group
                     </button>
                 </div>
 
@@ -436,13 +466,13 @@ export function GroupsPanel({
                                         <span>Created {formatRelative(group.createdAt)}</span>
                                     </div>
                                 </div>
-                                <span className="groups-list__chevron" aria-hidden="true">→</span>
+                                <span className="groups-list__chevron" aria-hidden="true">{ARROW_RIGHT_ICON}</span>
                             </button>
                         ))}
                     </div>
                 ) : (
                     <div className="groups-empty">
-                        <div className="groups-empty__icon" aria-hidden="true">+</div>
+                        <div className="groups-empty__icon" aria-hidden="true">{PLUS_ICON}</div>
                         <p className="empty-pane__title">Create your first group</p>
                         <p className="empty-pane__body">Give your team a private shared space with access you control.</p>
                         <button className="btn btn--solid" type="button" onClick={onOpenCreate}>Create group</button>
@@ -472,7 +502,7 @@ export function GroupsPanel({
                                 onClick={closeCreate}
                                 aria-label="Close group dialog"
                             >
-                                x
+                                {CLOSE_ICON}
                             </button>
                         </div>
 
