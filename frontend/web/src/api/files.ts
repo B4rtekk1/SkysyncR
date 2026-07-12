@@ -159,6 +159,18 @@ export async function restoreFile(id: string): Promise<void> {
     if (!res.ok) throw new Error(await parseErrorMessage(res))
 }
 
+export async function renameFile(id: string, filename: string): Promise<ApiFile> {
+    const res = await authenticatedFetch(`${API_BASE}files/${id}`, {
+        method: 'PATCH',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ filename }),
+    })
+    if (!res.ok) throw new Error(await parseErrorMessage(res))
+    return res.json()
+}
+
 export async function downloadFile(id: string): Promise<Blob> {
     const res = await authenticatedFetch(`${API_BASE}files/${id}/download`, {
         method: 'GET',

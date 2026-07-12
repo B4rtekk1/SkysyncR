@@ -241,3 +241,41 @@ pub async fn restore_user_file(
 
     Ok(result.rows_affected())
 }
+
+pub async fn rename_user_file(
+    pool: &PgPool,
+    user_id: Uuid,
+    file_id: Uuid,
+    filename: String,
+) -> Result<Option<FileRecord>, sqlx::Error> {
+    sqlx::query_as::<_, FileRecord>(
+        r#"
+        UPDATE files
+        SET filename = $1,
+            updated_at = NOW()
+        WHERE id = $2
+          AND owner_id = $3
+          AND is_deleted = FALSE
+        RETURNING
+            id,
+            filename,
+            storage_path,
+            mime_type,
+            size_bytes,
+            folder_id,
+            is_deleted,
+            is_public,
+            share_token,
+            encrypted_key,
+            encryption_nonce,
+            created_at,
+            updated_at,
+            deleted_at
+        "#,
+    )
+    .bind(filename)
+    .bind(file_id)
+    .bind(user_id)
+    .fetch_optional(pool)
+    .await
+}

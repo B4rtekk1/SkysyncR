@@ -17,8 +17,8 @@ use uuid::Uuid;
 use crate::auth::AuthUser;
 use crate::db::files::{
     FileRecord, NewFileRecord, SharedFileRecord, create_file_record, folder_belongs_to_user,
-    get_user_file_for_download, list_files_shared_with_user, list_user_files, restore_user_file,
-    soft_delete_user_file,
+    get_user_file_for_download, list_files_shared_with_user, list_user_files, rename_user_file,
+    restore_user_file, soft_delete_user_file,
 };
 use crate::db::storage::get_storage_quota;
 use crate::state::AppState;
@@ -29,6 +29,11 @@ pub struct ListFilesQuery {
     pub folder_id: Option<String>,
     #[serde(default)]
     pub trashed: bool,
+}
+
+#[derive(Deserialize)]
+pub struct RenameFileRequest {
+    pub filename: String,
 }
 
 struct UploadPayload {
@@ -154,6 +159,21 @@ pub async fn restore_file(
     }
 
     Ok(StatusCode::NO_CONTENT)
+}
+
+pub async fn rename_file(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Path(file_id): Path<Uuid>,
+    Json(payload): Json<RenameFileRequest>,
+) -> Result<Json<FileRecord>, ApiError> {
+    let filename = validate_upload_metadata("filename", &payload.filename)?;
+    let file = rename_user_file(&state.db_pool, auth.user_id, file_id, filename)
+        .await
+        .map_err(|e| internal_error("rename file", e))?
+        .ok_or_else(|| ApiError::BadRequest("File not found".into()))?;
+
+    Ok(Json(file))
 }
 
 pub async fn download_file(

@@ -297,14 +297,43 @@
     color: var(--amber);
 }
 
+.file-card__name-slot {
+    min-width: 0;
+    margin: 0 0 6px;
+}
+
 .file-card__name {
     font-family: var(--font-mono), monospace;
     font-size: 0.86rem;
     color: var(--paper);
-    margin: 0 0 6px;
+    margin: 0;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+}
+
+.file-card__rename-input {
+    width: 100%;
+    min-width: 0;
+    height: 24px;
+    border: 1px solid rgba(var(--signal-rgb), 0.42);
+    border-radius: 6px;
+    background: color-mix(in srgb, var(--panel-2) 74%, transparent);
+    color: var(--paper);
+    font-family: var(--font-mono), monospace;
+    font-size: 0.86rem;
+    padding: 0 6px;
+    outline: none;
+}
+
+.file-card__rename-input:focus {
+    border-color: rgba(var(--signal-rgb), 0.7);
+    box-shadow: 0 0 0 1px rgba(var(--signal-rgb), 0.16);
+}
+
+.file-card__rename-input::selection {
+    background: rgba(var(--signal-rgb), 0.34);
+    color: var(--paper);
 }
 
 .file-card__meta {
@@ -340,7 +369,10 @@
     color: var(--signal);
 }
 
-.file-card__action--download {
+.file-card__action--download,
+.file-card__action--rename,
+.file-card__action--confirm,
+.file-card__action--cancel {
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -351,10 +383,30 @@
 }
 
 .file-card__action--download:hover,
-.file-card__action--download:focus-visible {
+.file-card__action--download:focus-visible,
+.file-card__action--rename:hover,
+.file-card__action--rename:focus-visible,
+.file-card__action--confirm:hover,
+.file-card__action--confirm:focus-visible {
     color: var(--signal);
     background: rgba(var(--signal-rgb), 0.08);
     transform: translateY(-1px);
+}
+
+.file-card__action--confirm {
+    color: var(--signal);
+}
+
+.file-card__action--cancel:hover,
+.file-card__action--cancel:focus-visible {
+    color: #ef4444;
+    background: rgba(239, 68, 68, 0.08);
+    transform: translateY(-1px);
+}
+
+.file-card__action:disabled {
+    cursor: wait;
+    opacity: 0.56;
 }
 
 .download-icon__arrow,
@@ -478,6 +530,10 @@
 }
 
 .file-grid--list .file-card__name {
+    margin: 0;
+}
+
+.file-grid--list .file-card__name-slot {
     grid-column: 1;
     margin: 0;
     padding-left: 16px;

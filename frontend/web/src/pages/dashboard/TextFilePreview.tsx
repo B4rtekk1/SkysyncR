@@ -1,18 +1,8 @@
-import { useState } from 'react'
-import { isMarkdownFile } from './fileUtils'
+import { useEffect, useState } from 'react'
+import { COPY_ICON } from './icons'
 import { MarkdownPreview } from './MarkdownPreview'
 import type { Item } from './types'
-
-type TextPreviewMode = 'render' | 'plain'
-
-export function useTextFilePreview(item: Item, text: string | null) {
-    const [textModeState, setTextModeState] = useState<{ itemId: string; mode: TextPreviewMode } | null>(null)
-    const textMode = textModeState?.itemId === item.id ? textModeState.mode : 'render'
-    const canRenderMarkdown = text !== null && isMarkdownFile(item.filename, item.mime_type)
-    const setTextMode = (mode: TextPreviewMode) => setTextModeState({ itemId: item.id, mode })
-
-    return { canRenderMarkdown, setTextMode, textMode }
-}
+import type { TextPreviewMode } from './useTextFilePreview'
 
 export function TextFilePreviewModeToggle({
     setTextMode,
@@ -40,6 +30,41 @@ export function TextFilePreviewModeToggle({
                 Plain
             </button>
         </div>
+    )
+}
+
+export function TextFileCopyButton({ item, text }: { item: Item; text: string }) {
+    const [copyStatus, setCopyStatus] = useState<'copied' | 'failed' | null>(null)
+    const copyTitle = copyStatus === 'copied' ? 'Copied' : copyStatus === 'failed' ? 'Copy unavailable' : 'Copy'
+
+    useEffect(() => {
+        if (copyStatus === null) {
+            return
+        }
+
+        const timeout = window.setTimeout(() => setCopyStatus(null), 1400)
+        return () => window.clearTimeout(timeout)
+    }, [copyStatus])
+
+    const copyText = async () => {
+        try {
+            await navigator.clipboard.writeText(text)
+            setCopyStatus('copied')
+        } catch {
+            setCopyStatus('failed')
+        }
+    }
+
+    return (
+        <button
+            className="file-card__action file-card__action--download"
+            type="button"
+            onClick={() => void copyText()}
+            aria-label={`Copy ${item.filename}`}
+            title={copyTitle}
+        >
+            {COPY_ICON}
+        </button>
     )
 }
 

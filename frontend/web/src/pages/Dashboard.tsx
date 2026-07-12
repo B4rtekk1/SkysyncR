@@ -19,6 +19,7 @@ import {
     getStorageQuota,
     softDeleteFile,
     restoreFile,
+    renameFile,
     uploadFile,
     type ApiFile,
     type StorageQuota,
@@ -389,6 +390,38 @@ function Dashboard() {
             await refreshQuota()
         } catch (e) {
             setError(e instanceof Error ? e.message : 'Could not restore that file.')
+        }
+    }
+
+    async function handleRename(item: Item, filename: string) {
+        const previousName = item.filename
+        const nextName = filename.trim()
+        if (!nextName || nextName === previousName) return
+
+        setError(null)
+        setItems((prev) =>
+            prev.map((current) =>
+                current.id === item.id ? { ...current, filename: nextName, updated_at: new Date().toISOString() } : current,
+            ),
+        )
+
+        try {
+            const renamed = await renameFile(item.id, nextName)
+            const visibleRenamed = { ...renamed, filename: nextName, mime_type: item.mime_type }
+            saveLocalFileMetadata(item.id, {
+                filename: nextName,
+                mime_type: item.mime_type,
+            })
+            setItems((prev) => prev.map((current) => (current.id === item.id ? visibleRenamed : current)))
+            setStorageItems((prev) => prev.map((current) => (current.id === item.id ? visibleRenamed : current)))
+        } catch (e) {
+            setItems((prev) =>
+                prev.map((current) =>
+                    current.id === item.id ? { ...current, filename: previousName, updated_at: item.updated_at } : current,
+                ),
+            )
+            setError(e instanceof Error ? e.message : 'Could not rename that file.')
+            throw e
         }
     }
 
@@ -791,6 +824,9 @@ function Dashboard() {
                                     onRestore={view === 'trash' ? handleRestore : undefined}
                                     onDownload={view !== 'trash' ? handleDownload : undefined}
                                     onPreview={view !== 'trash' ? handleFilePreview : undefined}
+                                    onRename={
+                                        view === 'all' || view === 'favourites' ? handleRename : undefined
+                                    }
                                     isFavourite={favouriteIds.has(item.id)}
                                     onToggleFavourite={
                                         view === 'all' || view === 'favourites' ? toggleFavourite : undefined

@@ -1,7 +1,13 @@
-import { useState, type CSSProperties, type DragEvent, type KeyboardEvent as ReactKeyboardEvent } from 'react'
+import {
+    useRef,
+    useState,
+    type CSSProperties,
+    type DragEvent,
+    type KeyboardEvent as ReactKeyboardEvent,
+} from 'react'
 import type { SharedFile } from '../../api/files'
 import { FileIcon } from './FileIcon'
-import { DOWNLOAD_ICON, DRAG_HANDLE_ICON, STAR_ICON_FILLED, STAR_ICON_OUTLINE, TRASH_OPEN_ICON } from './icons'
+import { CANCEL_ICON, CHECK_ICON, DOWNLOAD_ICON, DRAG_HANDLE_ICON, RENAME_ICON, STAR_ICON_FILLED, STAR_ICON_OUTLINE, TRASH_OPEN_ICON } from './icons'
 import type { Item, ViewKey } from './types'
 import { KIND_LABELS, formatBytes, formatRelative, kindFromFile, useDecryptReveal } from './fileUtils'
 function isShared(item: Item): item is SharedFile {
@@ -16,6 +22,7 @@ export function FileCard({
                       onRestore,
                       onDownload,
                       onPreview,
+                      onRename,
                       view,
                       isFavourite,
                       onToggleFavourite,
@@ -37,6 +44,7 @@ export function FileCard({
     onRestore?: (id: string) => void
     onDownload?: (item: Item) => void
     onPreview?: (item: Item) => void
+    onRename?: (item: Item, filename: string) => Promise<void>
     view: ViewKey
     isFavourite?: boolean
     onToggleFavourite?: (id: string) => void
@@ -55,15 +63,51 @@ export function FileCard({
     const kind = kindFromFile(item.filename, item.mime_type)
     const typeLabel = KIND_LABELS[kind]
     const [favouriteTouched, setFavouriteTouched] = useState(false)
+    const [isRenaming, setIsRenaming] = useState(false)
+    const [renameDraft, setRenameDraft] = useState(item.filename)
+    const [renameSaving, setRenameSaving] = useState(false)
+    const renameInputRef = useRef<HTMLInputElement>(null)
     const canToggleFavourite = Boolean(onToggleFavourite && !isShared(item))
+    const canRename = Boolean(onRename && !isShared(item) && view !== 'trash' && !pending)
     const canDownload = Boolean(onDownload && view !== 'trash')
-    const canPreview = Boolean(onPreview && ['image', 'text', 'code'].includes(kind) && view !== 'trash' && !pending)
-    const hasAction = Boolean(canDownload || (view === 'all' && onDelete) || (view === 'trash' && onRestore))
+    const canPreview = Boolean(onPreview && ['image', 'text', 'code'].includes(kind) && view !== 'trash' && !pending && !isRenaming)
+    const hasAction = Boolean(canRename || canDownload || (view === 'all' && onDelete) || (view === 'trash' && onRestore))
+
     const handlePreviewKeyDown = (e: ReactKeyboardEvent<HTMLElement>) => {
         if (!canPreview) return
         if (e.key !== 'Enter' && e.key !== ' ') return
         e.preventDefault()
         onPreview?.(item)
+    }
+    const cancelRename = () => {
+        setRenameDraft(item.filename)
+        setIsRenaming(false)
+    }
+    const saveRename = async () => {
+        const nextName = renameDraft.trim()
+        if (!nextName || nextName === item.filename || renameSaving) {
+            cancelRename()
+            return
+        }
+
+        setRenameSaving(true)
+        try {
+            await onRename?.(item, nextName)
+            setIsRenaming(false)
+        } finally {
+            setRenameSaving(false)
+        }
+    }
+    const selectFilenameWithoutExtension = (filename: string) => {
+        window.requestAnimationFrame(() => {
+            const input = renameInputRef.current
+            if (!input) return
+
+            const extensionIndex = filename.lastIndexOf('.')
+            const selectionEnd = extensionIndex > 0 ? extensionIndex : filename.length
+            input.focus()
+            input.setSelectionRange(0, selectionEnd)
+        })
     }
 
     return (
@@ -76,7 +120,7 @@ export function FileCard({
                 isSearchExiting ? 'is-search-exiting' : ''
             }`}
             style={style}
-            draggable={draggable && !pending}
+            draggable={draggable && !pending && !isRenaming}
             role={canPreview ? 'button' : undefined}
             tabIndex={canPreview ? 0 : undefined}
             aria-label={canPreview ? `Preview ${item.filename}` : undefined}
@@ -136,15 +180,85 @@ export function FileCard({
           </span>
                 )}
             </div>
-            <p className="file-card__name" title={item.filename}>
-                {display}
-            </p>
+            <div className="file-card__name-slot">
+                {isRenaming ? (
+                    <input
+                        className="file-card__rename-input"
+                        type="text"
+                        value={renameDraft}
+                        ref={renameInputRef}
+                        onChange={(e) => setRenameDraft(e.target.value)}
+                        onKeyDown={(e) => {
+                            if (e.key === 'Escape') {
+                                e.preventDefault()
+                                cancelRename()
+                            } else if (e.key === 'Enter') {
+                                e.preventDefault()
+                                void saveRename()
+                            }
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                        disabled={renameSaving}
+                        aria-label={`Rename ${item.filename}`}
+                    />
+                ) : (
+                    <p className="file-card__name" title={item.filename}>
+                        {display}
+                    </p>
+                )}
+            </div>
             <p className="file-card__meta">
                 {typeLabel} · {formatBytes(item.size_bytes)} · {formatRelative(item.updated_at)}
                 {isShared(item) && item.shared_by_user_name ? ` · shared by ${item.shared_by_user_name}` : ''}
             </p>
             {hasAction && (
                 <div className="file-card__actions">
+                    {isRenaming && (
+                        <>
+                            <button
+                                className="file-card__action file-card__action--confirm"
+                                type="button"
+                                onClick={(e) => {
+                                    e.stopPropagation()
+                                    void saveRename()
+                                }}
+                                disabled={renameSaving}
+                                aria-label={`Save name for ${item.filename}`}
+                                title="Save name"
+                            >
+                                {CHECK_ICON}
+                            </button>
+                            <button
+                                className="file-card__action file-card__action--cancel"
+                                type="button"
+                                onClick={(e) => {
+                                    e.stopPropagation()
+                                    cancelRename()
+                                }}
+                                disabled={renameSaving}
+                                aria-label={`Cancel rename for ${item.filename}`}
+                                title="Cancel"
+                            >
+                                {CANCEL_ICON}
+                            </button>
+                        </>
+                    )}
+                    {canRename && !isRenaming && (
+                        <button
+                            className="file-card__action file-card__action--rename"
+                            onClick={(e) => {
+                                e.stopPropagation()
+                                setRenameDraft(item.filename)
+                                setIsRenaming(true)
+                                selectFilenameWithoutExtension(item.filename)
+                            }}
+                            aria-label={`Rename ${item.filename}`}
+                            title="Rename"
+                            type="button"
+                        >
+                            {RENAME_ICON}
+                        </button>
+                    )}
                     {canDownload && (
                         <button
                             className="file-card__action file-card__action--download"

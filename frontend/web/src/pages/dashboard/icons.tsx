@@ -97,6 +97,47 @@ export const DOWNLOAD_ICON = (
     </svg>
 )
 
+export const COPY_ICON = (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <rect x="8" y="8" width="10" height="12" rx="1.8" stroke="currentColor" strokeWidth="1.6" />
+        <path
+            d="M6 16H5.8A1.8 1.8 0 0 1 4 14.2V5.8A1.8 1.8 0 0 1 5.8 4h7.4A1.8 1.8 0 0 1 15 5.8V6"
+            stroke="currentColor"
+            strokeWidth="1.6"
+            strokeLinecap="round"
+        />
+    </svg>
+)
+
+export const RENAME_ICON = (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path
+            d="M5 18.5h14"
+            stroke="currentColor"
+            strokeWidth="1.6"
+            strokeLinecap="round"
+        />
+        <path
+            d="m13.8 5.2 5 5M4.8 17.2l1.1-4.2 8.7-8.7a2 2 0 0 1 2.8 0l1.1 1.1a2 2 0 0 1 0 2.8L9.8 16.9l-4.2 1.1a.7.7 0 0 1-.8-.8Z"
+            stroke="currentColor"
+            strokeWidth="1.6"
+            strokeLinejoin="round"
+        />
+    </svg>
+)
+
+export const CHECK_ICON = (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path d="M5 12.5 9.3 17 19 7" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+)
+
+export const CANCEL_ICON = (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path d="m7 7 10 10M17 7 7 17" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+    </svg>
+)
+
 export const SETTINGS_ICON = (
     <svg
         width="17"

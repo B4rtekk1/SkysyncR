@@ -1,7 +1,8 @@
 import { DOWNLOAD_ICON } from './icons'
 import type { FilePreviewState, Item } from './types'
 import { formatBytes } from './fileUtils'
-import { TextFilePreview, TextFilePreviewModeToggle, useTextFilePreview } from './TextFilePreview'
+import { TextFileCopyButton, TextFilePreview, TextFilePreviewModeToggle } from './TextFilePreview'
+import { useTextFilePreview } from './useTextFilePreview'
 
 export function ImagePreviewModal({
                                preview,
@@ -32,6 +33,7 @@ export function ImagePreviewModal({
                         {canRenderMarkdown && (
                             <TextFilePreviewModeToggle setTextMode={setTextMode} textMode={textMode} />
                         )}
+                        {preview.text !== null && <TextFileCopyButton item={preview.item} text={preview.text} />}
                         <button
                             className="file-card__action file-card__action--download"
                             type="button"
