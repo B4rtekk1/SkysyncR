@@ -328,7 +328,11 @@
 
 .file-card__rename-input:focus {
     border-color: rgba(var(--signal-rgb), 0.7);
-    box-shadow: 0 0 0 1px rgba(var(--signal-rgb), 0.16);
+    box-shadow: none;
+}
+
+.file-card__rename-input:focus-visible {
+    outline: none;
 }
 
 .file-card__rename-input::selection {
