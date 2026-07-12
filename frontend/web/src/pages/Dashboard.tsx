@@ -131,7 +131,35 @@ function Dashboard() {
         deleteGroup,
         removeGroupInvite,
     } = useDashboardGroups()
-    const { filePreview, closeFilePreview, handleDownload, handleFilePreview } = useFilePreview(privateKey, setError)
+    function handleFileUpdated(updated: ApiFile) {
+        const previousSize = storageItems.find((item) => item.id === updated.id)?.size_bytes ?? updated.size_bytes
+        const sizeDelta = updated.size_bytes - previousSize
+
+        setStorageItems((prev) =>
+            prev.map((current) => {
+                if (current.id !== updated.id) return current
+
+                return { ...updated, filename: current.filename, mime_type: current.mime_type }
+            }),
+        )
+        setItems((prev) =>
+            prev.map((current) =>
+                current.id === updated.id
+                    ? { ...updated, filename: current.filename, mime_type: current.mime_type }
+                    : current,
+            ),
+        )
+        setQuota((current) =>
+            current && sizeDelta !== 0 ? { ...current, used_bytes: current.used_bytes + sizeDelta } : current,
+        )
+    }
+
+    const { filePreview, closeFilePreview, handleDownload, handleFilePreview, handleSaveTextFile } = useFilePreview(
+        privateKey,
+        publicKey,
+        setError,
+        handleFileUpdated,
+    )
     const { visibleItems, renderedItems, animatedFiles } = useAnimatedItems({
         items,
         view,
@@ -859,6 +887,7 @@ function Dashboard() {
                     preview={filePreview}
                     onClose={closeFilePreview}
                     onDownload={handleDownload}
+                    onSaveText={handleSaveTextFile}
                 />
             )}
             {settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} />}

@@ -17,8 +17,9 @@ use uuid::Uuid;
 use crate::auth::AuthUser;
 use crate::db::files::{
     FileRecord, NewFileRecord, SharedFileRecord, create_file_record, folder_belongs_to_user,
-    get_user_file_for_download, list_files_shared_with_user, list_user_files, rename_user_file,
-    restore_user_file, soft_delete_user_file,
+    get_user_file_for_content_update, get_user_file_for_download, list_files_shared_with_user,
+    list_user_files, rename_user_file, restore_user_file, soft_delete_user_file,
+    update_user_file_content,
 };
 use crate::db::storage::get_storage_quota;
 use crate::state::AppState;
@@ -43,6 +44,12 @@ struct UploadPayload {
     encrypted_key: Vec<u8>,
     encryption_nonce: Vec<u8>,
     folder_id: Option<Uuid>,
+}
+
+struct UpdateContentPayload {
+    bytes: Vec<u8>,
+    encrypted_key: Vec<u8>,
+    encryption_nonce: Vec<u8>,
 }
 
 pub async fn list_files(
@@ -176,6 +183,50 @@ pub async fn rename_file(
     Ok(Json(file))
 }
 
+pub async fn update_file_content(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Path(file_id): Path<Uuid>,
+    multipart: Multipart,
+) -> Result<Json<FileRecord>, ApiError> {
+    let payload = parse_update_content_payload(multipart, state.config.max_file_size_bytes).await?;
+    let file_size = i64::try_from(payload.bytes.len())
+        .map_err(|_| ApiError::BadRequest("File is too large".into()))?;
+
+    let target = get_user_file_for_content_update(&state.db_pool, auth.user_id, file_id)
+        .await
+        .map_err(|e| internal_error("get file for content update", e))?
+        .ok_or_else(|| ApiError::BadRequest("File not found".into()))?;
+
+    let quota = get_storage_quota(&state.db_pool, auth.user_id)
+        .await
+        .map_err(|e| internal_error("get storage quota", e))?;
+    let size_delta = file_size.saturating_sub(target.size_bytes);
+    if quota.used_bytes.saturating_add(size_delta) > quota.total_bytes {
+        return Err(ApiError::BadRequest("Storage quota exceeded".into()));
+    }
+
+    fs::write(&target.storage_path, &payload.bytes)
+        .await
+        .map_err(|e| internal_error("write updated file", e))?;
+
+    let checksum = hex::encode(Sha256::digest(&payload.bytes));
+    let file = update_user_file_content(
+        &state.db_pool,
+        auth.user_id,
+        file_id,
+        file_size,
+        payload.encrypted_key,
+        payload.encryption_nonce,
+        checksum,
+    )
+    .await
+    .map_err(|e| internal_error("update file content", e))?
+    .ok_or_else(|| ApiError::BadRequest("File not found".into()))?;
+
+    Ok(Json(file))
+}
+
 pub async fn download_file(
     State(state): State<AppState>,
     auth: AuthUser,
@@ -217,6 +268,71 @@ pub async fn list_shared_files_with_me(
         .map_err(|e| internal_error("list shared files", e))?;
 
     Ok(Json(files))
+}
+
+async fn parse_update_content_payload(
+    mut multipart: Multipart,
+    max_file_size_bytes: u64,
+) -> Result<UpdateContentPayload, ApiError> {
+    let mut bytes: Option<Vec<u8>> = None;
+    let mut encrypted_key: Option<Vec<u8>> = None;
+    let mut encryption_nonce: Option<Vec<u8>> = None;
+
+    while let Some(field) = multipart
+        .next_field()
+        .await
+        .map_err(|_| ApiError::BadRequest("Invalid multipart body".into()))?
+    {
+        let name = field.name().unwrap_or_default().to_string();
+        match name.as_str() {
+            "file" => {
+                let data = field
+                    .bytes()
+                    .await
+                    .map_err(|_| ApiError::BadRequest("Invalid uploaded file".into()))?;
+                if data.len() as u64 > max_file_size_bytes {
+                    return Err(ApiError::BadRequest("File is too large".into()));
+                }
+                if data.is_empty() {
+                    return Err(ApiError::BadRequest("File is empty".into()));
+                }
+                bytes = Some(data.to_vec());
+            }
+            "encrypted_key" => {
+                let value = field
+                    .text()
+                    .await
+                    .map_err(|_| ApiError::BadRequest("Invalid encrypted_key".into()))?;
+                let decoded = decode_base64_field("encrypted_key", &value)?;
+                if decoded.len() < 128 {
+                    return Err(ApiError::BadRequest(
+                        "encrypted_key must be wrapped locally".into(),
+                    ));
+                }
+                encrypted_key = Some(decoded);
+            }
+            "encryption_nonce" => {
+                let value = field
+                    .text()
+                    .await
+                    .map_err(|_| ApiError::BadRequest("Invalid encryption_nonce".into()))?;
+                let decoded = decode_base64_field("encryption_nonce", &value)?;
+                if decoded.len() != 12 {
+                    return Err(ApiError::BadRequest("Invalid encryption_nonce".into()));
+                }
+                encryption_nonce = Some(decoded);
+            }
+            _ => {}
+        }
+    }
+
+    Ok(UpdateContentPayload {
+        bytes: bytes.ok_or_else(|| ApiError::BadRequest("Missing file".into()))?,
+        encrypted_key: encrypted_key
+            .ok_or_else(|| ApiError::BadRequest("Missing encrypted_key".into()))?,
+        encryption_nonce: encryption_nonce
+            .ok_or_else(|| ApiError::BadRequest("Missing encryption_nonce".into()))?,
+    })
 }
 
 async fn parse_upload_payload(

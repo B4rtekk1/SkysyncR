@@ -1,10 +1,10 @@
 use axum::Router;
 use axum::extract::DefaultBodyLimit;
-use axum::routing::{delete, get, post};
+use axum::routing::{delete, get, post, put};
 
 use crate::handlers::files::{
     download_file, list_files, list_shared_files_with_me, rename_file, restore_file,
-    soft_delete_file, upload_file,
+    soft_delete_file, update_file_content, upload_file,
 };
 use crate::state::AppState;
 
@@ -13,6 +13,7 @@ pub fn files_routes() -> Router<AppState> {
         .route("/files", get(list_files).post(upload_file))
         .route("/files/shared-with-me", get(list_shared_files_with_me))
         .route("/files/{id}/download", get(download_file))
+        .route("/files/{id}/content", put(update_file_content))
         .route("/files/{id}", delete(soft_delete_file).patch(rename_file))
         .route("/files/{id}/restore", post(restore_file))
         .layer(DefaultBodyLimit::disable())

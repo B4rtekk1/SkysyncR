@@ -58,6 +58,12 @@ pub struct DownloadFileRecord {
     pub storage_path: String,
 }
 
+#[derive(FromRow)]
+pub struct UpdateFileContentTarget {
+    pub storage_path: String,
+    pub size_bytes: i64,
+}
+
 pub async fn list_user_files(
     pool: &PgPool,
     user_id: Uuid,
@@ -151,6 +157,26 @@ pub async fn get_user_file_for_download(
     sqlx::query_as::<_, DownloadFileRecord>(
         r#"
         SELECT filename, storage_path
+        FROM files
+        WHERE id = $1
+          AND owner_id = $2
+          AND is_deleted = FALSE
+        "#,
+    )
+    .bind(file_id)
+    .bind(user_id)
+    .fetch_optional(pool)
+    .await
+}
+
+pub async fn get_user_file_for_content_update(
+    pool: &PgPool,
+    user_id: Uuid,
+    file_id: Uuid,
+) -> Result<Option<UpdateFileContentTarget>, sqlx::Error> {
+    sqlx::query_as::<_, UpdateFileContentTarget>(
+        r#"
+        SELECT storage_path, size_bytes
         FROM files
         WHERE id = $1
           AND owner_id = $2
@@ -274,6 +300,53 @@ pub async fn rename_user_file(
         "#,
     )
     .bind(filename)
+    .bind(file_id)
+    .bind(user_id)
+    .fetch_optional(pool)
+    .await
+}
+
+pub async fn update_user_file_content(
+    pool: &PgPool,
+    user_id: Uuid,
+    file_id: Uuid,
+    size_bytes: i64,
+    encrypted_key: Vec<u8>,
+    encryption_nonce: Vec<u8>,
+    checksum: String,
+) -> Result<Option<FileRecord>, sqlx::Error> {
+    sqlx::query_as::<_, FileRecord>(
+        r#"
+        UPDATE files
+        SET size_bytes = $1,
+            encrypted_key = $2,
+            encryption_nonce = $3,
+            checksum = $4,
+            updated_at = NOW()
+        WHERE id = $5
+          AND owner_id = $6
+          AND is_deleted = FALSE
+        RETURNING
+            id,
+            filename,
+            storage_path,
+            mime_type,
+            size_bytes,
+            folder_id,
+            is_deleted,
+            is_public,
+            share_token,
+            encrypted_key,
+            encryption_nonce,
+            created_at,
+            updated_at,
+            deleted_at
+        "#,
+    )
+    .bind(size_bytes)
+    .bind(encrypted_key)
+    .bind(encryption_nonce)
+    .bind(checksum)
     .bind(file_id)
     .bind(user_id)
     .fetch_optional(pool)

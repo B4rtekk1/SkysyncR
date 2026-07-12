@@ -87,3 +87,37 @@ export function TextFilePreview({
         </pre>
     )
 }
+
+export function TextFileEditor({
+    error,
+    onChange,
+    onSave,
+    saving,
+    text,
+}: {
+    error: string | null
+    onChange: (text: string) => void
+    onSave: () => void
+    saving: boolean
+    text: string
+}) {
+    return (
+        <div className="image-preview__editor-wrap">
+            <textarea
+                className="image-preview__editor"
+                value={text}
+                onChange={(e) => onChange(e.target.value)}
+                onKeyDown={(e) => {
+                    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+                        e.preventDefault()
+                        onSave()
+                    }
+                }}
+                disabled={saving}
+                autoFocus
+                spellCheck={false}
+            />
+            {error && <p className="image-preview__editor-error">{error}</p>}
+        </div>
+    )
+}

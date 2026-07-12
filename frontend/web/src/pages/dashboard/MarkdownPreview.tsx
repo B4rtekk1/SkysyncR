@@ -108,10 +108,10 @@ function isDivBlockEnd(line: string) {
 function slugHeading(text: string) {
     return text
         .toLowerCase()
-        .replace(/<[^>]*>/g, '')
+        .replace(/[^\p{L}\p{N}\s-]/gu, '')
         .trim()
         .replace(/\s+/g, '-')
-        .replace(/[^\p{L}\p{N}-]/gu, '')
+        .replace(/-+/g, '-')
 }
 
 function findAnchorTarget(container: HTMLElement, rawHash: string) {

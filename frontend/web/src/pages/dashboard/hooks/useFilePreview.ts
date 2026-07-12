@@ -1,6 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { downloadFile } from '../../../api/files'
-import { decryptFile, unwrapFileKeyForUser } from '../../../crypto/fileEncryption'
+import { downloadFile, updateFileContent, type ApiFile } from '../../../api/files'
+import {
+    decryptFile,
+    encryptText,
+    generateFileKey,
+    unwrapFileKeyForUser,
+    wrapFileKeyForUser,
+} from '../../../crypto/fileEncryption'
 import { type FileKind, kindFromFile } from '../fileUtils'
 import type { FilePreviewState, Item } from '../types'
 
@@ -13,7 +19,12 @@ function previewKindFromFile(filename: string, mime: string | null): FilePreview
     return null
 }
 
-export function useFilePreview(privateKey: CryptoKey | null, setError: (error: string | null) => void) {
+export function useFilePreview(
+    privateKey: CryptoKey | null,
+    publicKey: string | null,
+    setError: (error: string | null) => void,
+    onFileUpdated: (file: ApiFile) => void,
+) {
     const [filePreview, setFilePreview] = useState<FilePreviewState | null>(null)
     const filePreviewUrlRef = useRef<string | null>(null)
     const filePreviewRequestRef = useRef(0)
@@ -120,10 +131,43 @@ export function useFilePreview(privateKey: CryptoKey | null, setError: (error: s
         }
     }
 
+    async function handleSaveTextFile(item: Item, text: string) {
+        if (!publicKey) {
+            throw new Error('Public key is missing. Sign in again to save encrypted files.')
+        }
+
+        const fileKey = await generateFileKey()
+        const encrypted = await encryptText(text, fileKey)
+        const wrappedKey = await wrapFileKeyForUser(fileKey, publicKey)
+        const encryptedFile = new Blob([encrypted.ciphertext], {
+            type: 'application/octet-stream',
+        })
+        const updated = await updateFileContent({
+            id: item.id,
+            encryptedFile,
+            originalFilename: item.filename,
+            wrappedKey,
+            encryptionNonce: encrypted.nonce,
+        })
+
+        onFileUpdated(updated)
+        setFilePreview((current) => {
+            if (!current || current.item.id !== item.id || current.kind !== 'text') return current
+
+            return {
+                ...current,
+                item: { ...updated, mime_type: item.mime_type },
+                text,
+                loading: false,
+            }
+        })
+    }
+
     return {
         filePreview,
         closeFilePreview,
         handleDownload,
         handleFilePreview,
+        handleSaveTextFile,
     }
 }

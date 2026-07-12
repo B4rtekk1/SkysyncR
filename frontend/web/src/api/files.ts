@@ -171,6 +171,26 @@ export async function renameFile(id: string, filename: string): Promise<ApiFile>
     return res.json()
 }
 
+export async function updateFileContent(params: {
+    id: string
+    encryptedFile: Blob
+    originalFilename: string
+    wrappedKey: ArrayBuffer | Uint8Array
+    encryptionNonce: ArrayBuffer | Uint8Array
+}): Promise<ApiFile> {
+    const form = new FormData()
+    form.append('file', params.encryptedFile, params.originalFilename)
+    form.append('encrypted_key', arrayBufferToBase64(params.wrappedKey))
+    form.append('encryption_nonce', arrayBufferToBase64(params.encryptionNonce))
+
+    const res = await authenticatedFetch(`${API_BASE}files/${params.id}/content`, {
+        method: 'PUT',
+        body: form,
+    })
+    if (!res.ok) throw new Error(await parseErrorMessage(res))
+    return res.json()
+}
+
 export async function downloadFile(id: string): Promise<Blob> {
     const res = await authenticatedFetch(`${API_BASE}files/${id}/download`, {
         method: 'GET',
@@ -179,6 +199,6 @@ export async function downloadFile(id: string): Promise<Blob> {
     return res.blob()
 }
 
-function arrayBufferToBase64(buf: ArrayBuffer): string {
+function arrayBufferToBase64(buf: ArrayBuffer | Uint8Array): string {
     return btoa(String.fromCharCode(...new Uint8Array(buf)))
 }
