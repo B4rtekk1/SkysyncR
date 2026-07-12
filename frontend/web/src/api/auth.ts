@@ -1,6 +1,7 @@
 const API_BASE = import.meta.env.VITE_API_BASE ?? 'http://localhost:3000/'
 
 import { deviceHeaders, withDeviceHeaders } from './device'
+import { apiFetch } from './http'
 
 const ACCESS_TOKEN_KEY = 'access_token'
 const REFRESH_TOKEN_KEY = 'refresh_token'
@@ -78,7 +79,7 @@ async function refreshAccessToken(): Promise<string | null> {
   const refreshToken = getRefreshToken()
   if (!refreshToken) return null
 
-  const res = await fetch(`${API_BASE}users/refresh`, {
+  const res = await apiFetch(`${API_BASE}users/refresh`, {
     method: 'POST',
     headers: withDeviceHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify({ refresh_token: refreshToken }),
@@ -126,7 +127,7 @@ export async function logout(): Promise<void> {
   const refreshToken = getRefreshToken()
   if (refreshToken) {
     try {
-      await fetch(`${API_BASE}users/logout`, {
+      await apiFetch(`${API_BASE}users/logout`, {
         method: 'POST',
         headers: withDeviceHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({ refresh_token: refreshToken }),
@@ -154,13 +155,13 @@ export async function authenticatedFetch(
     headers.set('Authorization', `Bearer ${token}`)
   }
 
-  const response = await fetch(input, { ...init, headers })
+  const response = await apiFetch(input, { ...init, headers })
 
   if (response.status === 401 && getRefreshToken()) {
     const newToken = await refreshAccessToken()
     if (newToken) {
       headers.set('Authorization', `Bearer ${newToken}`)
-      return fetch(input, { ...init, headers })
+      return apiFetch(input, { ...init, headers })
     }
   }
 

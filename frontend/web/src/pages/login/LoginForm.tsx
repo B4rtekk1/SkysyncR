@@ -1,6 +1,7 @@
 import { type SubmitEvent, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ApiRequestError, getCurrentUser, loginUser } from '../../api/users.ts'
+import { isNetworkError } from '../../api/http.ts'
 import { decryptPrivateKey } from '../../crypto/keys'
 import { loadEncryptedPrivateKey, storeActivePrivateKey } from '../../crypto/storage'
 import EyeIcon from './EyeIcon'
@@ -10,10 +11,6 @@ type LoginError = {
   message: string
   action?: string
   field?: 'email' | 'password'
-}
-
-function isNetworkError(err: unknown): boolean {
-  return err instanceof TypeError
 }
 
 function messageFromError(err: unknown): string {

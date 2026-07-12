@@ -2,6 +2,7 @@ const url = import.meta.env.VITE_API_BASE ?? 'http://localhost:3000/'
 
 import { authenticatedFetch, saveTokens, type TokenPair } from './auth'
 import { withDeviceHeaders } from './device'
+import { apiFetch } from './http'
 
 export interface RegisterPayload {
   email: string
@@ -69,7 +70,7 @@ async function throwApiError(res: Response, fallback: string): Promise<never> {
 export async function registerUser(
   payload: RegisterPayload,
 ): Promise<RegisterResponse> {
-  const res = await fetch(`${url}users/register`, {
+  const res = await apiFetch(`${url}users/register`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
@@ -86,7 +87,7 @@ export async function loginUser(
   payload: LoginPayload,
   remember = true,
 ): Promise<LoginResponse> {
-  const res = await fetch(`${url}users/login`, {
+  const res = await apiFetch(`${url}users/login`, {
     method: 'POST',
     headers: withDeviceHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify(payload),
@@ -102,7 +103,7 @@ export async function loginUser(
 }
 
 export async function verifyUser(token: string): Promise<void> {
-  const res = await fetch(`${url}users/verify?token=${token}`, {
+  const res = await apiFetch(`${url}users/verify?token=${token}`, {
     method: 'GET',
   })
 
