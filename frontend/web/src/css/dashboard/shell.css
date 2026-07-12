@@ -456,7 +456,9 @@
 
 @media (prefers-reduced-motion: reduce) {
     .shell__storage-fill,
-    .shell__storage-type-fill {
+    .shell__storage-type-fill,
+    .file-filter__menu.is-opening,
+    .file-filter__menu.is-closing {
         animation: none;
         transition: none;
     }
@@ -805,6 +807,16 @@
     width: 340px;
     max-height: min(560px, calc(100vh - 180px));
     overflow-y: auto;
+    transform-origin: top right;
+}
+
+.file-filter__menu.is-opening {
+    animation: file-filter-menu-in 0.2s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.file-filter__menu.is-closing {
+    animation: file-filter-menu-out 0.18s cubic-bezier(0.4, 0, 0.2, 1) both;
+    pointer-events: none;
 }
 
 .file-filter__search {
@@ -981,6 +993,37 @@
     color: var(--mist);
     cursor: default;
     opacity: 0.55;
+}
+
+@keyframes file-filter-menu-in {
+    0% {
+        opacity: 0;
+        filter: blur(3px);
+        transform: translateY(-8px) scale(0.97);
+    }
+    60% {
+        opacity: 1;
+        filter: blur(0);
+        transform: translateY(2px) scale(1.006);
+    }
+    100% {
+        opacity: 1;
+        filter: blur(0);
+        transform: translateY(0) scale(1);
+    }
+}
+
+@keyframes file-filter-menu-out {
+    0% {
+        opacity: 1;
+        filter: blur(0);
+        transform: translateY(0) scale(1);
+    }
+    100% {
+        opacity: 0;
+        filter: blur(2px);
+        transform: translateY(-6px) scale(0.98);
+    }
 }
 
 @keyframes dropdown-in {

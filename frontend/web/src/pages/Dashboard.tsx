@@ -208,6 +208,7 @@ function Dashboard() {
     const [menuOpen, setMenuOpen] = useState(false)
     const [sortMenuOpen, setSortMenuOpen] = useState(false)
     const [filterMenuOpen, setFilterMenuOpen] = useState(false)
+    const [filterMenuClosing, setFilterMenuClosing] = useState(false)
     const [dragActive, setDragActive] = useState(false)
     const [favouriteIds, setFavouriteIds] = useState<Set<string>>(() => loadFavouriteIds())
     const [draggedCardId, setDraggedCardId] = useState<string | null>(null)
@@ -223,6 +224,7 @@ function Dashboard() {
     const menuRef = useRef<HTMLDivElement>(null)
     const sortMenuRef = useRef<HTMLDivElement>(null)
     const filterMenuRef = useRef<HTMLDivElement>(null)
+    const filterMenuCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
     const navListRef = useRef<HTMLElement>(null)
     const navItemRefs = useRef<Partial<Record<ViewKey, HTMLButtonElement>>>({})
     const [navIndicator, setNavIndicator] = useState<NavIndicator>({
@@ -454,11 +456,19 @@ function Dashboard() {
                 setSortMenuOpen(false)
             }
             if (filterMenuRef.current && !filterMenuRef.current.contains(e.target as Node)) {
-                setFilterMenuOpen(false)
+                closeFilterMenu()
             }
         }
         document.addEventListener('mousedown', onClickAway)
         return () => document.removeEventListener('mousedown', onClickAway)
+    }, [filterMenuOpen, filterMenuClosing])
+
+    useEffect(() => {
+        return () => {
+            if (filterMenuCloseTimerRef.current) {
+                clearTimeout(filterMenuCloseTimerRef.current)
+            }
+        }
     }, [])
 
     async function ingestFiles(fileList: FileList) {
@@ -668,6 +678,33 @@ function Dashboard() {
             minSizeMb: '',
             maxSizeMb: '',
         })
+    }
+
+    function openFilterMenu() {
+        if (filterMenuCloseTimerRef.current) {
+            clearTimeout(filterMenuCloseTimerRef.current)
+            filterMenuCloseTimerRef.current = null
+        }
+        setFilterMenuClosing(false)
+        setFilterMenuOpen(true)
+    }
+
+    function closeFilterMenu() {
+        if (!filterMenuOpen || filterMenuClosing) return
+        setFilterMenuClosing(true)
+        filterMenuCloseTimerRef.current = setTimeout(() => {
+            setFilterMenuOpen(false)
+            setFilterMenuClosing(false)
+            filterMenuCloseTimerRef.current = null
+        }, 180)
+    }
+
+    function toggleFilterMenu() {
+        if (filterMenuOpen) {
+            closeFilterMenu()
+        } else {
+            openFilterMenu()
+        }
     }
 
     function handleCardDragStart(id: string, e: DragEvent<HTMLElement>) {
@@ -1018,7 +1055,7 @@ function Dashboard() {
                                             filterMenuOpen ? 'is-open' : ''
                                         } ${hasActiveFilter ? 'has-filter' : ''}`}
                                         type="button"
-                                        onClick={() => setFilterMenuOpen((open) => !open)}
+                                        onClick={toggleFilterMenu}
                                         aria-haspopup="listbox"
                                         aria-expanded={filterMenuOpen}
                                         aria-label="Filter files"
@@ -1052,7 +1089,9 @@ function Dashboard() {
 
                                     {filterMenuOpen && (
                                         <div
-                                            className="sort-dropdown__menu file-filter__menu"
+                                            className={`sort-dropdown__menu file-filter__menu ${
+                                                filterMenuClosing ? 'is-closing' : 'is-opening'
+                                            }`}
                                             aria-label="Filter files"
                                         >
                                             <label className="file-filter__search">
