@@ -1,4 +1,4 @@
-use chrono::{Duration, Utc};
+use chrono::{DateTime, Duration, Utc};
 use jsonwebtoken::{DecodingKey, EncodingKey, Header, Validation, decode, encode};
 use serde::{Deserialize, Serialize};
 
@@ -12,13 +12,26 @@ pub struct Claims {
     pub iat: usize,
 }
 
-pub fn generate_access_token(
+pub fn generate_access_token_capped(
     user_id: &str,
     device_id: &str,
     secret: &str,
-) -> Result<String, jsonwebtoken::errors::Error> {
+    max_expires_at: DateTime<Utc>,
+) -> Result<(String, i64), jsonwebtoken::errors::Error> {
     let now = Utc::now();
-    let exp = now + ACCESS_TOKEN_DURATION;
+    let exp = (now + ACCESS_TOKEN_DURATION).min(max_expires_at);
+
+    generate_access_token_with_expiry(user_id, device_id, secret, now, exp)
+}
+
+fn generate_access_token_with_expiry(
+    user_id: &str,
+    device_id: &str,
+    secret: &str,
+    now: DateTime<Utc>,
+    exp: DateTime<Utc>,
+) -> Result<(String, i64), jsonwebtoken::errors::Error> {
+    let expires_in = (exp - now).num_seconds().max(0);
 
     let claims = Claims {
         sub: user_id.to_owned(),
@@ -27,11 +40,13 @@ pub fn generate_access_token(
         iat: now.timestamp() as usize,
     };
 
-    encode(
+    let token = encode(
         &Header::default(),
         &claims,
         &EncodingKey::from_secret(secret.as_ref()),
-    )
+    )?;
+
+    Ok((token, expires_in))
 }
 
 pub fn verify_access_token(

@@ -3,7 +3,9 @@ use sqlx::PgPool;
 use sqlx::types::ipnetwork::IpNetwork;
 use uuid::Uuid;
 
-use crate::crypto::refresh_token::{hash_refresh_token, refresh_token_expires_at};
+use crate::crypto::refresh_token::{
+    hash_refresh_token, refresh_session_expires_at, refresh_token_expires_at,
+};
 use crate::utils::device::DeviceContext;
 
 pub async fn create_refresh_token(
@@ -11,32 +13,43 @@ pub async fn create_refresh_token(
     user_id: Uuid,
     raw_token: &str,
     device: &DeviceContext,
-) -> Result<(), sqlx::Error> {
+) -> Result<DateTime<Utc>, sqlx::Error> {
     let token_hash = hash_refresh_token(raw_token);
-    let expires_at = refresh_token_expires_at();
+    let session_expires_at = refresh_session_expires_at();
+    let expires_at = refresh_token_expires_at(session_expires_at);
     let ip_address: Option<IpNetwork> = device.ip_address.map(IpNetwork::from);
 
     sqlx::query!(
         r#"
-        INSERT INTO refresh_tokens (user_id, token_hash, expires_at, device_id, user_agent, ip_address)
-        VALUES ($1, $2, $3, $4, $5, $6::inet)
+        INSERT INTO refresh_tokens (
+            user_id,
+            token_hash,
+            expires_at,
+            session_expires_at,
+            device_id,
+            user_agent,
+            ip_address
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7::inet)
         "#,
         user_id,
         token_hash,
         expires_at,
+        session_expires_at,
         device.device_id,
         device.user_agent,
         ip_address
     )
-        .execute(pool)
-        .await?;
+    .execute(pool)
+    .await?;
 
-    Ok(())
+    Ok(session_expires_at)
 }
 
 pub struct ValidRefreshToken {
     pub id: Uuid,
     pub user_id: Uuid,
+    pub session_expires_at: DateTime<Utc>,
 }
 
 pub enum RefreshTokenAuth {
@@ -61,7 +74,9 @@ pub async fn authenticate_refresh_token(
             device_id,
             user_agent,
             revoked,
-            expires_at > NOW() AS "valid_exp!: bool"
+            expires_at > NOW() AS "valid_exp!: bool",
+            session_expires_at AS "session_expires_at!: DateTime<Utc>",
+            session_expires_at > NOW() AS "valid_session!: bool"
         FROM refresh_tokens
         WHERE token_hash = $1
         "#,
@@ -74,7 +89,7 @@ pub async fn authenticate_refresh_token(
         return Ok(RefreshTokenAuth::NotFound);
     };
 
-    if !row.valid_exp {
+    if !row.valid_exp || !row.valid_session {
         return Ok(RefreshTokenAuth::NotFound);
     }
 
@@ -94,6 +109,7 @@ pub async fn authenticate_refresh_token(
     Ok(RefreshTokenAuth::Valid(ValidRefreshToken {
         id: row.id,
         user_id: row.user_id,
+        session_expires_at: row.session_expires_at,
     }))
 }
 
@@ -135,6 +151,7 @@ pub async fn rotate_refresh_token(
     old_token_id: Uuid,
     user_id: Uuid,
     new_raw_token: &str,
+    session_expires_at: DateTime<Utc>,
     device: &DeviceContext,
 ) -> Result<(), sqlx::Error> {
     let mut tx = pool.begin().await?;
@@ -151,23 +168,32 @@ pub async fn rotate_refresh_token(
     .await?;
 
     let token_hash = hash_refresh_token(new_raw_token);
-    let expires_at: DateTime<Utc> = refresh_token_expires_at();
+    let expires_at: DateTime<Utc> = refresh_token_expires_at(session_expires_at);
     let ip_address: Option<IpNetwork> = device.ip_address.map(IpNetwork::from);
 
     sqlx::query!(
         r#"
-        INSERT INTO refresh_tokens (user_id, token_hash, expires_at, device_id, user_agent, ip_address)
-        VALUES ($1, $2, $3, $4, $5, $6::inet)
+        INSERT INTO refresh_tokens (
+            user_id,
+            token_hash,
+            expires_at,
+            session_expires_at,
+            device_id,
+            user_agent,
+            ip_address
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7::inet)
         "#,
         user_id,
         token_hash,
         expires_at,
+        session_expires_at,
         device.device_id,
         device.user_agent,
         ip_address
     )
-        .execute(&mut *tx)
-        .await?;
+    .execute(&mut *tx)
+    .await?;
 
     tx.commit().await?;
     Ok(())

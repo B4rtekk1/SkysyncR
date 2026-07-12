@@ -1,5 +1,5 @@
 use crate::auth::AuthUser;
-use crate::crypto::jwt::{ACCESS_TOKEN_DURATION, generate_access_token};
+use crate::crypto::jwt::generate_access_token_capped;
 use crate::crypto::refresh_token::generate_refresh_token;
 use crate::db::refresh_tokens::{
     RefreshTokenAuth, ValidRefreshToken, authenticate_refresh_token, create_refresh_token,
@@ -114,20 +114,21 @@ async fn issue_token_pair(
     state: &AppState,
     user_id: uuid::Uuid,
     device: &DeviceContext,
-) -> Result<(String, String), ApiError> {
-    let access_token = generate_access_token(
-        &user_id.to_string(),
-        &device.device_id,
-        &state.config.jwt_secret,
-    )
-    .map_err(|e| internal_error("generate access token", e))?;
-
+) -> Result<(String, String, i64), ApiError> {
     let refresh_token = generate_refresh_token();
-    create_refresh_token(&state.db_pool, user_id, &refresh_token, device)
+    let session_expires_at = create_refresh_token(&state.db_pool, user_id, &refresh_token, device)
         .await
         .map_err(|e| internal_error("create refresh token", e))?;
 
-    Ok((access_token, refresh_token))
+    let (access_token, expires_in) = generate_access_token_capped(
+        &user_id.to_string(),
+        &device.device_id,
+        &state.config.jwt_secret,
+        session_expires_at,
+    )
+    .map_err(|e| internal_error("generate access token", e))?;
+
+    Ok((access_token, refresh_token, expires_in))
 }
 
 pub async fn login_user(
@@ -188,7 +189,8 @@ pub async fn login_user(
         .await
         .map_err(|e| internal_error("reset failed login", e))?;
 
-    let (access_token, refresh_token) = issue_token_pair(&state, user_id, &device).await?;
+    let (access_token, refresh_token, expires_in) =
+        issue_token_pair(&state, user_id, &device).await?;
 
     update_last_login(&state.db_pool, &email)
         .await
@@ -197,7 +199,7 @@ pub async fn login_user(
     Ok(Json(LoginResponse {
         access_token,
         refresh_token,
-        expires_in: ACCESS_TOKEN_DURATION.num_seconds(),
+        expires_in,
     }))
 }
 
@@ -214,10 +216,11 @@ pub async fn refresh_tokens(
     let device = DeviceContext::from_headers(&headers, Some(peer.ip()))?;
     let stored = require_refresh_token(&state, &payload.refresh_token, &device).await?;
 
-    let access_token = generate_access_token(
+    let (access_token, expires_in) = generate_access_token_capped(
         &stored.user_id.to_string(),
         &device.device_id,
         &state.config.jwt_secret,
+        stored.session_expires_at,
     )
     .map_err(|e| internal_error("generate access token", e))?;
 
@@ -227,6 +230,7 @@ pub async fn refresh_tokens(
         stored.id,
         stored.user_id,
         &new_refresh_token,
+        stored.session_expires_at,
         &device,
     )
     .await
@@ -235,7 +239,7 @@ pub async fn refresh_tokens(
     Ok(Json(RefreshResponse {
         access_token,
         refresh_token: new_refresh_token,
-        expires_in: ACCESS_TOKEN_DURATION.num_seconds(),
+        expires_in,
     }))
 }
 

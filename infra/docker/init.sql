@@ -61,6 +61,7 @@ CREATE TABLE IF NOT EXISTS refresh_tokens
     user_id    UUID        NOT NULL REFERENCES users (id) ON DELETE CASCADE,
     token_hash TEXT        NOT NULL UNIQUE,
     expires_at timestamptz NOT NULL,
+    session_expires_at timestamptz NOT NULL DEFAULT (NOW() + interval '90 days'),
     revoked    BOOLEAN     NOT NULL DEFAULT FALSE,
     created_at timestamptz NOT NULL DEFAULT NOW(),
     user_agent TEXT,
@@ -180,3 +181,9 @@ CREATE TABLE IF NOT EXISTS favorites
 -- Migrations for existing dev databases
 ALTER TABLE users ADD COLUMN IF NOT EXISTS verification_token_expires_at timestamptz;
 ALTER TABLE refresh_tokens ADD COLUMN IF NOT EXISTS device_id TEXT;
+ALTER TABLE refresh_tokens ADD COLUMN IF NOT EXISTS session_expires_at timestamptz;
+UPDATE refresh_tokens
+SET session_expires_at = COALESCE(session_expires_at, created_at + interval '90 days', NOW() + interval '90 days')
+WHERE session_expires_at IS NULL;
+ALTER TABLE refresh_tokens ALTER COLUMN session_expires_at SET DEFAULT (NOW() + interval '90 days');
+ALTER TABLE refresh_tokens ALTER COLUMN session_expires_at SET NOT NULL;
