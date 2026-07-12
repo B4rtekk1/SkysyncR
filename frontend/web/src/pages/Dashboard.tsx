@@ -207,6 +207,7 @@ function Dashboard() {
     const [query, setQuery] = useState('')
     const [menuOpen, setMenuOpen] = useState(false)
     const [sortMenuOpen, setSortMenuOpen] = useState(false)
+    const [sortMenuClosing, setSortMenuClosing] = useState(false)
     const [filterMenuOpen, setFilterMenuOpen] = useState(false)
     const [filterMenuClosing, setFilterMenuClosing] = useState(false)
     const [dragActive, setDragActive] = useState(false)
@@ -223,6 +224,7 @@ function Dashboard() {
     const filterSummary = getFilterSummary(fileFilters)
     const menuRef = useRef<HTMLDivElement>(null)
     const sortMenuRef = useRef<HTMLDivElement>(null)
+    const sortMenuCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
     const filterMenuRef = useRef<HTMLDivElement>(null)
     const filterMenuCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
     const navListRef = useRef<HTMLElement>(null)
@@ -453,7 +455,7 @@ function Dashboard() {
                 setMenuOpen(false)
             }
             if (sortMenuRef.current && !sortMenuRef.current.contains(e.target as Node)) {
-                setSortMenuOpen(false)
+                closeSortMenu()
             }
             if (filterMenuRef.current && !filterMenuRef.current.contains(e.target as Node)) {
                 closeFilterMenu()
@@ -461,10 +463,13 @@ function Dashboard() {
         }
         document.addEventListener('mousedown', onClickAway)
         return () => document.removeEventListener('mousedown', onClickAway)
-    }, [filterMenuOpen, filterMenuClosing])
+    }, [filterMenuOpen, filterMenuClosing, sortMenuOpen, sortMenuClosing])
 
     useEffect(() => {
         return () => {
+            if (sortMenuCloseTimerRef.current) {
+                clearTimeout(sortMenuCloseTimerRef.current)
+            }
             if (filterMenuCloseTimerRef.current) {
                 clearTimeout(filterMenuCloseTimerRef.current)
             }
@@ -678,6 +683,33 @@ function Dashboard() {
             minSizeMb: '',
             maxSizeMb: '',
         })
+    }
+
+    function openSortMenu() {
+        if (sortMenuCloseTimerRef.current) {
+            clearTimeout(sortMenuCloseTimerRef.current)
+            sortMenuCloseTimerRef.current = null
+        }
+        setSortMenuClosing(false)
+        setSortMenuOpen(true)
+    }
+
+    function closeSortMenu() {
+        if (!sortMenuOpen || sortMenuClosing) return
+        setSortMenuClosing(true)
+        sortMenuCloseTimerRef.current = setTimeout(() => {
+            setSortMenuOpen(false)
+            setSortMenuClosing(false)
+            sortMenuCloseTimerRef.current = null
+        }, 180)
+    }
+
+    function toggleSortMenu() {
+        if (sortMenuOpen) {
+            closeSortMenu()
+        } else {
+            openSortMenu()
+        }
     }
 
     function openFilterMenu() {
@@ -975,7 +1007,7 @@ function Dashboard() {
                                     <button
                                         className={`sort-dropdown__trigger ${sortMenuOpen ? 'is-open' : ''}`}
                                         type="button"
-                                        onClick={() => setSortMenuOpen((open) => !open)}
+                                        onClick={toggleSortMenu}
                                         aria-haspopup="listbox"
                                         aria-expanded={sortMenuOpen}
                                         aria-label="Sort files"
@@ -1008,7 +1040,13 @@ function Dashboard() {
                                     </button>
 
                                     {sortMenuOpen && (
-                                        <div className="sort-dropdown__menu" role="listbox" aria-label="Sort files">
+                                        <div
+                                            className={`sort-dropdown__menu sort-dropdown__menu--animated ${
+                                                sortMenuClosing ? 'is-closing' : 'is-opening'
+                                            }`}
+                                            role="listbox"
+                                            aria-label="Sort files"
+                                        >
                                             {Object.entries(FILE_SORT_LABELS).map(([value, label]) => (
                                                 <button
                                                     key={value}
@@ -1020,7 +1058,7 @@ function Dashboard() {
                                                     aria-selected={sortKey === value}
                                                     onClick={() => {
                                                         setSortKey(value as FileSortKey)
-                                                        setSortMenuOpen(false)
+                                                        closeSortMenu()
                                                     }}
                                                 >
                                                     <span>{label}</span>

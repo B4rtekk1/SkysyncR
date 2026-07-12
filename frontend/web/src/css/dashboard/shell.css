@@ -457,6 +457,8 @@
 @media (prefers-reduced-motion: reduce) {
     .shell__storage-fill,
     .shell__storage-type-fill,
+    .sort-dropdown__menu--animated.is-opening,
+    .sort-dropdown__menu--animated.is-closing,
     .file-filter__menu.is-opening,
     .file-filter__menu.is-closing {
         animation: none;
@@ -751,7 +753,16 @@
     border-radius: 10px;
     background: color-mix(in srgb, var(--panel) 96%, black);
     box-shadow: 0 20px 46px -24px rgba(0, 0, 0, 0.68);
-    animation: dropdown-in 0.16s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+    transform-origin: top right;
+}
+
+.sort-dropdown__menu--animated.is-opening {
+    animation: dropdown-menu-in 0.2s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.sort-dropdown__menu--animated.is-closing {
+    animation: dropdown-menu-out 0.18s cubic-bezier(0.4, 0, 0.2, 1) both;
+    pointer-events: none;
 }
 
 .sort-dropdown__option {
@@ -811,11 +822,11 @@
 }
 
 .file-filter__menu.is-opening {
-    animation: file-filter-menu-in 0.2s cubic-bezier(0.16, 1, 0.3, 1) both;
+    animation: dropdown-menu-in 0.2s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
 .file-filter__menu.is-closing {
-    animation: file-filter-menu-out 0.18s cubic-bezier(0.4, 0, 0.2, 1) both;
+    animation: dropdown-menu-out 0.18s cubic-bezier(0.4, 0, 0.2, 1) both;
     pointer-events: none;
 }
 
@@ -995,7 +1006,7 @@
     opacity: 0.55;
 }
 
-@keyframes file-filter-menu-in {
+@keyframes dropdown-menu-in {
     0% {
         opacity: 0;
         filter: blur(3px);
@@ -1013,7 +1024,7 @@
     }
 }
 
-@keyframes file-filter-menu-out {
+@keyframes dropdown-menu-out {
     0% {
         opacity: 1;
         filter: blur(0);
@@ -1023,17 +1034,6 @@
         opacity: 0;
         filter: blur(2px);
         transform: translateY(-6px) scale(0.98);
-    }
-}
-
-@keyframes dropdown-in {
-    from {
-        opacity: 0;
-        transform: translateY(-4px) scale(0.98);
-    }
-    to {
-        opacity: 1;
-        transform: translateY(0) scale(1);
     }
 }
 
