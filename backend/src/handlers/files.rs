@@ -19,7 +19,7 @@ use crate::db::files::{
     FileRecord, NewFileRecord, SharedFileRecord, create_file_record, folder_belongs_to_user,
     get_user_file_for_content_update, get_user_file_for_download, list_files_shared_with_user,
     list_user_files, rename_user_file, restore_user_file, soft_delete_user_file,
-    update_user_file_content,
+    update_user_file_content, update_user_file_share,
 };
 use crate::db::storage::get_storage_quota;
 use crate::state::AppState;
@@ -35,6 +35,11 @@ pub struct ListFilesQuery {
 #[derive(Deserialize)]
 pub struct RenameFileRequest {
     pub filename: String,
+}
+
+#[derive(Deserialize)]
+pub struct ShareFileRequest {
+    pub is_public: bool,
 }
 
 struct UploadPayload {
@@ -222,6 +227,27 @@ pub async fn update_file_content(
     )
     .await
     .map_err(|e| internal_error("update file content", e))?
+    .ok_or_else(|| ApiError::BadRequest("File not found".into()))?;
+
+    Ok(Json(file))
+}
+
+pub async fn share_file(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Path(file_id): Path<Uuid>,
+    Json(payload): Json<ShareFileRequest>,
+) -> Result<Json<FileRecord>, ApiError> {
+    let share_token = payload.is_public.then(|| Uuid::new_v4().to_string());
+    let file = update_user_file_share(
+        &state.db_pool,
+        auth.user_id,
+        file_id,
+        payload.is_public,
+        share_token,
+    )
+    .await
+    .map_err(|e| internal_error("share file", e))?
     .ok_or_else(|| ApiError::BadRequest("File not found".into()))?;
 
     Ok(Json(file))

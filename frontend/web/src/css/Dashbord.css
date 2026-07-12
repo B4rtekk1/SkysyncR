@@ -2,6 +2,7 @@
 @import './dashboard/shell.css';
 @import './dashboard/files.css';
 @import './dashboard/groups.css';
+@import './dashboard/share.css';
 @import './dashboard/states.css';
 @import './dashboard/responsive.css';
 @import './dashboard/groups-overrides.css';

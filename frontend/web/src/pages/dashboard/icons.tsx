@@ -109,6 +109,15 @@ export const COPY_ICON = (
     </svg>
 )
 
+export const SHARE_ICON = (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <circle cx="7" cy="12" r="2.4" stroke="currentColor" strokeWidth="1.6" />
+        <circle cx="17" cy="6" r="2.4" stroke="currentColor" strokeWidth="1.6" />
+        <circle cx="17" cy="18" r="2.4" stroke="currentColor" strokeWidth="1.6" />
+        <path d="M9.1 11l5.8-3.6M9.1 13l5.8 3.6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+    </svg>
+)
+
 export const RENAME_ICON = (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
         <path

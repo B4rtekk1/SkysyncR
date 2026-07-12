@@ -191,6 +191,18 @@ export async function updateFileContent(params: {
     return res.json()
 }
 
+export async function shareFile(id: string, isPublic: boolean): Promise<ApiFile> {
+    const res = await authenticatedFetch(`${API_BASE}files/${id}/share`, {
+        method: 'PUT',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ is_public: isPublic }),
+    })
+    if (!res.ok) throw new Error(await parseErrorMessage(res))
+    return res.json()
+}
+
 export async function downloadFile(id: string): Promise<Blob> {
     const res = await authenticatedFetch(`${API_BASE}files/${id}/download`, {
         method: 'GET',

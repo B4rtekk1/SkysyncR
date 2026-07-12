@@ -20,6 +20,7 @@ import {
     softDeleteFile,
     restoreFile,
     renameFile,
+    shareFile,
     uploadFile,
     type ApiFile,
     type StorageQuota,
@@ -36,6 +37,7 @@ import { EmptyPane } from './dashboard/EmptyPane'
 import { FileCard } from './dashboard/FileCard'
 import { GroupsPanel } from './dashboard/GroupsPanel'
 import { ImagePreviewModal } from './dashboard/ImagePreviewModal'
+import { ShareFileModal } from './dashboard/ShareFileModal'
 import {
     DRAG_HANDLE_ICON,
     GRID_VIEW_ICON,
@@ -84,6 +86,8 @@ function Dashboard() {
     const [draggedCardId, setDraggedCardId] = useState<string | null>(null)
     const [dropTargetId, setDropTargetId] = useState<string | null>(null)
     const [settingsOpen, setSettingsOpen] = useState(false)
+    const [shareItem, setShareItem] = useState<Item | null>(null)
+    const [shareLoading, setShareLoading] = useState(false)
     const [publicKey, setPublicKey] = useState<string | null>(null)
     const [privateKey, setPrivateKey] = useState<CryptoKey | null>(null)
     const normalizedQuery = query.trim().toLowerCase()
@@ -450,6 +454,29 @@ function Dashboard() {
             )
             setError(e instanceof Error ? e.message : 'Could not rename that file.')
             throw e
+        }
+    }
+
+    function handleShare(item: Item) {
+        setError(null)
+        setShareItem(item)
+    }
+
+    async function setFileSharing(item: Item, isPublic: boolean) {
+        setShareLoading(true)
+        setError(null)
+        try {
+            const shared = await shareFile(item.id, isPublic)
+            const visibleShared = { ...shared, filename: item.filename, mime_type: item.mime_type }
+            setItems((prev) => prev.map((current) => (current.id === item.id ? visibleShared : current)))
+            setStorageItems((prev) => prev.map((current) => (current.id === item.id ? visibleShared : current)))
+            setShareItem(visibleShared)
+            return visibleShared
+        } catch (e) {
+            setError(e instanceof Error ? e.message : 'Could not update sharing for that file.')
+            throw e
+        } finally {
+            setShareLoading(false)
         }
     }
 
@@ -855,6 +882,9 @@ function Dashboard() {
                                     onRename={
                                         view === 'all' || view === 'favourites' ? handleRename : undefined
                                     }
+                                    onShare={
+                                        view === 'all' || view === 'favourites' ? handleShare : undefined
+                                    }
                                     isFavourite={favouriteIds.has(item.id)}
                                     onToggleFavourite={
                                         view === 'all' || view === 'favourites' ? toggleFavourite : undefined
@@ -891,6 +921,24 @@ function Dashboard() {
                 />
             )}
             {settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} />}
+            {shareItem && (
+                <ShareFileModal
+                    item={shareItem}
+                    shareUrl={
+                        shareItem.is_public && shareItem.share_token
+                            ? `${window.location.origin}/share/${shareItem.share_token}`
+                            : null
+                    }
+                    loading={shareLoading}
+                    onClose={() => setShareItem(null)}
+                    onEnableShare={async () => {
+                        await setFileSharing(shareItem, true)
+                    }}
+                    onDisableShare={async () => {
+                        await setFileSharing(shareItem, false)
+                    }}
+                />
+            )}
         </div>
     )
 }

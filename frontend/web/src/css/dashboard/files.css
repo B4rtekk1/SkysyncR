@@ -375,6 +375,7 @@
 
 .file-card__action--download,
 .file-card__action--rename,
+.file-card__action--share,
 .file-card__action--confirm,
 .file-card__action--cancel {
     display: inline-flex;
@@ -390,6 +391,8 @@
 .file-card__action--download:focus-visible,
 .file-card__action--rename:hover,
 .file-card__action--rename:focus-visible,
+.file-card__action--share:hover,
+.file-card__action--share:focus-visible,
 .file-card__action--confirm:hover,
 .file-card__action--confirm:focus-visible {
     color: var(--signal);
@@ -399,6 +402,11 @@
 
 .file-card__action--confirm {
     color: var(--signal);
+}
+
+.file-card__action--share.is-active {
+    color: var(--signal);
+    background: rgba(var(--signal-rgb), 0.08);
 }
 
 .file-card__action--cancel:hover,

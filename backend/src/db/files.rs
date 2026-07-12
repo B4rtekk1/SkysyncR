@@ -352,3 +352,44 @@ pub async fn update_user_file_content(
     .fetch_optional(pool)
     .await
 }
+
+pub async fn update_user_file_share(
+    pool: &PgPool,
+    user_id: Uuid,
+    file_id: Uuid,
+    is_public: bool,
+    share_token: Option<String>,
+) -> Result<Option<FileRecord>, sqlx::Error> {
+    sqlx::query_as::<_, FileRecord>(
+        r#"
+        UPDATE files
+        SET is_public = $1,
+            share_token = $2,
+            updated_at = NOW()
+        WHERE id = $3
+          AND owner_id = $4
+          AND is_deleted = FALSE
+        RETURNING
+            id,
+            filename,
+            storage_path,
+            mime_type,
+            size_bytes,
+            folder_id,
+            is_deleted,
+            is_public,
+            share_token,
+            encrypted_key,
+            encryption_nonce,
+            created_at,
+            updated_at,
+            deleted_at
+        "#,
+    )
+    .bind(is_public)
+    .bind(share_token)
+    .bind(file_id)
+    .bind(user_id)
+    .fetch_optional(pool)
+    .await
+}

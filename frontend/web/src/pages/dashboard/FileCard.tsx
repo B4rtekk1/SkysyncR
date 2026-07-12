@@ -7,11 +7,11 @@ import {
 } from 'react'
 import type { SharedFile } from '../../api/files'
 import { FileIcon } from './FileIcon'
-import { CANCEL_ICON, CHECK_ICON, DOWNLOAD_ICON, DRAG_HANDLE_ICON, RENAME_ICON, STAR_ICON_FILLED, STAR_ICON_OUTLINE, TRASH_OPEN_ICON } from './icons'
+import { CANCEL_ICON, CHECK_ICON, DOWNLOAD_ICON, DRAG_HANDLE_ICON, RENAME_ICON, SHARE_ICON, STAR_ICON_FILLED, STAR_ICON_OUTLINE, TRASH_OPEN_ICON } from './icons'
 import type { Item, ViewKey } from './types'
 import { KIND_LABELS, formatBytes, formatRelative, kindFromFile, useDecryptReveal } from './fileUtils'
 function isShared(item: Item): item is SharedFile {
-    return 'permission' in item
+    return 'permissions' in item
 }
 
 export function FileCard({
@@ -23,6 +23,7 @@ export function FileCard({
                       onDownload,
                       onPreview,
                       onRename,
+                      onShare,
                       view,
                       isFavourite,
                       onToggleFavourite,
@@ -45,6 +46,7 @@ export function FileCard({
     onDownload?: (item: Item) => void
     onPreview?: (item: Item) => void
     onRename?: (item: Item, filename: string) => Promise<void>
+    onShare?: (item: Item) => void | Promise<void>
     view: ViewKey
     isFavourite?: boolean
     onToggleFavourite?: (id: string) => void
@@ -69,9 +71,10 @@ export function FileCard({
     const renameInputRef = useRef<HTMLInputElement>(null)
     const canToggleFavourite = Boolean(onToggleFavourite && !isShared(item))
     const canRename = Boolean(onRename && !isShared(item) && view !== 'trash' && !pending)
+    const canShare = Boolean(onShare && !isShared(item) && view !== 'trash' && !pending)
     const canDownload = Boolean(onDownload && view !== 'trash')
     const canPreview = Boolean(onPreview && ['image', 'text', 'code'].includes(kind) && view !== 'trash' && !pending && !isRenaming)
-    const hasAction = Boolean(canRename || canDownload || (view === 'all' && onDelete) || (view === 'trash' && onRestore))
+    const hasAction = Boolean(canRename || canShare || canDownload || (view === 'all' && onDelete) || (view === 'trash' && onRestore))
 
     const handlePreviewKeyDown = (e: ReactKeyboardEvent<HTMLElement>) => {
         if (!canPreview) return
@@ -271,6 +274,23 @@ export function FileCard({
                             type="button"
                         >
                             {DOWNLOAD_ICON}
+                        </button>
+                    )}
+                    {canShare && (
+                        <button
+                            className={`file-card__action file-card__action--share ${
+                                item.is_public ? 'is-active' : ''
+                            }`}
+                            onClick={(e) => {
+                                e.stopPropagation()
+                                void onShare?.(item)
+                            }}
+                            aria-label={`Share ${item.filename}`}
+                            aria-pressed={item.is_public}
+                            title="Share"
+                            type="button"
+                        >
+                            {SHARE_ICON}
                         </button>
                     )}
                     {view === 'all' && onDelete && (
