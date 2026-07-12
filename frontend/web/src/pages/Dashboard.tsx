@@ -486,7 +486,7 @@ function Dashboard() {
             style={{ '--sidebar-width': sidebarHidden ? '0px' : `${sidebarWidth}px` } as React.CSSProperties}
         >
             <aside className="shell__sidebar" aria-hidden={sidebarHidden}>
-                <Link to="/" className="shell__logo">
+                <Link to="/dashboard" className="shell__logo">
                     <span className="nav__logo-mark" aria-hidden="true" />
                     <span className="shell__sidebar-label">SkysyncR</span>
                 </Link>

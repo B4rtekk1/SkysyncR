@@ -7,6 +7,7 @@
     padding: 24px;
     background: rgba(0, 0, 0, 0.58);
     backdrop-filter: blur(10px);
+    animation: settings-backdrop-in 0.22s ease-out both;
 }
 
 .settings-dialog {
@@ -20,6 +21,66 @@
     color: var(--paper);
     box-shadow: 0 28px 90px rgba(0, 0, 0, 0.42);
     overflow: hidden;
+    transform-origin: 50% 46%;
+    animation: settings-dialog-in 0.24s cubic-bezier(0.16, 1, 0.3, 1) both;
+    will-change: opacity, transform;
+}
+
+.settings-modal.is-closing {
+    pointer-events: none;
+    animation: settings-backdrop-out 0.22s ease-in both;
+}
+
+.settings-modal.is-closing .settings-dialog {
+    animation: settings-dialog-out 0.2s cubic-bezier(0.5, 0, 0.75, 0) both;
+}
+
+@keyframes settings-backdrop-in {
+    from {
+        opacity: 0;
+        backdrop-filter: blur(0);
+    }
+
+    to {
+        opacity: 1;
+        backdrop-filter: blur(10px);
+    }
+}
+
+@keyframes settings-backdrop-out {
+    from {
+        opacity: 1;
+        backdrop-filter: blur(10px);
+    }
+
+    to {
+        opacity: 0;
+        backdrop-filter: blur(0);
+    }
+}
+
+@keyframes settings-dialog-in {
+    from {
+        opacity: 0;
+        transform: translateY(18px) scale(0.96);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+@keyframes settings-dialog-out {
+    from {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+
+    to {
+        opacity: 0;
+        transform: translateY(12px) scale(0.97);
+    }
 }
 
 .settings-shell {
@@ -379,6 +440,7 @@
         width: 100%;
         max-height: calc(100vh - 20px);
         border-radius: 10px;
+        transform-origin: 50% 100%;
     }
 
     .settings-topbar,
@@ -405,5 +467,14 @@
 
     .settings-toggle {
         align-items: flex-start;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .settings-modal,
+    .settings-dialog,
+    .settings-modal.is-closing,
+    .settings-modal.is-closing .settings-dialog {
+        animation: none;
     }
 }

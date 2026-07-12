@@ -92,6 +92,64 @@ button {
   font-family: inherit;
 }
 
+html.is-theme-fading *,
+html.is-theme-fading *::before,
+html.is-theme-fading *::after {
+  transition-property: background-color, color, border-color, box-shadow, fill, stroke;
+  transition-duration: 0.42s;
+  transition-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+html.is-theme-transitioning::view-transition-old(root),
+html.is-theme-transitioning::view-transition-new(root) {
+  animation-duration: 0.52s;
+  animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+  mix-blend-mode: normal;
+}
+
+html.is-theme-transitioning::view-transition-old(root) {
+  animation: none;
+}
+
+html.is-theme-transitioning::view-transition-new(root) {
+  animation-name: theme-reveal;
+}
+
+html.is-theme-transitioning .nav__theme-toggle svg,
+html.is-theme-transitioning .shell__theme-toggle svg,
+html.is-theme-fading .nav__theme-toggle svg,
+html.is-theme-fading .shell__theme-toggle svg {
+  animation: theme-icon-swap 0.42s cubic-bezier(0.16, 1, 0.3, 1);
+  transform-origin: center;
+}
+
+@keyframes theme-reveal {
+  from {
+    clip-path: circle(0 at var(--theme-transition-x, 100%) var(--theme-transition-y, 0));
+  }
+
+  to {
+    clip-path: circle(150vmax at var(--theme-transition-x, 100%) var(--theme-transition-y, 0));
+  }
+}
+
+@keyframes theme-icon-swap {
+  0% {
+    opacity: 0;
+    transform: rotate(-35deg) scale(0.72);
+  }
+
+  70% {
+    opacity: 1;
+    transform: rotate(8deg) scale(1.12);
+  }
+
+  100% {
+    opacity: 1;
+    transform: rotate(0) scale(1);
+  }
+}
+
 :focus-visible {
   outline: 2px solid var(--signal);
   outline-offset: 3px;

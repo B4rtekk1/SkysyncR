@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import '../App.css'
 import '../css/Dashbord.css'
 import '../css/Settings.css'
@@ -25,6 +25,7 @@ type SettingsState = {
 }
 
 const SETTINGS_STORAGE_KEY = 'settings_preferences'
+const SETTINGS_ANIMATION_MS = 220
 
 const DEFAULT_SETTINGS: SettingsState = {
     displayName: '',
@@ -55,10 +56,20 @@ function SettingsModal({ onClose }: SettingsModalProps) {
     const [settings, setSettings] = useState<SettingsState>(() => loadSettings())
     const [email, setEmail] = useState<string | null>(null)
     const [saved, setSaved] = useState(false)
+    const [closing, setClosing] = useState(false)
     const initials = useMemo(() => {
         const source = settings.displayName || email || 'S'
         return source.trim().charAt(0).toUpperCase()
     }, [settings.displayName, email])
+
+    const requestClose = useCallback(() => {
+        setClosing((alreadyClosing) => {
+            if (alreadyClosing) return true
+
+            window.setTimeout(onClose, SETTINGS_ANIMATION_MS)
+            return true
+        })
+    }, [onClose])
 
     useEffect(() => {
         let active = true
@@ -95,12 +106,12 @@ function SettingsModal({ onClose }: SettingsModalProps) {
 
     useEffect(() => {
         function closeOnEscape(e: KeyboardEvent) {
-            if (e.key === 'Escape') onClose()
+            if (e.key === 'Escape') requestClose()
         }
 
         window.addEventListener('keydown', closeOnEscape)
         return () => window.removeEventListener('keydown', closeOnEscape)
-    }, [onClose])
+    }, [requestClose])
 
     function updateSetting<K extends keyof SettingsState>(key: K, value: SettingsState[K]) {
         setSettings((prev) => ({ ...prev, [key]: value }))
@@ -126,7 +137,11 @@ function SettingsModal({ onClose }: SettingsModalProps) {
     }
 
     return (
-        <div className="settings-modal" role="presentation" onMouseDown={onClose}>
+        <div
+            className={`settings-modal ${closing ? 'is-closing' : ''}`}
+            role="presentation"
+            onMouseDown={requestClose}
+        >
             <section
                 className="settings-dialog"
                 role="dialog"
@@ -144,7 +159,7 @@ function SettingsModal({ onClose }: SettingsModalProps) {
                     <div className="shell__topbar-actions">
                         {saved && <span className="settings-saved">Saved</span>}
                         <ThemeToggle className="shell__theme-toggle" />
-                        <button className="settings-close" type="button" onClick={onClose} aria-label="Close settings">
+                        <button className="settings-close" type="button" onClick={requestClose} aria-label="Close settings">
                             x
                         </button>
                     </div>
@@ -293,7 +308,7 @@ function SettingsModal({ onClose }: SettingsModalProps) {
                     </div>
 
                     <div className="settings-actions">
-                        <button className="btn btn--outline" type="button" onClick={onClose}>
+                        <button className="btn btn--outline" type="button" onClick={requestClose}>
                             Close
                         </button>
                         <button className="btn btn--solid" type="button" onClick={saveSettings}>

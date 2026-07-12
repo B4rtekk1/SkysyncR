@@ -1,40 +1,96 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 
 export type Theme = 'dark' | 'light'
 
-const THEME_STORAGE_KEY = 'theme'
+const THEME_CHANGE_EVENT = 'skysyncr-theme-change'
+const THEME_TRANSITION_MS = 520
+const SYSTEM_LIGHT_QUERY = '(prefers-color-scheme: light)'
 
-function loadTheme(): Theme {
-    try {
-        const raw = localStorage.getItem(THEME_STORAGE_KEY)
-        if (raw === 'light' || raw === 'dark') return raw
-        if (typeof window !== 'undefined' && window.matchMedia?.('(prefers-color-scheme: light)').matches) {
-            return 'light'
-        }
-        return 'dark'
-    } catch {
-        return 'dark'
-    }
+type ThemeOrigin = {
+    x: number
+    y: number
 }
 
-function saveTheme(theme: Theme) {
-    try {
-        localStorage.setItem(THEME_STORAGE_KEY, theme)
-    } catch {
-        // ignore storage failures (e.g. private browsing)
+type ThemeChangeEvent = CustomEvent<Theme>
+
+type ViewTransition = {
+    finished: Promise<void>
+}
+
+type DocumentWithViewTransition = Document & {
+    startViewTransition?: (updateCallback: () => void) => ViewTransition
+}
+
+function loadTheme(): Theme {
+    if (typeof window !== 'undefined' && window.matchMedia?.(SYSTEM_LIGHT_QUERY).matches) {
+        return 'light'
     }
+    return 'dark'
+}
+
+function applyTheme(theme: Theme) {
+    document.documentElement.setAttribute('data-theme', theme)
 }
 
 export function useTheme() {
     const [theme, setTheme] = useState<Theme>(() => loadTheme())
 
+    const setThemeEverywhere = useCallback((nextTheme: Theme) => {
+        applyTheme(nextTheme)
+        setTheme(nextTheme)
+        window.dispatchEvent(new CustomEvent(THEME_CHANGE_EVENT, { detail: nextTheme }))
+    }, [])
+
     useEffect(() => {
-        document.documentElement.setAttribute('data-theme', theme)
-        saveTheme(theme)
+        function syncTheme(event: Event) {
+            setTheme((event as ThemeChangeEvent).detail)
+        }
+
+        window.addEventListener(THEME_CHANGE_EVENT, syncTheme)
+        return () => window.removeEventListener(THEME_CHANGE_EVENT, syncTheme)
+    }, [])
+
+    useEffect(() => {
+        applyTheme(theme)
     }, [theme])
 
-    function toggleTheme() {
-        setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'))
+    useEffect(() => {
+        const systemTheme = window.matchMedia?.(SYSTEM_LIGHT_QUERY)
+        if (!systemTheme) return undefined
+
+        function syncSystemTheme(event: MediaQueryListEvent) {
+            setThemeEverywhere(event.matches ? 'light' : 'dark')
+        }
+
+        systemTheme.addEventListener('change', syncSystemTheme)
+        return () => systemTheme.removeEventListener('change', syncSystemTheme)
+    }, [setThemeEverywhere])
+
+    function toggleTheme(origin?: ThemeOrigin) {
+        const nextTheme = theme === 'dark' ? 'light' : 'dark'
+        const root = document.documentElement
+        const supportsViewTransition = 'startViewTransition' in document && !window.matchMedia('(prefers-reduced-motion: reduce)').matches
+
+        if (origin) {
+            root.style.setProperty('--theme-transition-x', `${origin.x}px`)
+            root.style.setProperty('--theme-transition-y', `${origin.y}px`)
+        }
+
+        if (supportsViewTransition) {
+            root.classList.add('is-theme-transitioning')
+            const transition = (document as DocumentWithViewTransition).startViewTransition?.(() => {
+                setThemeEverywhere(nextTheme)
+            })
+
+            transition?.finished.finally(() => {
+                root.classList.remove('is-theme-transitioning')
+            })
+            return
+        }
+
+        root.classList.add('is-theme-fading')
+        setThemeEverywhere(nextTheme)
+        window.setTimeout(() => root.classList.remove('is-theme-fading'), THEME_TRANSITION_MS)
     }
 
     return { theme, toggleTheme }
