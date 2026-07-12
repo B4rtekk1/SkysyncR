@@ -822,8 +822,21 @@ function Dashboard() {
                                         aria-label="Sort files"
                                         title="Sort files"
                                     >
-                                        <span className="sort-dropdown__label">Sort</span>
-                                        <span className="sort-dropdown__value">{FILE_SORT_LABELS[sortKey]}</span>
+                                        <span className="sort-dropdown__icon" aria-hidden="true">
+                                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none">
+                                                <path
+                                                    d="M4 7h10M4 12h7M4 17h4M18 6v12m0 0 3-3m-3 3-3-3"
+                                                    stroke="currentColor"
+                                                    strokeWidth="1.8"
+                                                    strokeLinecap="round"
+                                                    strokeLinejoin="round"
+                                                />
+                                            </svg>
+                                        </span>
+                                        <span className="sort-dropdown__text">
+                                            <span className="sort-dropdown__label">Sort by</span>
+                                            <span className="sort-dropdown__value">{FILE_SORT_LABELS[sortKey]}</span>
+                                        </span>
                                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                                             <path
                                                 d="m7 10 5 5 5-5"
