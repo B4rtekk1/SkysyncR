@@ -3,6 +3,7 @@ import '../App.css'
 import '../css/Dashbord.css'
 import '../css/Settings.css'
 import ThemeToggle from '../components/ThemeToggle'
+import { useTheme, type ThemePreference } from '../hooks/UseTheme'
 import { logout } from '../api/auth'
 import { getCurrentUser } from '../api/users'
 import { NAV_ICONS } from './dashboard/icons'
@@ -38,6 +39,11 @@ const DEFAULT_SETTINGS: SettingsState = {
 }
 
 const viewOptions: ViewKey[] = ['all', 'favourites', 'shared', 'groups', 'trash']
+const themeOptions: Array<{ value: ThemePreference; label: string }> = [
+    { value: 'system', label: 'System' },
+    { value: 'light', label: 'Light' },
+    { value: 'dark', label: 'Dark' },
+]
 
 type SettingsModalProps = {
     onClose: () => void
@@ -57,6 +63,7 @@ function SettingsModal({ onClose }: SettingsModalProps) {
     const [email, setEmail] = useState<string | null>(null)
     const [saved, setSaved] = useState(false)
     const [closing, setClosing] = useState(false)
+    const { theme, themePreference, setThemePreference } = useTheme()
     const initials = useMemo(() => {
         const source = settings.displayName || email || 'S'
         return source.trim().charAt(0).toUpperCase()
@@ -247,6 +254,30 @@ function SettingsModal({ onClose }: SettingsModalProps) {
                                 />
                                 <span>Show compact metadata in file cards</span>
                             </label>
+                        </section>
+
+                        <section className="settings-panel">
+                            <div className="settings-panel__head">
+                                <div>
+                                    <p className="settings-kicker">Appearance</p>
+                                    <h2>Theme</h2>
+                                </div>
+                                <span className="settings-badge">{theme}</span>
+                            </div>
+                            <div className="settings-segment settings-segment--theme" role="group" aria-label="Theme preference">
+                                {themeOptions.map((option) => (
+                                    <button
+                                        key={option.value}
+                                        className={themePreference === option.value ? 'is-active' : ''}
+                                        type="button"
+                                        onClick={() => setThemePreference(option.value)}
+                                        aria-pressed={themePreference === option.value}
+                                    >
+                                        {option.label}
+                                    </button>
+                                ))}
+                            </div>
+                            <p className="settings-muted">System follows your operating system appearance.</p>
                         </section>
 
                         <section className="settings-panel settings-panel--wide">

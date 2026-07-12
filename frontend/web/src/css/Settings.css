@@ -330,6 +330,10 @@
     color: #f8fbff;
 }
 
+.settings-segment--theme {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
 .settings-check,
 .settings-toggle {
     display: flex;

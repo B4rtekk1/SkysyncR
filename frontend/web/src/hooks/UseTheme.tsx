@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useState } from 'react'
 
 export type Theme = 'dark' | 'light'
+export type ThemePreference = Theme | 'system'
 
+const THEME_STORAGE_KEY = 'theme_preference'
 const THEME_CHANGE_EVENT = 'skysyncr-theme-change'
 const THEME_TRANSITION_MS = 520
 const SYSTEM_LIGHT_QUERY = '(prefers-color-scheme: light)'
@@ -11,7 +13,12 @@ type ThemeOrigin = {
     y: number
 }
 
-type ThemeChangeEvent = CustomEvent<Theme>
+type ThemeChangeDetail = {
+    preference: ThemePreference
+    theme: Theme
+}
+
+type ThemeChangeEvent = CustomEvent<ThemeChangeDetail>
 
 type ViewTransition = {
     finished: Promise<void>
@@ -21,11 +28,33 @@ type DocumentWithViewTransition = Document & {
     startViewTransition?: (updateCallback: () => void) => ViewTransition
 }
 
-function loadTheme(): Theme {
+function getSystemTheme(): Theme {
     if (typeof window !== 'undefined' && window.matchMedia?.(SYSTEM_LIGHT_QUERY).matches) {
         return 'light'
     }
     return 'dark'
+}
+
+function resolveTheme(preference: ThemePreference): Theme {
+    return preference === 'system' ? getSystemTheme() : preference
+}
+
+function loadThemePreference(): ThemePreference {
+    try {
+        const raw = localStorage.getItem(THEME_STORAGE_KEY)
+        if (raw === 'system' || raw === 'light' || raw === 'dark') return raw
+    } catch {
+        // ignore storage failures (e.g. private browsing)
+    }
+    return 'system'
+}
+
+function saveThemePreference(preference: ThemePreference) {
+    try {
+        localStorage.setItem(THEME_STORAGE_KEY, preference)
+    } catch {
+        // ignore storage failures (e.g. private browsing)
+    }
 }
 
 function applyTheme(theme: Theme) {
@@ -33,17 +62,31 @@ function applyTheme(theme: Theme) {
 }
 
 export function useTheme() {
-    const [theme, setTheme] = useState<Theme>(() => loadTheme())
+    const [themePreference, setThemePreferenceState] = useState<ThemePreference>(() => loadThemePreference())
+    const [theme, setTheme] = useState<Theme>(() => resolveTheme(loadThemePreference()))
 
-    const setThemeEverywhere = useCallback((nextTheme: Theme) => {
+    const setThemePreferenceEverywhere = useCallback((nextPreference: ThemePreference) => {
+        const nextTheme = resolveTheme(nextPreference)
+
+        saveThemePreference(nextPreference)
         applyTheme(nextTheme)
+        setThemePreferenceState(nextPreference)
         setTheme(nextTheme)
-        window.dispatchEvent(new CustomEvent(THEME_CHANGE_EVENT, { detail: nextTheme }))
+        window.dispatchEvent(
+            new CustomEvent<ThemeChangeDetail>(THEME_CHANGE_EVENT, {
+                detail: {
+                    preference: nextPreference,
+                    theme: nextTheme,
+                },
+            }),
+        )
     }, [])
 
     useEffect(() => {
         function syncTheme(event: Event) {
-            setTheme((event as ThemeChangeEvent).detail)
+            const { preference, theme } = (event as ThemeChangeEvent).detail
+            setThemePreferenceState(preference)
+            setTheme(theme)
         }
 
         window.addEventListener(THEME_CHANGE_EVENT, syncTheme)
@@ -58,18 +101,26 @@ export function useTheme() {
         const systemTheme = window.matchMedia?.(SYSTEM_LIGHT_QUERY)
         if (!systemTheme) return undefined
 
-        function syncSystemTheme(event: MediaQueryListEvent) {
-            setThemeEverywhere(event.matches ? 'light' : 'dark')
+        function syncSystemTheme() {
+            if (themePreference === 'system') {
+                setThemePreferenceEverywhere('system')
+            }
         }
 
         systemTheme.addEventListener('change', syncSystemTheme)
         return () => systemTheme.removeEventListener('change', syncSystemTheme)
-    }, [setThemeEverywhere])
+    }, [setThemePreferenceEverywhere, themePreference])
 
-    function toggleTheme(origin?: ThemeOrigin) {
-        const nextTheme = theme === 'dark' ? 'light' : 'dark'
+    function changeThemePreference(nextPreference: ThemePreference, origin?: ThemeOrigin) {
+        const nextTheme = resolveTheme(nextPreference)
         const root = document.documentElement
+        const themeWillChange = nextTheme !== theme
         const supportsViewTransition = 'startViewTransition' in document && !window.matchMedia('(prefers-reduced-motion: reduce)').matches
+
+        if (!themeWillChange) {
+            setThemePreferenceEverywhere(nextPreference)
+            return
+        }
 
         if (origin) {
             root.style.setProperty('--theme-transition-x', `${origin.x}px`)
@@ -79,7 +130,7 @@ export function useTheme() {
         if (supportsViewTransition) {
             root.classList.add('is-theme-transitioning')
             const transition = (document as DocumentWithViewTransition).startViewTransition?.(() => {
-                setThemeEverywhere(nextTheme)
+                setThemePreferenceEverywhere(nextPreference)
             })
 
             transition?.finished.finally(() => {
@@ -89,11 +140,20 @@ export function useTheme() {
         }
 
         root.classList.add('is-theme-fading')
-        setThemeEverywhere(nextTheme)
+        setThemePreferenceEverywhere(nextPreference)
         window.setTimeout(() => root.classList.remove('is-theme-fading'), THEME_TRANSITION_MS)
     }
 
-    return { theme, toggleTheme }
+    function toggleTheme(origin?: ThemeOrigin) {
+        changeThemePreference(theme === 'dark' ? 'light' : 'dark', origin)
+    }
+
+    return {
+        theme,
+        themePreference,
+        setThemePreference: changeThemePreference,
+        toggleTheme,
+    }
 }
 
 export const SUN_ICON = (
