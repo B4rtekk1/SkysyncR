@@ -132,11 +132,11 @@
     color: var(--amber);
 }
 
-.file-card__fav.is-active svg {
+.file-card__fav.has-favourite-motion.is-active svg {
     animation: favourite-pop 0.52s cubic-bezier(0.2, 0.9, 0.2, 1.18);
 }
 
-.file-card__fav.is-active::after {
+.file-card__fav.has-favourite-motion.is-active::after {
     animation: favourite-ring 0.58s ease-out;
 }
 
@@ -151,11 +151,11 @@
     transform: scale(0.72) rotate(-10deg);
 }
 
-.file-card__fav.is-active .star-icon__shape {
+.file-card__fav.has-favourite-motion.is-active .star-icon__shape {
     animation: favourite-shine 0.52s cubic-bezier(0.2, 0.9, 0.2, 1.18);
 }
 
-.file-card__fav.is-active .star-icon__burst {
+.file-card__fav.has-favourite-motion.is-active .star-icon__burst {
     animation: favourite-burst 0.58s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
