@@ -1,7 +1,8 @@
-import type { Group, GroupInvite, Item, LayoutMode, ViewKey } from './types'
+import type { FileSortKey, Group, GroupInvite, Item, LayoutMode, ViewKey } from './types'
 export const FAVOURITES_STORAGE_KEY = 'favourite_file_ids'
 export const LOCAL_FILE_META_STORAGE_KEY = 'local_file_metadata'
 export const LAYOUT_MODE_STORAGE_KEY = 'file_layout_mode'
+export const FILE_SORT_STORAGE_KEY = 'file_sort'
 export const GROUPS_STORAGE_KEY = 'groups'
 export const LEGACY_GROUP_INVITES_STORAGE_KEY = 'group_invites'
 
@@ -69,6 +70,35 @@ export function saveLayoutMode(mode: LayoutMode) {
     } catch {
         // ignore storage failures (e.g. private browsing)
     }
+}
+
+export function loadFileSort(): FileSortKey {
+    try {
+        const raw = localStorage.getItem(FILE_SORT_STORAGE_KEY)
+        return isFileSortKey(raw) ? raw : 'manual'
+    } catch {
+        return 'manual'
+    }
+}
+
+export function saveFileSort(sortKey: FileSortKey) {
+    try {
+        localStorage.setItem(FILE_SORT_STORAGE_KEY, sortKey)
+    } catch {
+        // ignore storage failures (e.g. private browsing)
+    }
+}
+
+function isFileSortKey(value: string | null): value is FileSortKey {
+    return (
+        value === 'manual' ||
+        value === 'name-asc' ||
+        value === 'name-desc' ||
+        value === 'updated-desc' ||
+        value === 'updated-asc' ||
+        value === 'size-desc' ||
+        value === 'size-asc'
+    )
 }
 
 export function loadGroups(): Group[] {

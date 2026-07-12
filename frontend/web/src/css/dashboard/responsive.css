@@ -41,6 +41,10 @@
         align-items: flex-start;
         flex-direction: column;
     }
+
+    .shell__content-actions {
+        flex-wrap: wrap;
+    }
 }
 
 @media (max-width: 560px) {
@@ -50,6 +54,15 @@
 
     .shell__sync {
         display: none;
+    }
+
+    .sort-dropdown {
+        width: 100%;
+    }
+
+    .sort-dropdown__trigger,
+    .sort-dropdown__menu {
+        width: 100%;
     }
 
     .groups-panel {

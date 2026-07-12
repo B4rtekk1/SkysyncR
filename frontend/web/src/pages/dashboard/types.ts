@@ -1,6 +1,14 @@
 import type { ApiFile, SharedFile } from '../../api/files'
 export type ViewKey = 'all' | 'favourites' | 'shared' | 'groups' | 'trash'
 export type LayoutMode = 'grid' | 'list'
+export type FileSortKey =
+    | 'manual'
+    | 'name-asc'
+    | 'name-desc'
+    | 'updated-desc'
+    | 'updated-asc'
+    | 'size-desc'
+    | 'size-asc'
 export type Item = ApiFile | SharedFile
 export type FilePreviewKind = 'image' | 'text'
 export type FilePreviewState = {

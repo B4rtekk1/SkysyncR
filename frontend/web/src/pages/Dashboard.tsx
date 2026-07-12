@@ -57,8 +57,10 @@ import {
     applyLocalFileMetadata,
     applySavedOrder,
     loadActiveView,
+    loadFileSort,
     loadFavouriteIds,
     saveActiveView,
+    saveFileSort,
     saveFavouriteIds,
     saveLocalFileMetadata,
     saveOrderIds,
@@ -70,10 +72,53 @@ import { useLayoutModeSwitch } from './dashboard/hooks/useLayoutModeSwitch'
 import { useNavOrdering } from './dashboard/hooks/useNavOrdering'
 import { useSidebarState } from './dashboard/hooks/useSidebarState'
 import { useStorageSummary } from './dashboard/hooks/useStorageSummary'
-import type { Item, NavIndicator, ViewKey } from './dashboard/types'
+import type { FileSortKey, Item, NavIndicator, ViewKey } from './dashboard/types'
+
+const FILE_SORT_LABELS: Record<FileSortKey, string> = {
+    manual: 'Manual order',
+    'name-asc': 'Name A-Z',
+    'name-desc': 'Name Z-A',
+    'updated-desc': 'Newest first',
+    'updated-asc': 'Oldest first',
+    'size-desc': 'Largest first',
+    'size-asc': 'Smallest first',
+}
+
+function compareStrings(a: string, b: string) {
+    return a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' })
+}
+
+function compareDates(a: string, b: string) {
+    return new Date(a).getTime() - new Date(b).getTime()
+}
+
+function sortFiles(items: Item[], sortKey: FileSortKey) {
+    if (sortKey === 'manual') return items
+
+    return [...items].sort((a, b) => {
+        switch (sortKey) {
+            case 'name-asc':
+                return compareStrings(a.filename, b.filename)
+            case 'name-desc':
+                return compareStrings(b.filename, a.filename)
+            case 'updated-desc':
+                return compareDates(b.updated_at, a.updated_at)
+            case 'updated-asc':
+                return compareDates(a.updated_at, b.updated_at)
+            case 'size-desc':
+                return b.size_bytes - a.size_bytes
+            case 'size-asc':
+                return a.size_bytes - b.size_bytes
+            default:
+                return 0
+        }
+    })
+}
+
 function Dashboard() {
     const [view, setView] = useState<ViewKey>(() => loadActiveView())
     const [items, setItems] = useState<Item[]>([])
+    const [sortKey, setSortKey] = useState<FileSortKey>(() => loadFileSort())
     const [pendingIds, setPendingIds] = useState<Set<string>>(new Set())
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState<string | null>(null)
@@ -81,6 +126,7 @@ function Dashboard() {
     const [storageItems, setStorageItems] = useState<ApiFile[]>([])
     const [query, setQuery] = useState('')
     const [menuOpen, setMenuOpen] = useState(false)
+    const [sortMenuOpen, setSortMenuOpen] = useState(false)
     const [dragActive, setDragActive] = useState(false)
     const [favouriteIds, setFavouriteIds] = useState<Set<string>>(() => loadFavouriteIds())
     const [draggedCardId, setDraggedCardId] = useState<string | null>(null)
@@ -92,6 +138,7 @@ function Dashboard() {
     const [privateKey, setPrivateKey] = useState<CryptoKey | null>(null)
     const normalizedQuery = query.trim().toLowerCase()
     const menuRef = useRef<HTMLDivElement>(null)
+    const sortMenuRef = useRef<HTMLDivElement>(null)
     const navListRef = useRef<HTMLElement>(null)
     const navItemRefs = useRef<Partial<Record<ViewKey, HTMLButtonElement>>>({})
     const [navIndicator, setNavIndicator] = useState<NavIndicator>({
@@ -164,8 +211,9 @@ function Dashboard() {
         setError,
         handleFileUpdated,
     )
+    const sortedItems = useMemo(() => sortFiles(items, sortKey), [items, sortKey])
     const { visibleItems, renderedItems, animatedFiles } = useAnimatedItems({
-        items,
+        items: sortedItems,
         view,
         favouriteIds,
         normalizedQuery,
@@ -266,6 +314,10 @@ function Dashboard() {
     }, [view])
 
     useEffect(() => {
+        saveFileSort(sortKey)
+    }, [sortKey])
+
+    useEffect(() => {
         let active = true
 
         Promise.resolve()
@@ -305,6 +357,9 @@ function Dashboard() {
         function onClickAway(e: MouseEvent) {
             if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
                 setMenuOpen(false)
+            }
+            if (sortMenuRef.current && !sortMenuRef.current.contains(e.target as Node)) {
+                setSortMenuOpen(false)
             }
         }
         document.addEventListener('mousedown', onClickAway)
@@ -511,6 +566,7 @@ function Dashboard() {
         const sourceId = e.dataTransfer.getData('text/plain') || draggedCardId
         setDraggedCardId(null)
         setDropTargetId(null)
+        if (sortKey !== 'manual') return
         if (!sourceId || sourceId === targetId) return
 
         setItems((prev) => {
@@ -755,6 +811,71 @@ function Dashboard() {
                         </div>
 
                         <div className="shell__content-actions">
+                            {view !== 'groups' && (
+                                <div className="sort-dropdown" ref={sortMenuRef}>
+                                    <button
+                                        className={`sort-dropdown__trigger ${sortMenuOpen ? 'is-open' : ''}`}
+                                        type="button"
+                                        onClick={() => setSortMenuOpen((open) => !open)}
+                                        aria-haspopup="listbox"
+                                        aria-expanded={sortMenuOpen}
+                                        aria-label="Sort files"
+                                        title="Sort files"
+                                    >
+                                        <span className="sort-dropdown__label">Sort</span>
+                                        <span className="sort-dropdown__value">{FILE_SORT_LABELS[sortKey]}</span>
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                                            <path
+                                                d="m7 10 5 5 5-5"
+                                                stroke="currentColor"
+                                                strokeWidth="1.8"
+                                                strokeLinecap="round"
+                                                strokeLinejoin="round"
+                                            />
+                                        </svg>
+                                    </button>
+
+                                    {sortMenuOpen && (
+                                        <div className="sort-dropdown__menu" role="listbox" aria-label="Sort files">
+                                            {Object.entries(FILE_SORT_LABELS).map(([value, label]) => (
+                                                <button
+                                                    key={value}
+                                                    className={`sort-dropdown__option ${
+                                                        sortKey === value ? 'is-selected' : ''
+                                                    }`}
+                                                    type="button"
+                                                    role="option"
+                                                    aria-selected={sortKey === value}
+                                                    onClick={() => {
+                                                        setSortKey(value as FileSortKey)
+                                                        setSortMenuOpen(false)
+                                                    }}
+                                                >
+                                                    <span>{label}</span>
+                                                    {sortKey === value && (
+                                                        <svg
+                                                            width="15"
+                                                            height="15"
+                                                            viewBox="0 0 24 24"
+                                                            fill="none"
+                                                            aria-hidden="true"
+                                                        >
+                                                            <path
+                                                                d="M5 12.5 9.3 17 19 7"
+                                                                stroke="currentColor"
+                                                                strokeWidth="1.9"
+                                                                strokeLinecap="round"
+                                                                strokeLinejoin="round"
+                                                            />
+                                                        </svg>
+                                                    )}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
                             <div
                                 className={`view-toggle view-toggle--${layoutMode} ${
                                     layoutSwitchTarget ? 'is-switching' : ''
@@ -889,7 +1010,7 @@ function Dashboard() {
                                     onToggleFavourite={
                                         view === 'all' || view === 'favourites' ? toggleFavourite : undefined
                                     }
-                                    draggable={!pendingIds.has(item.id) && !isSearchExiting}
+                                    draggable={sortKey === 'manual' && !pendingIds.has(item.id) && !isSearchExiting}
                                     isDragging={draggedCardId === item.id}
                                     isDropTarget={dropTargetId === item.id}
                                     isSearchExiting={isSearchExiting}
