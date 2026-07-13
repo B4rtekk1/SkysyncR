@@ -18,21 +18,11 @@ import {
     listTrash,
     listSharedFilesWithMe,
     getStorageQuota,
-    softDeleteFile,
-    restoreFile,
-    renameFile,
-    shareFile,
-    uploadFile,
     type ApiFile,
     type StorageQuota,
 } from '../api/files'
 import { logout } from '../api/auth'
 import { getCurrentUser } from '../api/users'
-import {
-    generateFileKey,
-    encryptFile,
-    wrapFileKeyForUser,
-} from '../crypto/fileEncryption'
 import { loadActivePrivateKey } from '../crypto/storage'
 import { EmptyPane } from './dashboard/EmptyPane'
 import { FileCard } from './dashboard/FileCard'
@@ -75,13 +65,13 @@ import {
     saveActiveView,
     saveFileFilter,
     saveFileSort,
-    saveFavouriteIds,
-    saveLocalFileMetadata,
     saveOrderIds,
 } from './dashboard/storage'
 import { useAnimatedItems } from './dashboard/hooks/useAnimatedItems'
+import { useFileActions } from './dashboard/hooks/useFileActions'
 import { useDashboardGroups } from './dashboard/hooks/useDashboardGroups'
 import { useFilePreview } from './dashboard/hooks/useFilePreview'
+import { useFileUpload } from './dashboard/hooks/useFileUpload'
 import { useLayoutModeSwitch } from './dashboard/hooks/useLayoutModeSwitch'
 import { useNavOrdering } from './dashboard/hooks/useNavOrdering'
 import { useSidebarState } from './dashboard/hooks/useSidebarState'
@@ -229,7 +219,7 @@ function Dashboard() {
         return localStorage.getItem('display_name') || sessionStorage.getItem('display_name') || 'You'
     }, [])
 
-    const refreshQuota = async () => {
+    const refreshQuota = useCallback(async () => {
         try {
             const [quotaData, fileData] = await Promise.all([getStorageQuota(), listFiles()])
             setQuota(quotaData)
@@ -237,12 +227,36 @@ function Dashboard() {
         } catch {
             setQuota(null)
         }
-    }
+    }, [])
+
+    const { ingestFiles } = useFileUpload({
+        publicKey,
+        setItems,
+        setPendingIds,
+        setError,
+        refreshQuota,
+    })
+    const {
+        handleDelete,
+        handleRestore,
+        handleRename,
+        handleShare,
+        setFileSharing,
+        toggleFavourite,
+    } = useFileActions({
+        setItems,
+        setStorageItems,
+        setError,
+        setShareItem,
+        setShareLoading,
+        setFavouriteIds,
+        refreshQuota,
+    })
 
     useEffect(() => {
         const timeout = setTimeout(() => void refreshQuota(), 0)
         return () => clearTimeout(timeout)
-    }, [])
+    }, [refreshQuota])
 
     useEffect(() => {
         let active = true
@@ -402,81 +416,6 @@ function Dashboard() {
         }
     }, [])
 
-    async function ingestFiles(fileList: FileList) {
-        for (const file of Array.from(fileList)) {
-            const tempId = `pending-${Date.now()}-${Math.random().toString(36).slice(2)}`
-            const now = new Date().toISOString()
-            const placeholder: ApiFile = {
-                id: tempId,
-                filename: file.name,
-                storage_path: '',
-                mime_type: file.type || null,
-                size_bytes: file.size,
-                folder_id: null,
-                is_deleted: false,
-                is_public: false,
-                share_token: null,
-                encrypted_key: '',
-                encryption_nonce: '',
-                created_at: now,
-                updated_at: now,
-                deleted_at: null,
-            }
-
-            setItems((prev) => [placeholder, ...prev])
-            setPendingIds((prev) => new Set(prev).add(tempId))
-
-            if (!publicKey) {
-                setItems((prev) => prev.filter((i) => i.id !== tempId))
-                setPendingIds((prev) => {
-                    const next = new Set(prev)
-                    next.delete(tempId)
-                    return next
-                })
-                setError('Encryption key unavailable. Sign in again before uploading.')
-                continue
-            }
-
-            try {
-                const key = await generateFileKey()
-                const { ciphertext, nonce } = await encryptFile(file, key)
-                const wrappedKey = await wrapFileKeyForUser(key, publicKey)
-                const originalMimeType = file.type || null
-                const encryptedBlob = new Blob([ciphertext], { type: originalMimeType || 'application/octet-stream' })
-
-                const saved = await uploadFile({
-                    encryptedFile: encryptedBlob,
-                    originalFilename: file.name,
-                    originalMimeType,
-                    wrappedKey,
-                    encryptionNonce: nonce.buffer as ArrayBuffer,
-                })
-
-                const visibleSaved = {
-                    ...saved,
-                    filename: file.name,
-                    mime_type: file.type || null,
-                }
-                saveLocalFileMetadata(saved.id, {
-                    filename: file.name,
-                    mime_type: file.type || null,
-                })
-                setItems((prev) => prev.map((i) => (i.id === tempId ? visibleSaved : i)))
-            } catch (e) {
-                setItems((prev) => prev.filter((i) => i.id !== tempId))
-                setError(e instanceof Error ? e.message : `Failed to upload ${file.name}.`)
-            } finally {
-                setPendingIds((prev) => {
-                    const next = new Set(prev)
-                    next.delete(tempId)
-                    return next
-                })
-            }
-        }
-
-        await refreshQuota()
-    }
-
     function onUploadChange(e: ChangeEvent<HTMLInputElement>) {
         if (e.target.files && e.target.files.length > 0) {
             void ingestFiles(e.target.files)
@@ -494,94 +433,6 @@ function Dashboard() {
         if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
             void ingestFiles(e.dataTransfer.files)
         }
-    }
-
-    async function handleDelete(id: string) {
-        setItems((prev) => prev.filter((i) => i.id !== id))
-        try {
-            await softDeleteFile(id)
-            await refreshQuota()
-        } catch (e) {
-            setError(e instanceof Error ? e.message : 'Could not move that file to trash.')
-        }
-    }
-
-    async function handleRestore(id: string) {
-        setItems((prev) => prev.filter((i) => i.id !== id))
-        try {
-            await restoreFile(id)
-            await refreshQuota()
-        } catch (e) {
-            setError(e instanceof Error ? e.message : 'Could not restore that file.')
-        }
-    }
-
-    async function handleRename(item: Item, filename: string) {
-        const previousName = item.filename
-        const nextName = filename.trim()
-        if (!nextName || nextName === previousName) return
-
-        setError(null)
-        setItems((prev) =>
-            prev.map((current) =>
-                current.id === item.id ? { ...current, filename: nextName, updated_at: new Date().toISOString() } : current,
-            ),
-        )
-
-        try {
-            const renamed = await renameFile(item.id, nextName)
-            const visibleRenamed = { ...renamed, filename: nextName, mime_type: item.mime_type }
-            saveLocalFileMetadata(item.id, {
-                filename: nextName,
-                mime_type: item.mime_type,
-            })
-            setItems((prev) => prev.map((current) => (current.id === item.id ? visibleRenamed : current)))
-            setStorageItems((prev) => prev.map((current) => (current.id === item.id ? visibleRenamed : current)))
-        } catch (e) {
-            setItems((prev) =>
-                prev.map((current) =>
-                    current.id === item.id ? { ...current, filename: previousName, updated_at: item.updated_at } : current,
-                ),
-            )
-            setError(e instanceof Error ? e.message : 'Could not rename that file.')
-            throw e
-        }
-    }
-
-    function handleShare(item: Item) {
-        setError(null)
-        setShareItem(item)
-    }
-
-    async function setFileSharing(item: Item, isPublic: boolean) {
-        setShareLoading(true)
-        setError(null)
-        try {
-            const shared = await shareFile(item.id, isPublic)
-            const visibleShared = { ...shared, filename: item.filename, mime_type: item.mime_type }
-            setItems((prev) => prev.map((current) => (current.id === item.id ? visibleShared : current)))
-            setStorageItems((prev) => prev.map((current) => (current.id === item.id ? visibleShared : current)))
-            setShareItem(visibleShared)
-            return visibleShared
-        } catch (e) {
-            setError(e instanceof Error ? e.message : 'Could not update sharing for that file.')
-            throw e
-        } finally {
-            setShareLoading(false)
-        }
-    }
-
-    function toggleFavourite(id: string) {
-        setFavouriteIds((prev) => {
-            const next = new Set(prev)
-            if (next.has(id)) {
-                next.delete(id)
-            } else {
-                next.add(id)
-            }
-            saveFavouriteIds(next)
-            return next
-        })
     }
 
     function toggleFileTypeFilter(type: FileTypeFilterKey) {
