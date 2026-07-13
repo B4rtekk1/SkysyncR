@@ -26,6 +26,7 @@ export function FileCard({
                       onPreview,
                       onRename,
                       onShare,
+                      onNote,
                       view,
                       isFavourite,
                       onToggleFavourite,
@@ -49,6 +50,7 @@ export function FileCard({
     onPreview?: (item: Item) => void
     onRename?: (item: Item, filename: string) => Promise<void>
     onShare?: (item: Item) => void | Promise<void>
+    onNote?: (item: Item) => void
     view: ViewKey
     isFavourite?: boolean
     onToggleFavourite?: (id: string) => void
@@ -77,9 +79,10 @@ export function FileCard({
     const canToggleFavourite = Boolean(onToggleFavourite && !isShared(item))
     const canRename = Boolean(onRename && !isShared(item) && view !== 'trash' && !pending)
     const canShare = Boolean(onShare && !isShared(item) && view !== 'trash' && !pending)
+    const canNote = Boolean(onNote && !isShared(item) && view !== 'trash' && !pending)
     const canDownload = Boolean(onDownload && view !== 'trash')
     const canPreview = Boolean(onPreview && ['image', 'video', 'text', 'code'].includes(kind) && view !== 'trash' && !pending && !isRenaming)
-    const hasAction = Boolean(canRename || canShare || canDownload || (view === 'all' && onDelete) || (view === 'trash' && onRestore) || !isRenaming)
+    const hasAction = Boolean(canRename || canShare || canNote || canDownload || (view === 'all' && onDelete) || (view === 'trash' && onRestore) || !isRenaming)
 
     const updateInfoPosition = useCallback(() => {
         const card = cardRef.current
@@ -251,6 +254,7 @@ export function FileCard({
                     canRename={canRename}
                     canDownload={canDownload}
                     canShare={canShare}
+                    canNote={canNote}
                     isInfoOpen={isInfoOpen}
                     infoPopover={
                         isInfoOpen ? (
@@ -276,6 +280,7 @@ export function FileCard({
                     }}
                     onDownload={onDownload}
                     onShare={onShare}
+                    onNote={onNote}
                     onDelete={onDelete}
                     onRestore={onRestore}
                 />

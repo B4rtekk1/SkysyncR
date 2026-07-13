@@ -45,6 +45,7 @@ CREATE TABLE IF NOT EXISTS files
     encryption_nonce bytea,
     checksum         TEXT,
     folder_id        UUID        REFERENCES folders (id) ON DELETE SET NULL,
+    note             TEXT,
     is_deleted       BOOLEAN     NOT NULL DEFAULT FALSE,
     is_public        BOOLEAN     NOT NULL DEFAULT FALSE,
     share_token      TEXT,
@@ -187,3 +188,4 @@ SET session_expires_at = COALESCE(session_expires_at, created_at + interval '90 
 WHERE session_expires_at IS NULL;
 ALTER TABLE refresh_tokens ALTER COLUMN session_expires_at SET DEFAULT (NOW() + interval '90 days');
 ALTER TABLE refresh_tokens ALTER COLUMN session_expires_at SET NOT NULL;
+ALTER TABLE files ADD COLUMN IF NOT EXISTS note TEXT;

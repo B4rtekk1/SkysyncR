@@ -171,6 +171,18 @@ export const INFO_ICON = (
     </svg>
 )
 
+export const NOTE_ICON = (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path
+            d="M6.5 4.5h8.2L18 7.8v11.7H6.5v-15Z"
+            stroke="currentColor"
+            strokeWidth="1.6"
+            strokeLinejoin="round"
+        />
+        <path d="M14.5 4.8V8h3.2M9 12h6M9 15.5h4.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+    </svg>
+)
+
 export const CHECK_ICON = (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
         <path d="M5 12.5 9.3 17 19 7" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />

@@ -4,6 +4,7 @@ import {
     CHECK_ICON,
     DOWNLOAD_ICON,
     INFO_ICON,
+    NOTE_ICON,
     RENAME_ICON,
     SHARE_ICON,
     TRASH_OPEN_ICON,
@@ -18,6 +19,7 @@ type FileCardActionsProps = {
     canRename: boolean
     canDownload: boolean
     canShare: boolean
+    canNote: boolean
     isInfoOpen: boolean
     infoPopover: ReactNode
     onSaveRename: () => void
@@ -26,6 +28,7 @@ type FileCardActionsProps = {
     onToggleInfo: () => void
     onDownload?: (item: Item) => void
     onShare?: (item: Item) => void | Promise<void>
+    onNote?: (item: Item) => void
     onDelete?: (id: string) => void
     onRestore?: (id: string) => void
 }
@@ -38,6 +41,7 @@ export function FileCardActions({
     canRename,
     canDownload,
     canShare,
+    canNote,
     isInfoOpen,
     infoPopover,
     onSaveRename,
@@ -46,6 +50,7 @@ export function FileCardActions({
     onToggleInfo,
     onDownload,
     onShare,
+    onNote,
     onDelete,
     onRestore,
 }: FileCardActionsProps) {
@@ -140,6 +145,21 @@ export function FileCardActions({
                     type="button"
                 >
                     {SHARE_ICON}
+                </button>
+            )}
+            {canNote && (
+                <button
+                    className={`file-card__action file-card__action--note ${item.note ? 'is-active' : ''}`}
+                    onClick={(e) => {
+                        e.stopPropagation()
+                        onNote?.(item)
+                    }}
+                    aria-label={`${item.note ? 'Edit' : 'Add'} note for ${item.filename}`}
+                    aria-pressed={Boolean(item.note)}
+                    title={item.note ? 'Edit note' : 'Add note'}
+                    type="button"
+                >
+                    {NOTE_ICON}
                 </button>
             )}
             {view === 'all' && onDelete && (

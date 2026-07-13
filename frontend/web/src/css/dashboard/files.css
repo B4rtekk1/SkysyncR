@@ -436,6 +436,7 @@
 .file-card__action--download,
 .file-card__action--rename,
 .file-card__action--share,
+.file-card__action--note,
 .file-card__action--info,
 .file-card__action--confirm,
 .file-card__action--cancel {
@@ -454,6 +455,8 @@
 .file-card__action--rename:focus-visible,
 .file-card__action--share:hover,
 .file-card__action--share:focus-visible,
+.file-card__action--note:hover,
+.file-card__action--note:focus-visible,
 .file-card__action--info:hover,
 .file-card__action--info:focus-visible,
 .file-card__action--info.is-active,
@@ -471,6 +474,11 @@
 .file-card__action--share.is-active {
     color: var(--signal);
     background: rgba(var(--signal-rgb), 0.08);
+}
+
+.file-card__action--note.is-active {
+    color: var(--amber);
+    background: rgba(255, 176, 76, 0.08);
 }
 
 .file-card__info-wrap {
@@ -831,4 +839,31 @@
     }
 }
 
+.note-editor-shell {
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr);
+    gap: 8px;
+}
 
+.note-editor-shell__labels {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 10px;
+}
+
+.note-editor-shell__labels span {
+    min-width: 0;
+    color: var(--mist);
+    font-family: var(--font-mono), monospace;
+    font-size: 0.68rem;
+    text-transform: uppercase;
+}
+
+@media (max-width: 560px) {
+    .note-editor-shell__labels {
+        grid-template-columns: 1fr;
+    }
+}

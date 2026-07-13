@@ -18,6 +18,7 @@ import {
     listTrash,
     listSharedFilesWithMe,
     getStorageQuota,
+    updateFileNote,
     type ApiFile,
     type StorageQuota,
 } from '../api/files'
@@ -27,6 +28,7 @@ import { loadActivePrivateKey } from '../crypto/storage'
 import { EmptyPane } from './dashboard/EmptyPane'
 import { FileCard } from './dashboard/FileCard'
 import { FileFilterModal } from './dashboard/FileFilterModal'
+import { FileNoteModal } from './dashboard/FileNoteModal'
 import { GroupsPanel } from './dashboard/GroupsPanel'
 import { ImagePreviewModal } from './dashboard/ImagePreviewModal'
 import { ShareFileModal } from './dashboard/ShareFileModal'
@@ -99,6 +101,8 @@ function Dashboard() {
     const [draggedCardId, setDraggedCardId] = useState<string | null>(null)
     const [dropTargetId, setDropTargetId] = useState<string | null>(null)
     const [settingsOpen, setSettingsOpen] = useState(false)
+    const [noteItem, setNoteItem] = useState<Item | null>(null)
+    const [noteSaving, setNoteSaving] = useState(false)
     const [shareItem, setShareItem] = useState<Item | null>(null)
     const [shareLoading, setShareLoading] = useState(false)
     const [publicKey, setPublicKey] = useState<string | null>(null)
@@ -432,6 +436,34 @@ function Dashboard() {
         setDragActive(false)
         if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
             void ingestFiles(e.dataTransfer.files)
+        }
+    }
+
+    async function handleSaveNote(item: Item, note: string) {
+        setNoteSaving(true)
+        setError(null)
+        try {
+            const updated = await updateFileNote(item.id, note)
+            setItems((prev) =>
+                prev.map((current) =>
+                    current.id === item.id
+                        ? { ...updated, filename: current.filename, mime_type: current.mime_type }
+                        : current,
+                ),
+            )
+            setStorageItems((prev) =>
+                prev.map((current) =>
+                    current.id === item.id
+                        ? { ...updated, filename: current.filename, mime_type: current.mime_type }
+                        : current,
+                ),
+            )
+            setNoteItem(null)
+        } catch (e) {
+            setError(e instanceof Error ? e.message : 'Nie udalo sie zapisac notatki.')
+            throw e
+        } finally {
+            setNoteSaving(false)
         }
     }
 
@@ -1092,6 +1124,9 @@ function Dashboard() {
                                     onShare={
                                         view === 'all' || view === 'favourites' ? handleShare : undefined
                                     }
+                                    onNote={
+                                        view === 'all' || view === 'favourites' ? setNoteItem : undefined
+                                    }
                                     isFavourite={favouriteIds.has(item.id)}
                                     onToggleFavourite={
                                         view === 'all' || view === 'favourites' ? toggleFavourite : undefined
@@ -1128,6 +1163,14 @@ function Dashboard() {
                 />
             )}
             {settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} />}
+            {noteItem && (
+                <FileNoteModal
+                    item={noteItem}
+                    saving={noteSaving}
+                    onClose={() => setNoteItem(null)}
+                    onSave={handleSaveNote}
+                />
+            )}
             {shareItem && (
                 <ShareFileModal
                     item={shareItem}

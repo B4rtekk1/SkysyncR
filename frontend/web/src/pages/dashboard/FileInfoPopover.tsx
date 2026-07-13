@@ -34,6 +34,7 @@ export function FileInfoPopover({ item, view, typeLabel, position, onClose }: Fi
         ['Permissions', formatPermission(item)],
         ['Source', formatSource(item, view)],
         ['Folder', item.folder_id || 'Root'],
+        ['Note', item.note ? item.note : 'No note attached'],
         ['Sharing', item.is_public ? 'Public link enabled' : 'Not public'],
         ...(isShared(item) ? [['Shared by', item.shared_by_user_name || item.shared_by_user_id]] : []),
         ['File ID', item.id],

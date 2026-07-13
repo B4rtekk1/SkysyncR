@@ -18,6 +18,7 @@ export interface ApiFile {
     mime_type: string | null
     size_bytes: number
     folder_id: string | null
+    note: string | null
     is_deleted: boolean
     is_public: boolean
     share_token: string | null
@@ -198,6 +199,18 @@ export async function shareFile(id: string, isPublic: boolean): Promise<ApiFile>
             'Content-Type': 'application/json',
         },
         body: JSON.stringify({ is_public: isPublic }),
+    })
+    if (!res.ok) throw new Error(await parseErrorMessage(res))
+    return res.json()
+}
+
+export async function updateFileNote(id: string, note: string): Promise<ApiFile> {
+    const res = await authenticatedFetch(`${API_BASE}files/${id}/note`, {
+        method: 'PUT',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ note }),
     })
     if (!res.ok) throw new Error(await parseErrorMessage(res))
     return res.json()

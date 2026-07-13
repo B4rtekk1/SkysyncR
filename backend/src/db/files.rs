@@ -19,6 +19,7 @@ pub struct FileRecord {
     pub mime_type: Option<String>,
     pub size_bytes: i64,
     pub folder_id: Option<Uuid>,
+    pub note: Option<String>,
     pub is_deleted: bool,
     pub is_public: bool,
     pub share_token: Option<String>,
@@ -79,6 +80,7 @@ pub async fn list_user_files(
             mime_type,
             size_bytes,
             folder_id,
+            note,
             is_deleted,
             is_public,
             share_token,
@@ -126,6 +128,7 @@ pub async fn create_file_record(
             mime_type,
             size_bytes,
             folder_id,
+            note,
             is_deleted,
             is_public,
             share_token,
@@ -289,6 +292,7 @@ pub async fn rename_user_file(
             mime_type,
             size_bytes,
             folder_id,
+            note,
             is_deleted,
             is_public,
             share_token,
@@ -333,6 +337,7 @@ pub async fn update_user_file_content(
             mime_type,
             size_bytes,
             folder_id,
+            note,
             is_deleted,
             is_public,
             share_token,
@@ -376,6 +381,7 @@ pub async fn update_user_file_share(
             mime_type,
             size_bytes,
             folder_id,
+            note,
             is_deleted,
             is_public,
             share_token,
@@ -388,6 +394,45 @@ pub async fn update_user_file_share(
     )
     .bind(is_public)
     .bind(share_token)
+    .bind(file_id)
+    .bind(user_id)
+    .fetch_optional(pool)
+    .await
+}
+
+pub async fn update_user_file_note(
+    pool: &PgPool,
+    user_id: Uuid,
+    file_id: Uuid,
+    note: Option<String>,
+) -> Result<Option<FileRecord>, sqlx::Error> {
+    sqlx::query_as::<_, FileRecord>(
+        r#"
+        UPDATE files
+        SET note = $1,
+            updated_at = NOW()
+        WHERE id = $2
+          AND owner_id = $3
+          AND is_deleted = FALSE
+        RETURNING
+            id,
+            filename,
+            storage_path,
+            mime_type,
+            size_bytes,
+            folder_id,
+            note,
+            is_deleted,
+            is_public,
+            share_token,
+            encrypted_key,
+            encryption_nonce,
+            created_at,
+            updated_at,
+            deleted_at
+        "#,
+    )
+    .bind(note)
     .bind(file_id)
     .bind(user_id)
     .fetch_optional(pool)

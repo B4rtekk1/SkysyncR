@@ -35,6 +35,7 @@ export function useFileUpload({
                     mime_type: file.type || null,
                     size_bytes: file.size,
                     folder_id: null,
+                    note: null,
                     is_deleted: false,
                     is_public: false,
                     share_token: null,

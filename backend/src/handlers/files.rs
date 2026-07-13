@@ -19,7 +19,7 @@ use crate::db::files::{
     FileRecord, NewFileRecord, SharedFileRecord, create_file_record, folder_belongs_to_user,
     get_user_file_for_content_update, get_user_file_for_download, list_files_shared_with_user,
     list_user_files, rename_user_file, restore_user_file, soft_delete_user_file,
-    update_user_file_content, update_user_file_share,
+    update_user_file_content, update_user_file_note, update_user_file_share,
 };
 use crate::db::storage::get_storage_quota;
 use crate::state::AppState;
@@ -40,6 +40,11 @@ pub struct RenameFileRequest {
 #[derive(Deserialize)]
 pub struct ShareFileRequest {
     pub is_public: bool,
+}
+
+#[derive(Deserialize)]
+pub struct UpdateFileNoteRequest {
+    pub note: String,
 }
 
 struct UploadPayload {
@@ -249,6 +254,21 @@ pub async fn share_file(
     .await
     .map_err(|e| internal_error("share file", e))?
     .ok_or_else(|| ApiError::BadRequest("File not found".into()))?;
+
+    Ok(Json(file))
+}
+
+pub async fn update_file_note(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Path(file_id): Path<Uuid>,
+    Json(payload): Json<UpdateFileNoteRequest>,
+) -> Result<Json<FileRecord>, ApiError> {
+    let note = normalize_file_note(&payload.note)?;
+    let file = update_user_file_note(&state.db_pool, auth.user_id, file_id, note)
+        .await
+        .map_err(|e| internal_error("update file note", e))?
+        .ok_or_else(|| ApiError::BadRequest("File not found".into()))?;
 
     Ok(Json(file))
 }
@@ -480,6 +500,20 @@ fn validate_upload_metadata(field_name: &str, value: &str) -> Result<String, Api
     }
 
     Ok(trimmed.to_string())
+}
+
+fn normalize_file_note(value: &str) -> Result<Option<String>, ApiError> {
+    const MAX_NOTE_LEN: usize = 20_000;
+    let trimmed = value.trim();
+
+    if trimmed.is_empty() {
+        return Ok(None);
+    }
+    if trimmed.len() > MAX_NOTE_LEN {
+        return Err(ApiError::BadRequest("Note is too large".into()));
+    }
+
+    Ok(Some(trimmed.to_string()))
 }
 
 fn decode_base64_field(field_name: &str, value: &str) -> Result<Vec<u8>, ApiError> {
