@@ -10,6 +10,7 @@ import {
 import { FileCardActions } from './FileCardActions'
 import { FileIcon } from './FileIcon'
 import { FileInfoPopover, type InfoPopoverPosition } from './FileInfoPopover'
+import { FileRenameInput } from './FileRenameInput'
 import { DRAG_HANDLE_ICON, STAR_ICON_FILLED, STAR_ICON_OUTLINE } from './icons'
 import type { Item, ViewKey } from './types'
 import { KIND_LABELS, formatBytes, formatRelative, kindFromFile, useDecryptReveal } from './fileUtils'
@@ -239,24 +240,14 @@ export function FileCard({
             </div>
             <div className="file-card__name-slot">
                 {isRenaming ? (
-                    <input
-                        className="file-card__rename-input"
-                        type="text"
+                    <FileRenameInput
+                        filename={item.filename}
                         value={renameDraft}
                         ref={renameInputRef}
-                        onChange={(e) => setRenameDraft(e.target.value)}
-                        onKeyDown={(e) => {
-                            if (e.key === 'Escape') {
-                                e.preventDefault()
-                                cancelRename()
-                            } else if (e.key === 'Enter') {
-                                e.preventDefault()
-                                void saveRename()
-                            }
-                        }}
-                        onClick={(e) => e.stopPropagation()}
+                        onChange={setRenameDraft}
+                        onSave={() => void saveRename()}
+                        onCancel={cancelRename}
                         disabled={renameSaving}
-                        aria-label={`Rename ${item.filename}`}
                     />
                 ) : (
                     <p className="file-card__name" title={item.filename}>
