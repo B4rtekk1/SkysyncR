@@ -43,6 +43,7 @@ export interface ApiFolder {
     updated_at: string
     is_deleted: boolean
     deleted_at: string | null
+    file_count: number
 }
 
 export interface StorageQuota {

@@ -12,6 +12,7 @@ pub struct FolderRecord {
     pub updated_at: DateTime<Utc>,
     pub is_deleted: bool,
     pub deleted_at: Option<DateTime<Utc>>,
+    pub file_count: i64,
 }
 
 pub struct NewFolderRecord {
@@ -28,21 +29,31 @@ pub async fn list_user_folders(
     sqlx::query_as::<_, FolderRecord>(
         r#"
         SELECT
-            id,
-            name,
-            parent_folder_id,
-            created_at,
-            updated_at,
-            is_deleted,
-            deleted_at
-        FROM folders
-        WHERE owner_id = $1
-          AND is_deleted = FALSE
+            f.id,
+            f.name,
+            f.parent_folder_id,
+            f.created_at,
+            f.updated_at,
+            FALSE AS is_deleted,
+            NULL::timestamptz AS deleted_at,
+            COUNT(files.id)::bigint AS file_count
+        FROM folders f
+        LEFT JOIN files
+          ON files.folder_id = f.id
+         AND files.owner_id = f.owner_id
+         AND files.is_deleted = FALSE
+        WHERE f.owner_id = $1
           AND (
-              ($2::uuid IS NULL AND parent_folder_id IS NULL)
-              OR parent_folder_id = $2
+              ($2::uuid IS NULL AND f.parent_folder_id IS NULL)
+              OR f.parent_folder_id = $2
           )
-        ORDER BY name ASC
+        GROUP BY
+            f.id,
+            f.name,
+            f.parent_folder_id,
+            f.created_at,
+            f.updated_at
+        ORDER BY f.name
         "#,
     )
     .bind(user_id)
@@ -69,8 +80,9 @@ pub async fn create_folder_record(
             parent_folder_id,
             created_at,
             updated_at,
-            is_deleted,
-            deleted_at
+            FALSE AS is_deleted,
+            NULL::timestamptz AS deleted_at,
+            0::bigint AS file_count
         "#,
     )
     .bind(folder.owner_id)
@@ -92,7 +104,6 @@ pub async fn folder_belongs_to_user(
             FROM folders
             WHERE id = $1
               AND owner_id = $2
-              AND is_deleted = FALSE
         )
         "#,
     )

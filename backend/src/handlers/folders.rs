@@ -8,8 +8,7 @@ use uuid::Uuid;
 
 use crate::auth::AuthUser;
 use crate::db::folders::{
-    FolderRecord, NewFolderRecord, create_folder_record, folder_belongs_to_user,
-    list_user_folders,
+    FolderRecord, NewFolderRecord, create_folder_record, folder_belongs_to_user, list_user_folders,
 };
 use crate::state::AppState;
 use crate::utils::errors::{ApiError, internal_error};
@@ -30,7 +29,8 @@ pub async fn list_folders(
     auth: AuthUser,
     Query(query): Query<ListFoldersQuery>,
 ) -> Result<Json<Vec<FolderRecord>>, ApiError> {
-    let parent_folder_id = parse_optional_uuid(query.parent_folder_id.as_deref(), "parent_folder_id")?;
+    let parent_folder_id =
+        parse_optional_uuid(query.parent_folder_id.as_deref(), "parent_folder_id")?;
 
     let folders = list_user_folders(&state.db_pool, auth.user_id, parent_folder_id)
         .await
@@ -45,7 +45,8 @@ pub async fn create_folder(
     Json(payload): Json<CreateFolderRequest>,
 ) -> Result<(StatusCode, Json<FolderRecord>), ApiError> {
     let name = validate_folder_name(&payload.name)?;
-    let parent_folder_id = parse_optional_uuid(payload.parent_folder_id.as_deref(), "parent_folder_id")?;
+    let parent_folder_id =
+        parse_optional_uuid(payload.parent_folder_id.as_deref(), "parent_folder_id")?;
 
     if let Some(parent_id) = parent_folder_id {
         let parent_exists = folder_belongs_to_user(&state.db_pool, auth.user_id, parent_id)
@@ -88,8 +89,13 @@ fn validate_folder_name(value: &str) -> Result<String, ApiError> {
     if trimmed.len() > 255 {
         return Err(ApiError::BadRequest("Folder name is too large".into()));
     }
-    if trimmed.chars().any(|ch| ch == '/' || ch == '\\' || ch.is_control()) {
-        return Err(ApiError::BadRequest("Folder name contains invalid characters".into()));
+    if trimmed
+        .chars()
+        .any(|ch| ch == '/' || ch == '\\' || ch.is_control())
+    {
+        return Err(ApiError::BadRequest(
+            "Folder name contains invalid characters".into(),
+        ));
     }
 
     Ok(trimmed.to_string())

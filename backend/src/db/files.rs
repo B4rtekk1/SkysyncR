@@ -204,7 +204,6 @@ pub async fn folder_belongs_to_user(
             FROM folders
             WHERE id = $1
               AND owner_id = $2
-              AND is_deleted = FALSE
         )
         "#,
     )

@@ -11,6 +11,8 @@ export function FolderCard({
     index: number
     onOpen: (folder: ApiFolder) => void
 }) {
+    const fileCountLabel = folder.file_count === 1 ? '1 file' : `${folder.file_count} files`
+
     return (
         <article
             className="file-card folder-card file-card--can-preview"
@@ -43,7 +45,9 @@ export function FolderCard({
                     {folder.name}
                 </p>
             </div>
-            <p className="file-card__meta">Updated {formatRelative(folder.updated_at)}</p>
+            <p className="file-card__meta">
+                {fileCountLabel} · Updated {formatRelative(folder.updated_at)}
+            </p>
         </article>
     )
 }
