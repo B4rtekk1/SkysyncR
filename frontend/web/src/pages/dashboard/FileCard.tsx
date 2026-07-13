@@ -81,7 +81,7 @@ export function FileCard({
     const canShare = Boolean(onShare && !isShared(item) && view !== 'trash' && !pending)
     const canNote = Boolean(onNote && !isShared(item) && view !== 'trash' && !pending)
     const canDownload = Boolean(onDownload && view !== 'trash')
-    const canPreview = Boolean(onPreview && ['image', 'video', 'text', 'code'].includes(kind) && view !== 'trash' && !pending && !isRenaming)
+    const canPreview = Boolean(onPreview && ['image', 'video', 'pdf', 'text', 'code'].includes(kind) && view !== 'trash' && !pending && !isRenaming)
     const hasAction = Boolean(canRename || canShare || canNote || canDownload || (view === 'all' && onDelete) || (view === 'trash' && onRestore) || !isRenaming)
 
     const updateInfoPosition = useCallback(() => {

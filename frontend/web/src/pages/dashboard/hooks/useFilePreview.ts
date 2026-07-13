@@ -16,6 +16,7 @@ function previewKindFromFile(filename: string, mime: string | null): FilePreview
     const kind: FileKind = kindFromFile(filename, mime)
     if (kind === 'image') return 'image'
     if (kind === 'video') return 'video'
+    if (kind === 'pdf') return 'pdf'
     if (kind === 'text' || kind === 'code') return 'text'
     return null
 }
@@ -107,7 +108,7 @@ export function useFilePreview(
         try {
             const previewBlob = await decryptDownloadedFile(item)
 
-            if (previewKind === 'image' || previewKind === 'video') {
+            if (previewKind === 'image' || previewKind === 'video' || previewKind === 'pdf') {
                 const url = URL.createObjectURL(previewBlob)
 
                 if (filePreviewRequestRef.current !== requestId) {

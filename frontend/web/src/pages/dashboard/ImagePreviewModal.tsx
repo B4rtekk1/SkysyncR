@@ -5,6 +5,7 @@ import { formatBytes } from './fileUtils'
 import { TextFileCopyButton, TextFileEditor, TextFilePreview, TextFilePreviewModeToggle } from './TextFilePreview'
 import { useTextFilePreview } from './useTextFilePreview'
 import { VideoPreviewPlayer } from './VideoPreviewPlayer'
+import { PdfPreview } from './PdfPreview'
 
 export function ImagePreviewModal({
                                preview,
@@ -140,6 +141,9 @@ export function ImagePreviewModal({
                     )}
                     {preview.url && preview.kind === 'video' && (
                         <VideoPreviewPlayer item={preview.item} url={preview.url} />
+                    )}
+                    {preview.url && preview.kind === 'pdf' && (
+                        <PdfPreview item={preview.item} url={preview.url} />
                     )}
                     {preview.text !== null && (
                         isEditingText ? (
