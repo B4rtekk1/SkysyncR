@@ -15,6 +15,7 @@ const MAX_TEXT_PREVIEW_BYTES = 1024 * 1024
 function previewKindFromFile(filename: string, mime: string | null): FilePreviewState['kind'] | null {
     const kind: FileKind = kindFromFile(filename, mime)
     if (kind === 'image') return 'image'
+    if (kind === 'video') return 'video'
     if (kind === 'text' || kind === 'code') return 'text'
     return null
 }
@@ -106,7 +107,7 @@ export function useFilePreview(
         try {
             const previewBlob = await decryptDownloadedFile(item)
 
-            if (previewKind === 'image') {
+            if (previewKind === 'image' || previewKind === 'video') {
                 const url = URL.createObjectURL(previewBlob)
 
                 if (filePreviewRequestRef.current !== requestId) {

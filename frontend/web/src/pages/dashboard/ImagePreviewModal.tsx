@@ -4,6 +4,7 @@ import type { FilePreviewState, Item } from './types'
 import { formatBytes } from './fileUtils'
 import { TextFileCopyButton, TextFileEditor, TextFilePreview, TextFilePreviewModeToggle } from './TextFilePreview'
 import { useTextFilePreview } from './useTextFilePreview'
+import { VideoPreviewPlayer } from './VideoPreviewPlayer'
 
 export function ImagePreviewModal({
                                preview,
@@ -134,8 +135,11 @@ export function ImagePreviewModal({
                             Loading preview...
                         </div>
                     )}
-                    {preview.url && (
+                    {preview.url && preview.kind === 'image' && (
                         <img className="image-preview__image" src={preview.url} alt={preview.item.filename} />
+                    )}
+                    {preview.url && preview.kind === 'video' && (
+                        <VideoPreviewPlayer item={preview.item} url={preview.url} />
                     )}
                     {preview.text !== null && (
                         isEditingText ? (

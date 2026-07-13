@@ -32,7 +32,7 @@ export type FileFilters = {
     modifiedTo: string
 }
 export type Item = ApiFile | SharedFile
-export type FilePreviewKind = 'image' | 'text'
+export type FilePreviewKind = 'image' | 'text' | 'video'
 export type FilePreviewState = {
     item: Item
     kind: FilePreviewKind
