@@ -107,6 +107,9 @@ export const DEFAULT_FILE_FILTERS: FileFilters = {
     visibility: 'any',
     minSizeMb: '',
     maxSizeMb: '',
+    excludedExtensions: '',
+    modifiedFrom: '',
+    modifiedTo: '',
 }
 
 export function loadFileFilter(): FileFilters {
@@ -130,6 +133,9 @@ export function loadFileFilter(): FileFilters {
                     : 'any',
             minSizeMb: typeof parsed.minSizeMb === 'string' ? parsed.minSizeMb : '',
             maxSizeMb: typeof parsed.maxSizeMb === 'string' ? parsed.maxSizeMb : '',
+            excludedExtensions: typeof parsed.excludedExtensions === 'string' ? parsed.excludedExtensions : '',
+            modifiedFrom: typeof parsed.modifiedFrom === 'string' ? parsed.modifiedFrom : '',
+            modifiedTo: typeof parsed.modifiedTo === 'string' ? parsed.modifiedTo : '',
         }
     } catch {
         return DEFAULT_FILE_FILTERS

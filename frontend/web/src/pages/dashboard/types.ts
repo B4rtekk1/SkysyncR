@@ -27,6 +27,9 @@ export type FileFilters = {
     visibility: FileVisibilityFilterKey
     minSizeMb: string
     maxSizeMb: string
+    excludedExtensions: string
+    modifiedFrom: string
+    modifiedTo: string
 }
 export type Item = ApiFile | SharedFile
 export type FilePreviewKind = 'image' | 'text'
