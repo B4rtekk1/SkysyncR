@@ -15,11 +15,14 @@ import ThemeToggle from '../components/ThemeToggle'
 import SettingsModal from './Settings'
 import {
     listFiles,
+    listFolders,
+    createFolder,
     listTrash,
     listSharedFilesWithMe,
     getStorageQuota,
     updateFileNote,
     type ApiFile,
+    type ApiFolder,
     type StorageQuota,
 } from '../api/files'
 import { logout } from '../api/auth'
@@ -28,6 +31,7 @@ import { loadActivePrivateKey } from '../crypto/storage'
 import { EmptyPane } from './dashboard/EmptyPane'
 import { FileCard } from './dashboard/FileCard'
 import { FileFilterModal } from './dashboard/FileFilterModal'
+import { FolderCard } from './dashboard/FolderCard'
 import { FileNoteModal } from './dashboard/FileNoteModal'
 import { GroupsPanel } from './dashboard/GroupsPanel'
 import { ImagePreviewModal } from './dashboard/ImagePreviewModal'
@@ -83,6 +87,9 @@ import type { FileFilters, FileSortKey, FileTypeFilterKey, FileVisibilityFilterK
 function Dashboard() {
     const [view, setView] = useState<ViewKey>(() => loadActiveView())
     const [items, setItems] = useState<Item[]>([])
+    const [folders, setFolders] = useState<ApiFolder[]>([])
+    const [activeFolderId, setActiveFolderId] = useState<string | null>(null)
+    const [folderTrail, setFolderTrail] = useState<ApiFolder[]>([])
     const [sortKey, setSortKey] = useState<FileSortKey>(() => loadFileSort())
     const [fileFilters, setFileFilters] = useState<FileFilters>(() => loadFileFilter())
     const [pendingIds, setPendingIds] = useState<Set<string>>(new Set())
@@ -103,6 +110,9 @@ function Dashboard() {
     const [settingsOpen, setSettingsOpen] = useState(false)
     const [noteItem, setNoteItem] = useState<Item | null>(null)
     const [noteSaving, setNoteSaving] = useState(false)
+    const [folderCreateOpen, setFolderCreateOpen] = useState(false)
+    const [folderNameDraft, setFolderNameDraft] = useState('')
+    const [folderSaving, setFolderSaving] = useState(false)
     const [shareItem, setShareItem] = useState<Item | null>(null)
     const [shareLoading, setShareLoading] = useState(false)
     const [publicKey, setPublicKey] = useState<string | null>(null)
@@ -191,6 +201,10 @@ function Dashboard() {
         () => items.filter((item) => matchesFileFilters(item, fileFilters)),
         [fileFilters, items],
     )
+    const visibleFolders = useMemo(() => {
+        if (view !== 'all') return []
+        return folders.filter((folder) => folder.name.toLowerCase().includes(normalizedQuery))
+    }, [folders, normalizedQuery, view])
     const sortedItems = useMemo(() => sortFiles(filteredItems, sortKey), [filteredItems, sortKey])
     const { visibleItems, renderedItems, animatedFiles } = useAnimatedItems({
         items: sortedItems,
@@ -235,6 +249,7 @@ function Dashboard() {
 
     const { ingestFiles } = useFileUpload({
         publicKey,
+        folderId: view === 'all' ? activeFolderId : null,
         setItems,
         setPendingIds,
         setError,
@@ -340,38 +355,60 @@ function Dashboard() {
     useEffect(() => {
         let active = true
 
-        Promise.resolve()
-            .then(() => {
-                if (!active) return undefined
+        async function loadDashboardData() {
+            if (!active) return
+
+            try {
                 setLoading(true)
                 setError(null)
-                if (view === 'groups') return []
-                return view === 'all' || view === 'favourites'
-                    ? listFiles()
-                    : view === 'trash'
-                        ? listTrash()
-                        : listSharedFilesWithMe()
-            })
-            .then((data) => {
-                if (active && data) {
-                    const withLocalMetadata = applyLocalFileMetadata(data)
+                if (view === 'groups') {
+                    setFolders([])
+                    setItems([])
+                    return
+                }
+
+                let fileData: ApiFile[]
+                let folderData: ApiFolder[] = []
+
+                if (view === 'all') {
+                    const [files, foldersData] = await Promise.all([
+                        listFiles(activeFolderId ?? undefined),
+                        listFolders(activeFolderId ?? undefined),
+                    ])
+                    fileData = files
+                    folderData = foldersData
+                } else if (view === 'favourites') {
+                    fileData = await listFiles()
+                    setFolders([])
+                } else if (view === 'trash') {
+                    fileData = await listTrash()
+                    setFolders([])
+                } else {
+                    fileData = await listSharedFilesWithMe()
+                    setFolders([])
+                }
+
+                if (active) {
+                    const withLocalMetadata = applyLocalFileMetadata(fileData)
                     setItems(applySavedOrder(withLocalMetadata, view))
+                    setFolders(folderData)
                     if (view === 'all' || view === 'favourites') {
                         setStorageItems(withLocalMetadata as ApiFile[])
                     }
                 }
-            })
-            .catch((e) => {
+            } catch (e) {
                 if (active) setError(e instanceof Error ? e.message : 'Could not load your files.')
-            })
-            .finally(() => {
+            } finally {
                 if (active) setLoading(false)
-            })
+            }
+        }
+
+        void loadDashboardData()
 
         return () => {
             active = false
         }
-    }, [view])
+    }, [activeFolderId, view])
 
     const closeSortMenu = useCallback(() => {
         if (!sortMenuOpen || sortMenuClosing) return
@@ -464,6 +501,55 @@ function Dashboard() {
             throw e
         } finally {
             setNoteSaving(false)
+        }
+    }
+
+    function openFolder(folder: ApiFolder) {
+        setActiveFolderId(folder.id)
+        setFolderTrail((current) => [...current, folder])
+        setQuery('')
+    }
+
+    function openFolderRoot() {
+        setActiveFolderId(null)
+        setFolderTrail([])
+        setQuery('')
+    }
+
+    function selectNavView(key: ViewKey) {
+        if (key === 'all') {
+            openFolderRoot()
+        }
+        setView(key)
+    }
+
+    function openFolderParent() {
+        setFolderTrail((current) => {
+            const next = current.slice(0, -1)
+            setActiveFolderId(next.at(-1)?.id ?? null)
+            return next
+        })
+        setQuery('')
+    }
+
+    async function handleCreateFolder() {
+        const name = folderNameDraft.trim()
+        if (!name || folderSaving) return
+
+        setFolderSaving(true)
+        setError(null)
+        try {
+            const folder = await createFolder({
+                name,
+                parentFolderId: activeFolderId,
+            })
+            setFolders((current) => [...current, folder].sort((a, b) => a.name.localeCompare(b.name)))
+            setFolderNameDraft('')
+            setFolderCreateOpen(false)
+        } catch (e) {
+            setError(e instanceof Error ? e.message : 'Nie udalo sie utworzyc folderu.')
+        } finally {
+            setFolderSaving(false)
         }
     }
 
@@ -654,7 +740,7 @@ function Dashboard() {
                             className={`shell__navitem ${view === key ? 'is-active' : ''} ${
                                 draggedNavKey === key ? 'is-dragging-nav' : ''
                             } ${dropNavTarget === key ? 'is-drop-target-nav' : ''}`}
-                            onClick={() => setView(key)}
+                            onClick={() => selectNavView(key)}
                             draggable
                             onDragStart={(e) => handleNavDragStart(key, e)}
                             onDragEnter={(e) => {
@@ -994,13 +1080,47 @@ function Dashboard() {
                             </div>
 
                             {view === 'all' && (
-                                <label className="btn btn--solid">
-                                    Upload
-                                    <input type="file" multiple onChange={onUploadChange} style={{ display: 'none' }} />
-                                </label>
+                                <>
+                                    <button
+                                        className="btn btn--ghost"
+                                        type="button"
+                                        onClick={() => setFolderCreateOpen(true)}
+                                    >
+                                        New folder
+                                    </button>
+                                    <label className="btn btn--solid">
+                                        Upload
+                                        <input type="file" multiple onChange={onUploadChange} style={{ display: 'none' }} />
+                                    </label>
+                                </>
                             )}
                         </div>
                     </div>
+
+                    {view === 'all' && folderTrail.length > 0 && (
+                        <div className="folder-path" aria-label="Current folder">
+                            <button type="button" onClick={openFolderRoot}>All files</button>
+                            {folderTrail.map((folder, index) => (
+                                <span key={folder.id}>
+                                    <span aria-hidden="true">/</span>
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            const nextTrail = folderTrail.slice(0, index + 1)
+                                            setFolderTrail(nextTrail)
+                                            setActiveFolderId(folder.id)
+                                            setQuery('')
+                                        }}
+                                    >
+                                        {folder.name}
+                                    </button>
+                                </span>
+                            ))}
+                            <button className="folder-path__up" type="button" onClick={openFolderParent}>
+                                Up
+                            </button>
+                        </div>
+                    )}
 
                     {error && (
                         <p className="shell__error" role="alert">
@@ -1081,7 +1201,7 @@ function Dashboard() {
                         />
                     )}
 
-                    {!loading && view === 'all' && visibleItems.length === 0 && renderedItems.length === 0 && (
+                    {!loading && view === 'all' && visibleFolders.length === 0 && visibleItems.length === 0 && renderedItems.length === 0 && (
                         <EmptyPane
                             title={
                                 query
@@ -1098,12 +1218,20 @@ function Dashboard() {
                         />
                     )}
 
-                    {!loading && renderedItems.length > 0 && (
+                    {!loading && (visibleFolders.length > 0 || renderedItems.length > 0) && (
                         <div
                             className={`file-grid file-grid--${layoutMode} ${
                                 layoutSwitchTarget ? `is-layout-switching is-switching-to-${layoutSwitchTarget}` : ''
                             }`}
                         >
+                            {visibleFolders.map((folder, i) => (
+                                <FolderCard
+                                    key={folder.id}
+                                    folder={folder}
+                                    index={i}
+                                    onOpen={openFolder}
+                                />
+                            ))}
                             {renderedItems.map((item, i) => {
                                 const isSearchExiting = animatedFiles.exitingIds.has(item.id)
 
@@ -1111,7 +1239,7 @@ function Dashboard() {
                                 <FileCard
                                     key={item.id}
                                     item={item}
-                                    index={i}
+                                    index={visibleFolders.length + i}
                                     pending={pendingIds.has(item.id)}
                                     view={view}
                                     onDelete={view === 'all' ? handleDelete : undefined}
@@ -1135,7 +1263,7 @@ function Dashboard() {
                                     isDragging={draggedCardId === item.id}
                                     isDropTarget={dropTargetId === item.id}
                                     isSearchExiting={isSearchExiting}
-                                    style={{ '--file-index': i } as React.CSSProperties}
+                                    style={{ '--file-index': visibleFolders.length + i } as React.CSSProperties}
                                     onDragStartCard={handleCardDragStart}
                                     onDragEnterCard={handleCardDragEnter}
                                     onDragLeaveCard={handleCardDragLeave}
@@ -1163,6 +1291,62 @@ function Dashboard() {
                 />
             )}
             {settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} />}
+            {folderCreateOpen && (
+                <div className="file-filter__modal is-opening" role="dialog" aria-modal="true" aria-labelledby="folder-create-title">
+                    <div className="file-filter__dialog folder-create">
+                        <div className="file-filter__modal-head">
+                            <div>
+                                <h2 id="folder-create-title">New folder</h2>
+                                <span>{folderTrail.at(-1)?.name ?? 'All files'}</span>
+                            </div>
+                            <button
+                                className="file-filter__close"
+                                type="button"
+                                onClick={() => {
+                                    setFolderCreateOpen(false)
+                                    setFolderNameDraft('')
+                                }}
+                                aria-label="Close"
+                            >
+                                x
+                            </button>
+                        </div>
+                        <div className="file-filter__modal-body">
+                            <input
+                                className="folder-create__input"
+                                value={folderNameDraft}
+                                onChange={(event) => setFolderNameDraft(event.target.value)}
+                                onKeyDown={(event) => {
+                                    if (event.key === 'Enter') void handleCreateFolder()
+                                    if (event.key === 'Escape') setFolderCreateOpen(false)
+                                }}
+                                placeholder="Folder name"
+                                autoFocus
+                            />
+                        </div>
+                        <div className="file-filter__footer">
+                            <button
+                                className="btn btn--ghost"
+                                type="button"
+                                onClick={() => {
+                                    setFolderCreateOpen(false)
+                                    setFolderNameDraft('')
+                                }}
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                className="btn btn--solid"
+                                type="button"
+                                disabled={!folderNameDraft.trim() || folderSaving}
+                                onClick={() => void handleCreateFolder()}
+                            >
+                                {folderSaving ? 'Creating...' : 'Create'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
             {noteItem && (
                 <FileNoteModal
                     item={noteItem}

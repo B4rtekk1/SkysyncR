@@ -323,6 +323,23 @@
     transform: translateY(-2px);
 }
 
+.folder-card {
+    cursor: pointer;
+}
+
+.folder-card__badge {
+    color: var(--amber);
+}
+
+.folder-card .file-card__top {
+    padding-right: 0;
+}
+
+.folder-card .file-card__name {
+    color: var(--paper);
+    font-weight: 700;
+}
+
 .file-card--can-preview:focus-visible {
     outline: 2px solid var(--signal);
     outline-offset: 3px;
@@ -822,6 +839,19 @@
 
 .file-grid--list .file-card--has-action:not(.file-card--has-favourite) .file-card__actions {
     grid-column: 3;
+}
+
+.file-grid--list .folder-card {
+    grid-template-columns: minmax(190px, 1fr) auto;
+}
+
+.file-grid--list .folder-card .file-card__top {
+    grid-column: 2;
+}
+
+.file-grid--list .folder-card .file-card__name-slot,
+.file-grid--list .folder-card .file-card__meta {
+    grid-column: 1;
 }
 
 .spinner {

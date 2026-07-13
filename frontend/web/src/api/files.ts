@@ -106,6 +106,29 @@ export async function listFolders(parentFolderId?: string): Promise<ApiFolder[]>
     return res.json();
 }
 
+export async function createFolder(params: {
+    name: string
+    parentFolderId?: string | null
+}): Promise<ApiFolder> {
+    const res = await authenticatedFetch(`${API_BASE}folders`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            name: params.name,
+            parent_folder_id: params.parentFolderId ?? null,
+        }),
+    });
+
+    if (!res.ok) {
+        const message = await parseErrorMessage(res);
+        throw new Error(message);
+    }
+
+    return res.json();
+}
+
 export async function getStorageQuota(): Promise<StorageQuota> {
     const res = await authenticatedFetch(`${API_BASE}storage/quota`, {
         method: 'GET',

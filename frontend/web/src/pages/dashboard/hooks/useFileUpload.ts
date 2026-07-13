@@ -10,6 +10,7 @@ import type { Item } from '../types'
 
 type UseFileUploadOptions = {
     publicKey: string | null
+    folderId?: string | null
     setItems: Dispatch<SetStateAction<Item[]>>
     setPendingIds: Dispatch<SetStateAction<Set<string>>>
     setError: Dispatch<SetStateAction<string | null>>
@@ -18,6 +19,7 @@ type UseFileUploadOptions = {
 
 export function useFileUpload({
     publicKey,
+    folderId,
     setItems,
     setPendingIds,
     setError,
@@ -34,7 +36,7 @@ export function useFileUpload({
                     storage_path: '',
                     mime_type: file.type || null,
                     size_bytes: file.size,
-                    folder_id: null,
+                    folder_id: folderId ?? null,
                     note: null,
                     is_deleted: false,
                     is_public: false,
@@ -71,6 +73,7 @@ export function useFileUpload({
                         encryptedFile: encryptedBlob,
                         originalFilename: file.name,
                         originalMimeType,
+                        folderId: folderId ?? undefined,
                         wrappedKey,
                         encryptionNonce: nonce.buffer as ArrayBuffer,
                     })
@@ -99,7 +102,7 @@ export function useFileUpload({
 
             await refreshQuota()
         },
-        [publicKey, refreshQuota, setError, setItems, setPendingIds],
+        [folderId, publicKey, refreshQuota, setError, setItems, setPendingIds],
     )
 
     return { ingestFiles }

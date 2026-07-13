@@ -1,4 +1,5 @@
 use crate::routes::files::files_routes;
+use crate::routes::folders::folders_routes;
 use crate::routes::storage::storage_routes;
 use crate::routes::users::{auth_limited_routes, users_routes};
 use crate::state::{AppConfig, AppState};
@@ -97,6 +98,7 @@ pub async fn run_server() {
         .merge(users_routes())
         .merge(storage_routes())
         .merge(files_routes())
+        .merge(folders_routes())
         .with_state(state)
         .layer(security_headers_layer())
         .layer(dev_cors_layer());

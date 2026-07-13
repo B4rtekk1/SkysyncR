@@ -902,6 +902,57 @@
     padding: 18px 20px;
 }
 
+.folder-path {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin: 0 0 16px;
+    color: var(--mist);
+    font-family: var(--font-mono), monospace;
+    font-size: 0.76rem;
+}
+
+.folder-path button {
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--panel);
+    color: var(--paper);
+    padding: 6px 9px;
+    font: inherit;
+    cursor: pointer;
+}
+
+.folder-path button:hover,
+.folder-path button:focus-visible {
+    border-color: rgba(var(--signal-rgb), 0.48);
+    color: var(--signal);
+}
+
+.folder-path__up {
+    margin-left: auto;
+}
+
+.folder-create {
+    width: min(420px, calc(100vw - 28px));
+}
+
+.folder-create__input {
+    width: 100%;
+    height: 40px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--panel-2);
+    color: var(--paper);
+    padding: 0 11px;
+    font: inherit;
+}
+
+.folder-create__input:focus {
+    border-color: rgba(var(--signal-rgb), 0.68);
+    outline: none;
+}
+
 .file-filter__modal-grid {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
