@@ -174,8 +174,7 @@ function drawData(matrix: Matrix, codewords: number[]) {
                 const x = right - offset
                 if (matrix[y][x] !== null) continue
 
-                const dark = Boolean(bits[bitIndex] ?? 0) !== mask(x, y)
-                matrix[y][x] = dark
+                matrix[y][x] = Boolean(bits[bitIndex] ?? 0) !== mask(x, y)
                 bitIndex += 1
             }
         }
