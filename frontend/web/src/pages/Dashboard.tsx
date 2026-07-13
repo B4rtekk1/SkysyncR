@@ -20,6 +20,7 @@ import {
     listTrash,
     listSharedFilesWithMe,
     getStorageQuota,
+    shareFolder,
     updateFileNote,
     type ApiFile,
     type ApiFolder,
@@ -82,7 +83,7 @@ import { useLayoutModeSwitch } from './dashboard/hooks/useLayoutModeSwitch'
 import { useNavOrdering } from './dashboard/hooks/useNavOrdering'
 import { useSidebarState } from './dashboard/hooks/useSidebarState'
 import { useStorageSummary } from './dashboard/hooks/useStorageSummary'
-import type { FileFilters, FileSortKey, FileTypeFilterKey, FileVisibilityFilterKey, Item, NavIndicator, ViewKey } from './dashboard/types'
+import type { FileFilters, FileSortKey, FileTypeFilterKey, FileVisibilityFilterKey, Item, NavIndicator, ShareableItem, ViewKey } from './dashboard/types'
 
 function Dashboard() {
     const [view, setView] = useState<ViewKey>(() => loadActiveView())
@@ -113,7 +114,7 @@ function Dashboard() {
     const [folderCreateOpen, setFolderCreateOpen] = useState(false)
     const [folderNameDraft, setFolderNameDraft] = useState('')
     const [folderSaving, setFolderSaving] = useState(false)
-    const [shareItem, setShareItem] = useState<Item | null>(null)
+    const [shareItem, setShareItem] = useState<ShareableItem | null>(null)
     const [shareLoading, setShareLoading] = useState(false)
     const [publicKey, setPublicKey] = useState<string | null>(null)
     const [privateKey, setPrivateKey] = useState<CryptoKey | null>(null)
@@ -550,6 +551,27 @@ function Dashboard() {
             setError(e instanceof Error ? e.message : 'Nie udalo sie utworzyc folderu.')
         } finally {
             setFolderSaving(false)
+        }
+    }
+
+    function handleShareFolder(folder: ApiFolder) {
+        setError(null)
+        setShareItem(folder)
+    }
+
+    async function setFolderSharing(folder: ApiFolder, isPublic: boolean) {
+        setShareLoading(true)
+        setError(null)
+        try {
+            const shared = await shareFolder(folder.id, isPublic)
+            setFolders((current) => current.map((item) => (item.id === folder.id ? shared : item)))
+            setShareItem(shared)
+            return shared
+        } catch (e) {
+            setError(e instanceof Error ? e.message : 'Could not update sharing for that folder.')
+            throw e
+        } finally {
+            setShareLoading(false)
         }
     }
 
@@ -1230,6 +1252,7 @@ function Dashboard() {
                                     folder={folder}
                                     index={i}
                                     onOpen={openFolder}
+                                    onShare={handleShareFolder}
                                 />
                             ))}
                             {renderedItems.map((item, i) => {
@@ -1358,18 +1381,27 @@ function Dashboard() {
             {shareItem && (
                 <ShareFileModal
                     item={shareItem}
+                    itemKind={'filename' in shareItem ? 'file' : 'folder'}
                     shareUrl={
                         shareItem.is_public && shareItem.share_token
-                            ? `${window.location.origin}/share/${shareItem.share_token}`
+                            ? `${window.location.origin}/share/${'filename' in shareItem ? '' : 'folders/'}${shareItem.share_token}`
                             : null
                     }
                     loading={shareLoading}
                     onClose={() => setShareItem(null)}
                     onEnableShare={async () => {
-                        await setFileSharing(shareItem, true)
+                        if ('filename' in shareItem) {
+                            await setFileSharing(shareItem, true)
+                        } else {
+                            await setFolderSharing(shareItem, true)
+                        }
                     }}
                     onDisableShare={async () => {
-                        await setFileSharing(shareItem, false)
+                        if ('filename' in shareItem) {
+                            await setFileSharing(shareItem, false)
+                        } else {
+                            await setFolderSharing(shareItem, false)
+                        }
                     }}
                 />
             )}

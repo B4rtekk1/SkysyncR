@@ -8,6 +8,8 @@ pub struct FolderRecord {
     pub id: Uuid,
     pub name: String,
     pub parent_folder_id: Option<Uuid>,
+    pub is_public: bool,
+    pub share_token: Option<String>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
     pub is_deleted: bool,
@@ -32,6 +34,8 @@ pub async fn list_user_folders(
             f.id,
             f.name,
             f.parent_folder_id,
+            f.is_public,
+            f.share_token,
             f.created_at,
             f.updated_at,
             FALSE AS is_deleted,
@@ -51,6 +55,8 @@ pub async fn list_user_folders(
             f.id,
             f.name,
             f.parent_folder_id,
+            f.is_public,
+            f.share_token,
             f.created_at,
             f.updated_at
         ORDER BY f.name
@@ -78,6 +84,8 @@ pub async fn create_folder_record(
             id,
             name,
             parent_folder_id,
+            is_public,
+            share_token,
             created_at,
             updated_at,
             FALSE AS is_deleted,
@@ -113,4 +121,47 @@ pub async fn folder_belongs_to_user(
     .await?;
 
     Ok(exists)
+}
+
+pub async fn update_user_folder_share(
+    pool: &PgPool,
+    user_id: Uuid,
+    folder_id: Uuid,
+    is_public: bool,
+    share_token: Option<String>,
+) -> Result<Option<FolderRecord>, sqlx::Error> {
+    sqlx::query_as::<_, FolderRecord>(
+        r#"
+        UPDATE folders
+        SET is_public = $1,
+            share_token = $2,
+            updated_at = NOW()
+        WHERE id = $3
+          AND owner_id = $4
+          AND is_deleted = FALSE
+        RETURNING
+            id,
+            name,
+            parent_folder_id,
+            is_public,
+            share_token,
+            created_at,
+            updated_at,
+            is_deleted,
+            deleted_at,
+            (
+                SELECT COUNT(files.id)::bigint
+                FROM files
+                WHERE files.folder_id = folders.id
+                  AND files.owner_id = folders.owner_id
+                  AND files.is_deleted = FALSE
+            ) AS file_count
+        "#,
+    )
+    .bind(is_public)
+    .bind(share_token)
+    .bind(folder_id)
+    .bind(user_id)
+    .fetch_optional(pool)
+    .await
 }

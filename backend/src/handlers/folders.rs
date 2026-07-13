@@ -1,6 +1,6 @@
 use axum::{
     Json,
-    extract::{Query, State},
+    extract::{Path, Query, State},
     http::StatusCode,
 };
 use serde::Deserialize;
@@ -9,6 +9,7 @@ use uuid::Uuid;
 use crate::auth::AuthUser;
 use crate::db::folders::{
     FolderRecord, NewFolderRecord, create_folder_record, folder_belongs_to_user, list_user_folders,
+    update_user_folder_share,
 };
 use crate::state::AppState;
 use crate::utils::errors::{ApiError, internal_error};
@@ -22,6 +23,11 @@ pub struct ListFoldersQuery {
 pub struct CreateFolderRequest {
     pub name: String,
     pub parent_folder_id: Option<String>,
+}
+
+#[derive(Deserialize)]
+pub struct ShareFolderRequest {
+    pub is_public: bool,
 }
 
 pub async fn list_folders(
@@ -69,6 +75,27 @@ pub async fn create_folder(
     .map_err(|e| internal_error("create folder", e))?;
 
     Ok((StatusCode::CREATED, Json(folder)))
+}
+
+pub async fn share_folder(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Path(folder_id): Path<Uuid>,
+    Json(payload): Json<ShareFolderRequest>,
+) -> Result<Json<FolderRecord>, ApiError> {
+    let share_token = payload.is_public.then(|| Uuid::new_v4().to_string());
+    let folder = update_user_folder_share(
+        &state.db_pool,
+        auth.user_id,
+        folder_id,
+        payload.is_public,
+        share_token,
+    )
+    .await
+    .map_err(|e| internal_error("share folder", e))?
+    .ok_or_else(|| ApiError::BadRequest("Folder not found".into()))?;
+
+    Ok(Json(folder))
 }
 
 fn parse_optional_uuid(value: Option<&str>, field_name: &str) -> Result<Option<Uuid>, ApiError> {

@@ -27,6 +27,8 @@ CREATE TABLE IF NOT EXISTS folders
     parent_folder_id UUID        REFERENCES folders (id) ON DELETE SET NULL,
     deleted_at        timestamptz,
     is_deleted       BOOLEAN     NOT NULL DEFAULT FALSE,
+    is_public        BOOLEAN     NOT NULL DEFAULT FALSE,
+    share_token      TEXT,
     created_at       timestamptz NOT NULL DEFAULT NOW(),
     updated_at       timestamptz NOT NULL DEFAULT NOW()
 );
@@ -189,3 +191,5 @@ WHERE session_expires_at IS NULL;
 ALTER TABLE refresh_tokens ALTER COLUMN session_expires_at SET DEFAULT (NOW() + interval '90 days');
 ALTER TABLE refresh_tokens ALTER COLUMN session_expires_at SET NOT NULL;
 ALTER TABLE files ADD COLUMN IF NOT EXISTS note TEXT;
+ALTER TABLE folders ADD COLUMN IF NOT EXISTS is_public BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE folders ADD COLUMN IF NOT EXISTS share_token TEXT;

@@ -1,15 +1,18 @@
 import type { CSSProperties } from 'react'
 import type { ApiFolder } from '../../api/files'
 import { formatRelative } from './fileUtils'
+import { SHARE_ICON } from './icons'
 
 export function FolderCard({
     folder,
     index,
     onOpen,
+    onShare,
 }: {
     folder: ApiFolder
     index: number
     onOpen: (folder: ApiFolder) => void
+    onShare?: (folder: ApiFolder) => void | Promise<void>
 }) {
     const fileCountLabel = folder.file_count === 1 ? '1 file' : `${folder.file_count} files`
 
@@ -48,6 +51,23 @@ export function FolderCard({
             <p className="file-card__meta">
                 {fileCountLabel} · Updated {formatRelative(folder.updated_at)}
             </p>
+            {onShare && (
+                <div className="file-card__actions">
+                    <button
+                        className={`file-card__action file-card__action--share ${folder.is_public ? 'is-active' : ''}`}
+                        type="button"
+                        onClick={(event) => {
+                            event.stopPropagation()
+                            void onShare(folder)
+                        }}
+                        aria-label={`Share folder ${folder.name}`}
+                        aria-pressed={folder.is_public}
+                        title="Share"
+                    >
+                        {SHARE_ICON}
+                    </button>
+                </div>
+            )}
         </article>
     )
 }

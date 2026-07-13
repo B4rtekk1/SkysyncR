@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type FocusEvent, type KeyboardEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type FocusEvent, type KeyboardEvent } from 'react'
 import { COPY_ICON } from './icons'
 import { createQrPath } from './qr'
-import type { Item } from './types'
+import type { ShareableItem } from './types'
 
 type ShareFileModalProps = {
-    item: Item
+    item: ShareableItem
+    itemKind: 'file' | 'folder'
     shareUrl: string | null
     loading: boolean
     onClose: () => void
@@ -38,20 +39,9 @@ function PermissionDropdown({
     value: SharePerson['permission']
 }) {
     const [open, setOpen] = useState(false)
-    const [placement, setPlacement] = useState<'down' | 'up'>('down')
+    const placement = 'up'
     const rootRef = useRef<HTMLDivElement>(null)
     const selected = PERMISSION_OPTIONS.find((option) => option.value === value) ?? PERMISSION_OPTIONS[0]
-    const updatePlacement = useCallback(() => {
-        const root = rootRef.current
-        if (!root) return
-
-        const rect = root.getBoundingClientRect()
-        const menuHeight = 154
-        const gap = 8
-        const spaceBelow = window.innerHeight - rect.bottom
-        const spaceAbove = rect.top
-        setPlacement(spaceBelow < menuHeight + gap && spaceAbove > spaceBelow ? 'up' : 'down')
-    }, [])
 
     function handleBlur(e: FocusEvent<HTMLDivElement>) {
         const nextTarget = e.relatedTarget
@@ -59,19 +49,6 @@ function PermissionDropdown({
             setOpen(false)
         }
     }
-
-    useEffect(() => {
-        if (!open) return undefined
-
-        updatePlacement()
-        window.addEventListener('resize', updatePlacement)
-        window.addEventListener('scroll', updatePlacement, true)
-
-        return () => {
-            window.removeEventListener('resize', updatePlacement)
-            window.removeEventListener('scroll', updatePlacement, true)
-        }
-    }, [open, updatePlacement])
 
     return (
         <div
@@ -82,10 +59,7 @@ function PermissionDropdown({
             <button
                 className="share-permission__trigger"
                 type="button"
-                onClick={() => {
-                    updatePlacement()
-                    setOpen((current) => !current)
-                }}
+                onClick={() => setOpen((current) => !current)}
                 aria-label={ariaLabel}
                 aria-haspopup="listbox"
                 aria-expanded={open}
@@ -126,6 +100,7 @@ function PermissionDropdown({
 
 export function ShareFileModal({
     item,
+    itemKind,
     shareUrl,
     loading,
     onClose,
@@ -139,6 +114,7 @@ export function ShareFileModal({
     const [error, setError] = useState<string | null>(null)
     const requestedShareRef = useRef<string | null>(null)
     const qr = useMemo(() => (shareUrl ? createQrPath(shareUrl) : null), [shareUrl])
+    const title = 'filename' in item ? item.filename : item.name
 
     useEffect(() => {
         function closeOnEscape(e: globalThis.KeyboardEvent) {
@@ -215,9 +191,9 @@ export function ShareFileModal({
                 <header className="share-modal__head">
                     <div className="share-modal__title">
                         <p className="eyebrow">
-                            <span className="eyebrow__dot" /> share file
+                            <span className="eyebrow__dot" /> share {itemKind}
                         </p>
-                        <h2 id="share-title">{item.filename}</h2>
+                        <h2 id="share-title">{title}</h2>
                     </div>
                     <button className="image-preview__close" type="button" onClick={onClose} aria-label="Close share dialog">
                         x
@@ -234,7 +210,7 @@ export function ShareFileModal({
                         </div>
                         <div className="share-modal__access-row">
                             <span>Anyone with this link</span>
-                            <strong>View only</strong>
+                            <strong>{itemKind === 'folder' ? 'View folder' : 'View only'}</strong>
                         </div>
                         <div className="share-modal__link-row">
                             <input value={shareUrl ?? 'Generating link...'} readOnly aria-label="Share link" />

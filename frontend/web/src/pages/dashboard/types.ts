@@ -1,4 +1,4 @@
-import type { ApiFile, SharedFile } from '../../api/files'
+import type { ApiFile, ApiFolder, SharedFile } from '../../api/files'
 export type ViewKey = 'all' | 'favourites' | 'shared' | 'groups' | 'trash'
 export type LayoutMode = 'grid' | 'list'
 export type FileSortKey =
@@ -32,6 +32,7 @@ export type FileFilters = {
     modifiedTo: string
 }
 export type Item = ApiFile | SharedFile
+export type ShareableItem = Item | ApiFolder
 export type FilePreviewKind = 'image' | 'text' | 'video'
 export type FilePreviewState = {
     item: Item

@@ -39,6 +39,8 @@ export interface ApiFolder {
     id: string
     name: string
     parent_folder_id: string | null
+    is_public: boolean
+    share_token: string | null
     created_at: string
     updated_at: string
     is_deleted: boolean
@@ -218,6 +220,18 @@ export async function updateFileContent(params: {
 
 export async function shareFile(id: string, isPublic: boolean): Promise<ApiFile> {
     const res = await authenticatedFetch(`${API_BASE}files/${id}/share`, {
+        method: 'PUT',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ is_public: isPublic }),
+    })
+    if (!res.ok) throw new Error(await parseErrorMessage(res))
+    return res.json()
+}
+
+export async function shareFolder(id: string, isPublic: boolean): Promise<ApiFolder> {
+    const res = await authenticatedFetch(`${API_BASE}folders/${id}/share`, {
         method: 'PUT',
         headers: {
             'Content-Type': 'application/json',

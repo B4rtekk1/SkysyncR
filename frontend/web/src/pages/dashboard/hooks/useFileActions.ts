@@ -7,13 +7,13 @@ import {
     type ApiFile,
 } from '../../../api/files'
 import { saveFavouriteIds, saveLocalFileMetadata } from '../storage'
-import type { Item } from '../types'
+import type { Item, ShareableItem } from '../types'
 
 type UseFileActionsOptions = {
     setItems: Dispatch<SetStateAction<Item[]>>
     setStorageItems: Dispatch<SetStateAction<ApiFile[]>>
     setError: Dispatch<SetStateAction<string | null>>
-    setShareItem: Dispatch<SetStateAction<Item | null>>
+    setShareItem: Dispatch<SetStateAction<ShareableItem | null>>
     setShareLoading: Dispatch<SetStateAction<boolean>>
     setFavouriteIds: Dispatch<SetStateAction<Set<string>>>
     refreshQuota: () => Promise<void>
