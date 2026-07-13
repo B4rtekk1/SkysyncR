@@ -503,6 +503,7 @@
 
 .video-viewer__timeline,
 .video-viewer__volume {
+    --progress: 0%;
     width: 100%;
     height: 24px;
     margin: 0;
@@ -518,8 +519,8 @@
     border-radius: 999px;
     background: linear-gradient(
         90deg,
-        var(--signal) 0 var(--progress),
-        rgba(246, 248, 251, 0.3) var(--progress) 100%
+        var(--signal) 0 var(--progress, 0%),
+        rgba(246, 248, 251, 0.3) var(--progress, 0%) 100%
     );
 }
 

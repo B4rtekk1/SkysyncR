@@ -18,7 +18,7 @@ export interface ApiFile {
     mime_type: string | null
     size_bytes: number
     folder_id: string | null
-    note: string | null
+    note?: string | null
     is_deleted: boolean
     is_public: boolean
     share_token: string | null
