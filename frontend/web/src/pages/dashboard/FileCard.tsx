@@ -7,46 +7,12 @@ import {
     type DragEvent,
     type KeyboardEvent as ReactKeyboardEvent,
 } from 'react'
-import { createPortal } from 'react-dom'
-import type { SharedFile } from '../../api/files'
 import { FileIcon } from './FileIcon'
+import { FileInfoPopover, type InfoPopoverPosition } from './FileInfoPopover'
 import { CANCEL_ICON, CHECK_ICON, DOWNLOAD_ICON, DRAG_HANDLE_ICON, INFO_ICON, RENAME_ICON, SHARE_ICON, STAR_ICON_FILLED, STAR_ICON_OUTLINE, TRASH_OPEN_ICON } from './icons'
 import type { Item, ViewKey } from './types'
 import { KIND_LABELS, formatBytes, formatRelative, kindFromFile, useDecryptReveal } from './fileUtils'
-function isShared(item: Item): item is SharedFile {
-    return 'permissions' in item
-}
-
-function formatExactBytes(bytes: number) {
-    return `${new Intl.NumberFormat().format(bytes)} bytes (${formatBytes(bytes)})`
-}
-
-function formatDateTime(iso: string | null) {
-    if (!iso) return 'Not set'
-    return new Date(iso).toLocaleString()
-}
-
-function formatPermission(item: Item) {
-    if (isShared(item)) {
-        if (item.permissions === 'owner') return 'Owner'
-        return item.permissions === 'write' ? 'Can edit' : 'Can view'
-    }
-    return item.is_public ? 'Public link' : 'Private'
-}
-
-function formatSource(item: Item, view: ViewKey) {
-    if (isShared(item)) {
-        return item.shared_by_user_name ? `Shared by ${item.shared_by_user_name}` : `Shared by user ${item.shared_by_user_id}`
-    }
-    if (view === 'trash') return 'Trash'
-    if (view === 'favourites') return 'Favourites'
-    return 'My storage'
-}
-
-type InfoPopoverPosition = {
-    left: number
-    top: number
-}
+import { isShared } from './fileCardUtils'
 
 export function FileCard({
                       item,
@@ -112,21 +78,6 @@ export function FileCard({
     const canDownload = Boolean(onDownload && view !== 'trash')
     const canPreview = Boolean(onPreview && ['image', 'text', 'code'].includes(kind) && view !== 'trash' && !pending && !isRenaming)
     const hasAction = Boolean(canRename || canShare || canDownload || (view === 'all' && onDelete) || (view === 'trash' && onRestore) || !isRenaming)
-    const infoRows = [
-        ['Name', item.filename],
-        ['Exact size', formatExactBytes(item.size_bytes)],
-        ['Type', typeLabel],
-        ['MIME type', item.mime_type || 'Unknown'],
-        ['Created', formatDateTime(item.created_at)],
-        ['Modified', formatDateTime(item.updated_at)],
-        ...(item.deleted_at ? [['Deleted', formatDateTime(item.deleted_at)]] : []),
-        ['Permissions', formatPermission(item)],
-        ['Source', formatSource(item, view)],
-        ['Folder', item.folder_id || 'Root'],
-        ['Sharing', item.is_public ? 'Public link enabled' : 'Not public'],
-        ...(isShared(item) ? [['Shared by', item.shared_by_user_name || item.shared_by_user_id]] : []),
-        ['File ID', item.id],
-    ]
 
     const updateInfoPosition = useCallback(() => {
         const card = cardRef.current
@@ -176,51 +127,6 @@ export function FileCard({
             window.removeEventListener('scroll', updateInfoPosition, true)
         }
     }, [isInfoOpen, updateInfoPosition])
-
-    const infoPopover = isInfoOpen
-        ? createPortal(
-              <div
-                  className="file-card__info-backdrop"
-                  onClick={(e) => {
-                      e.preventDefault()
-                      e.stopPropagation()
-                      setIsInfoOpen(false)
-                  }}
-                  role="presentation"
-              >
-                  <div
-                      className="file-card__info-popover"
-                      style={{ left: infoPosition.left, top: infoPosition.top }}
-                      role="dialog"
-                      aria-label={`Details for ${item.filename}`}
-                      onClick={(e) => e.stopPropagation()}
-                  >
-                      <div className="file-card__info-head">
-                          <span>File details</span>
-                          <button
-                              type="button"
-                              onClick={(e) => {
-                                  e.stopPropagation()
-                                  setIsInfoOpen(false)
-                              }}
-                              aria-label="Close details"
-                          >
-                              {CANCEL_ICON}
-                          </button>
-                      </div>
-                      <dl className="file-card__info-list">
-                          {infoRows.map(([label, value]) => (
-                              <div className="file-card__info-row" key={label}>
-                                  <dt>{label}</dt>
-                                  <dd>{value}</dd>
-                              </div>
-                          ))}
-                      </dl>
-                  </div>
-              </div>,
-              document.body,
-          )
-        : null
 
     const handlePreviewKeyDown = (e: ReactKeyboardEvent<HTMLElement>) => {
         if (!canPreview) return
@@ -427,7 +333,15 @@ export function FileCard({
                             >
                                 {INFO_ICON}
                             </button>
-                            {infoPopover}
+                            {isInfoOpen && (
+                                <FileInfoPopover
+                                    item={item}
+                                    view={view}
+                                    typeLabel={typeLabel}
+                                    position={infoPosition}
+                                    onClose={() => setIsInfoOpen(false)}
+                                />
+                            )}
                         </div>
                     )}
                     {canDownload && (
