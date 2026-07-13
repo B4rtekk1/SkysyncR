@@ -131,8 +131,8 @@ function parseSizeMb(value: string) {
 
 function formatSizeValue(value: number) {
     if (!Number.isFinite(value)) return ''
-    const rounded = Math.round(value * 1000) / 1000
-    return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(3).replace(/0+$/, '').replace(/\.$/, '')
+    const rounded = Math.round(value * 10) / 10
+    return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1)
 }
 
 function formatSizeFromKb(valueKb: number) {

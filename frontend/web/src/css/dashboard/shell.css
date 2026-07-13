@@ -1070,30 +1070,21 @@
 .file-filter__range-dual {
     --range-min: 0%;
     --range-max: 100%;
+    --range-thumb-size: 18px;
+    --range-thumb-offset: calc(var(--range-thumb-size) / 2);
     position: relative;
     height: 24px;
-}
-
-.file-filter__range-dual::before {
-    content: '';
-    position: absolute;
-    top: 10px;
-    right: 0;
-    left: 0;
-    height: 4px;
-    border-radius: 999px;
-    background: rgba(148, 163, 184, 0.24);
-}
-
-.file-filter__range-dual::after {
-    content: '';
-    position: absolute;
-    top: 10px;
-    right: calc(100% - var(--range-max));
-    left: var(--range-min);
-    height: 4px;
-    border-radius: 999px;
-    background: var(--signal);
+    background:
+        linear-gradient(
+            to right,
+            rgba(148, 163, 184, 0.24) 0,
+            rgba(148, 163, 184, 0.24) var(--range-min),
+            var(--signal) var(--range-min),
+            var(--signal) var(--range-max),
+            rgba(148, 163, 184, 0.24) var(--range-max),
+            rgba(148, 163, 184, 0.24) 100%
+        )
+        var(--range-thumb-offset) 10px / calc(100% - var(--range-thumb-size)) 4px no-repeat;
 }
 
 .file-filter__range-dual input {
@@ -1112,23 +1103,23 @@
 .file-filter__range-dual input::-webkit-slider-thumb {
     width: 18px;
     height: 18px;
+    box-sizing: border-box;
     border: 2px solid var(--panel);
     border-radius: 50%;
     appearance: none;
     background: var(--signal);
-    box-shadow: 0 0 0 1px rgba(var(--signal-rgb), 0.6);
     cursor: pointer;
     margin-top: -7px;
     pointer-events: auto;
 }
 
 .file-filter__range-dual input::-moz-range-thumb {
-    width: 16px;
-    height: 16px;
+    width: 18px;
+    height: 18px;
+    box-sizing: border-box;
     border: 2px solid var(--panel);
     border-radius: 50%;
     background: var(--signal);
-    box-shadow: 0 0 0 1px rgba(var(--signal-rgb), 0.6);
     cursor: pointer;
     pointer-events: auto;
 }
