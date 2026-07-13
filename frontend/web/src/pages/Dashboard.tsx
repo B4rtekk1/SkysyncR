@@ -36,6 +36,7 @@ import {
 import { loadActivePrivateKey } from '../crypto/storage'
 import { EmptyPane } from './dashboard/EmptyPane'
 import { FileCard } from './dashboard/FileCard'
+import { FileFilterModal } from './dashboard/FileFilterModal'
 import { GroupsPanel } from './dashboard/GroupsPanel'
 import { ImagePreviewModal } from './dashboard/ImagePreviewModal'
 import { ShareFileModal } from './dashboard/ShareFileModal'
@@ -52,8 +53,17 @@ import {
     KIND_ACCENT,
     KIND_LABELS,
     formatBytes,
-    kindFromFile,
 } from './dashboard/fileUtils'
+import {
+    FILE_SORT_LABELS,
+    formatSizeValue,
+    getFilterSummary,
+    hasActiveFileFilters,
+    matchesFileFilters,
+    parseSizeInputToMb,
+    parseSizeMb,
+    sortFiles,
+} from './dashboard/fileFilters'
 import {
     NAV_LABELS,
     applyLocalFileMetadata,
@@ -77,182 +87,6 @@ import { useNavOrdering } from './dashboard/hooks/useNavOrdering'
 import { useSidebarState } from './dashboard/hooks/useSidebarState'
 import { useStorageSummary } from './dashboard/hooks/useStorageSummary'
 import type { FileFilters, FileSortKey, FileTypeFilterKey, FileVisibilityFilterKey, Item, NavIndicator, ViewKey } from './dashboard/types'
-
-const FILE_SORT_LABELS: Record<FileSortKey, string> = {
-    manual: 'Manual order',
-    'name-asc': 'Name A-Z',
-    'name-desc': 'Name Z-A',
-    'updated-desc': 'Newest first',
-    'updated-asc': 'Oldest first',
-    'size-desc': 'Largest first',
-    'size-asc': 'Smallest first',
-}
-
-const FILE_TYPE_FILTER_LABELS: Record<FileTypeFilterKey, string> = {
-    image: 'Images',
-    document: 'Docs',
-    pdf: 'PDFs',
-    sheet: 'Sheets',
-    presentation: 'Slides',
-    archive: 'Archives',
-    video: 'Videos',
-    audio: 'Audio',
-    text: 'Text',
-    code: 'Code',
-    file: 'Other files',
-}
-
-const FILE_TYPE_FILTER_OPTIONS: FileTypeFilterKey[] = [
-    'image',
-    'document',
-    'pdf',
-    'sheet',
-    'presentation',
-    'archive',
-    'video',
-    'audio',
-    'text',
-    'code',
-    'file',
-]
-
-const FILE_VISIBILITY_LABELS: Record<FileVisibilityFilterKey, string> = {
-    any: 'Any',
-    public: 'Shared',
-    private: 'Not shared',
-}
-
-function parseSizeMb(value: string) {
-    const normalized = value.trim().replace(',', '.')
-    if (!normalized) return null
-    const parsed = Number(normalized)
-    return Number.isFinite(parsed) && parsed >= 0 ? parsed : null
-}
-
-function formatSizeValue(value: number) {
-    if (!Number.isFinite(value)) return ''
-    const rounded = Math.round(value * 10) / 10
-    return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1)
-}
-
-function formatSizeFromKb(valueKb: number) {
-    return valueKb >= 1024 ? `${formatSizeValue(valueKb / 1024)} MB` : `${Math.round(valueKb)} KB`
-}
-
-function formatSizeInputValue(valueMb: string) {
-    const parsed = parseSizeMb(valueMb)
-    return parsed === null ? '' : formatSizeFromKb(parsed * 1024)
-}
-
-function parseSizeInputToMb(value: string) {
-    const normalized = value.trim().replace(',', '.').toUpperCase()
-    if (!normalized) return ''
-
-    const match = normalized.match(/^(\d*(?:\.\d*)?)\s*(KB|MB)?$/)
-    if (!match) return null
-
-    const parsed = Number(match[1])
-    if (!Number.isFinite(parsed) || parsed < 0) return null
-    return formatSizeValue(match[2] === 'KB' ? parsed / 1024 : parsed)
-}
-
-function getFileExtension(filename: string) {
-    const name = filename.trim().toLowerCase()
-    const extensionStart = name.lastIndexOf('.')
-    return extensionStart > 0 && extensionStart < name.length - 1 ? name.slice(extensionStart + 1) : ''
-}
-
-function parseExcludedExtensions(value: string) {
-    return value
-        .split(/[\s,;]+/)
-        .map((extension) => extension.trim().toLowerCase().replace(/^\./, ''))
-        .filter(Boolean)
-}
-
-function hasActiveFileFilters(filters: FileFilters) {
-    return (
-        filters.types.length > 0 ||
-        filters.visibility !== 'any' ||
-        filters.minSizeMb.trim() !== '' ||
-        filters.maxSizeMb.trim() !== '' ||
-        filters.excludedExtensions.trim() !== '' ||
-        filters.modifiedFrom !== '' ||
-        filters.modifiedTo !== ''
-    )
-}
-
-function getFilterSummary(filters: FileFilters) {
-    const excludedExtensions = parseExcludedExtensions(filters.excludedExtensions)
-    const activeParts = [
-        filters.types.length > 0 ? `${filters.types.length} type${filters.types.length > 1 ? 's' : ''}` : null,
-        filters.visibility !== 'any' ? FILE_VISIBILITY_LABELS[filters.visibility] : null,
-        filters.minSizeMb.trim() || filters.maxSizeMb.trim() ? 'Size' : null,
-        excludedExtensions.length > 0 ? `${excludedExtensions.length} excluded` : null,
-        filters.modifiedFrom || filters.modifiedTo ? 'Modified' : null,
-    ].filter(Boolean)
-
-    return activeParts.length > 0 ? activeParts.join(' · ') : 'All files'
-}
-
-function matchesFileFilters(item: Item, filters: FileFilters) {
-    if (filters.types.length > 0 && !filters.types.includes(kindFromFile(item.filename, item.mime_type))) {
-        return false
-    }
-    if (filters.visibility === 'public' && !item.is_public) return false
-    if (filters.visibility === 'private' && item.is_public) return false
-
-    const minSizeMb = parseSizeMb(filters.minSizeMb)
-    const maxSizeMb = parseSizeMb(filters.maxSizeMb)
-    const sizeMb = item.size_bytes / (1024 * 1024)
-
-    if (minSizeMb !== null && sizeMb < minSizeMb) return false
-    if (maxSizeMb !== null && sizeMb > maxSizeMb) return false
-
-    const excludedExtensions = parseExcludedExtensions(filters.excludedExtensions)
-    if (excludedExtensions.includes(getFileExtension(item.filename))) return false
-
-    const modifiedAt = new Date(item.updated_at).getTime()
-    if (filters.modifiedFrom) {
-        const modifiedFrom = new Date(`${filters.modifiedFrom}T00:00:00`).getTime()
-        if (Number.isFinite(modifiedFrom) && modifiedAt < modifiedFrom) return false
-    }
-    if (filters.modifiedTo) {
-        const modifiedTo = new Date(`${filters.modifiedTo}T23:59:59.999`).getTime()
-        if (Number.isFinite(modifiedTo) && modifiedAt > modifiedTo) return false
-    }
-    return true
-}
-
-function compareStrings(a: string, b: string) {
-    return a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' })
-}
-
-function compareDates(a: string, b: string) {
-    return new Date(a).getTime() - new Date(b).getTime()
-}
-
-function sortFiles(items: Item[], sortKey: FileSortKey) {
-    if (sortKey === 'manual') return items
-
-    return [...items].sort((a, b) => {
-        switch (sortKey) {
-            case 'name-asc':
-                return compareStrings(a.filename, b.filename)
-            case 'name-desc':
-                return compareStrings(b.filename, a.filename)
-            case 'updated-desc':
-                return compareDates(b.updated_at, a.updated_at)
-            case 'updated-asc':
-                return compareDates(a.updated_at, b.updated_at)
-            case 'size-desc':
-                return b.size_bytes - a.size_bytes
-            case 'size-asc':
-                return a.size_bytes - b.size_bytes
-            default:
-                return 0
-        }
-    })
-}
 
 function Dashboard() {
     const [view, setView] = useState<ViewKey>(() => loadActiveView())
@@ -1221,227 +1055,29 @@ function Dashboard() {
                                         </svg>
                                     </button>
 
-                                    {filterMenuOpen && (
-                                        <div
-                                            className={`file-filter__modal ${
-                                                filterMenuClosing ? 'is-closing' : 'is-opening'
-                                            }`}
-                                            onMouseDown={(e) => {
-                                                if (e.target === e.currentTarget) closeFilterMenu()
-                                            }}
-                                        >
-                                            <div
-                                                className="file-filter__dialog"
-                                                role="dialog"
-                                                aria-modal="true"
-                                                aria-labelledby="file-filter-title"
-                                            >
-                                                <div className="file-filter__modal-head">
-                                                    <div>
-                                                        <h2 id="file-filter-title">Filter files</h2>
-                                                        <span>{filterSummary}</span>
-                                                    </div>
-                                                    <button
-                                                        type="button"
-                                                        className="file-filter__close"
-                                                        onClick={closeFilterMenu}
-                                                        aria-label="Close filters"
-                                                    >
-                                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                                                            <path
-                                                                d="m6 6 12 12M18 6 6 18"
-                                                                stroke="currentColor"
-                                                                strokeWidth="1.9"
-                                                                strokeLinecap="round"
-                                                            />
-                                                        </svg>
-                                                    </button>
-                                                </div>
-                                                <div className="file-filter__modal-body">
-                                                    <div className="file-filter__section file-filter__section--search">
-                                                        <div className="file-filter__section-head">
-                                                            <span>Search</span>
-                                                        </div>
-                                                        <label className="file-filter__search">
-                                                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                                                                <circle cx="10.5" cy="10.5" r="6.5" stroke="currentColor" strokeWidth="1.6" />
-                                                                <path d="M20 20l-4.35-4.35" stroke="currentColor" strokeWidth="1.6" />
-                                                            </svg>
-                                                            <input
-                                                                type="text"
-                                                                placeholder="Search files"
-                                                                value={query}
-                                                                onChange={(e) => setQuery(e.target.value)}
-                                                            />
-                                                        </label>
-                                                    </div>
-                                                    <div className="file-filter__modal-grid">
-                                                        <div className="file-filter__section">
-                                                            <div className="file-filter__section-head">
-                                                                <span>File types</span>
-                                                                {fileFilters.types.length > 0 && (
-                                                                    <button
-                                                                        type="button"
-                                                                        className="file-filter__link"
-                                                                        onClick={() => setFileFilters((current) => ({ ...current, types: [] }))}
-                                                                    >
-                                                                        Clear
-                                                                    </button>
-                                                                )}
-                                                            </div>
-                                                            <div className="file-filter__type-grid">
-                                                                {FILE_TYPE_FILTER_OPTIONS.map((type) => (
-                                                                    <label
-                                                                        key={type}
-                                                                        className={`file-filter__check ${
-                                                                            fileFilters.types.includes(type) ? 'is-selected' : ''
-                                                                        }`}
-                                                                    >
-                                                                        <input
-                                                                            type="checkbox"
-                                                                            checked={fileFilters.types.includes(type)}
-                                                                            onChange={() => toggleFileTypeFilter(type)}
-                                                                        />
-                                                                        <span>{FILE_TYPE_FILTER_LABELS[type]}</span>
-                                                                    </label>
-                                                                ))}
-                                                            </div>
-                                                        </div>
-
-                                                        <div className="file-filter__section">
-                                                            <div className="file-filter__section-head">
-                                                                <span>Sharing</span>
-                                                            </div>
-                                                            <div className="file-filter__segments">
-                                                                {(Object.keys(FILE_VISIBILITY_LABELS) as FileVisibilityFilterKey[]).map(
-                                                                    (visibility) => (
-                                                                        <button
-                                                                            key={visibility}
-                                                                            type="button"
-                                                                            className={`file-filter__segment ${
-                                                                                fileFilters.visibility === visibility ? 'is-selected' : ''
-                                                                            }`}
-                                                                            onClick={() => updateVisibilityFilter(visibility)}
-                                                                        >
-                                                                            {FILE_VISIBILITY_LABELS[visibility]}
-                                                                        </button>
-                                                                    ),
-                                                                )}
-                                                            </div>
-                                                        </div>
-
-                                                        <div className="file-filter__section">
-                                                            <div className="file-filter__section-head">
-                                                                <span>Size range</span>
-                                                                <span>
-                                                                    {formatSizeFromKb(sizeSliderMinValue)} - {formatSizeFromKb(sizeSliderMaxValue)}
-                                                                </span>
-                                                            </div>
-                                                            <div className="file-filter__range-stack">
-                                                                <div className="file-filter__range-labels">
-                                                                    <span>
-                                                                        Min {formatSizeFromKb(sizeSliderMinValue)}
-                                                                    </span>
-                                                                    <span>
-                                                                        Max {formatSizeFromKb(sizeSliderMaxValue)}
-                                                                    </span>
-                                                                </div>
-                                                                <div
-                                                                    className="file-filter__range-dual"
-                                                                    style={
-                                                                        {
-                                                                            '--range-min': `${sizeSliderMinPct}%`,
-                                                                            '--range-max': `${sizeSliderMaxPct}%`,
-                                                                        } as React.CSSProperties
-                                                                    }
-                                                                >
-                                                                    <input
-                                                                        type="range"
-                                                                        min="0"
-                                                                        max={sizeSliderMax}
-                                                                        value={sizeSliderMinValue}
-                                                                        onChange={(e) => updateSizeSlider('minSizeMb', e.target.value)}
-                                                                        aria-label="Minimum file size"
-                                                                    />
-                                                                    <input
-                                                                        type="range"
-                                                                        min="0"
-                                                                        max={sizeSliderMax}
-                                                                        value={sizeSliderMaxValue}
-                                                                        onChange={(e) => updateSizeSlider('maxSizeMb', e.target.value)}
-                                                                        aria-label="Maximum file size"
-                                                                    />
-                                                                </div>
-                                                                <div className="file-filter__size-row">
-                                                                    <input
-                                                                        type="text"
-                                                                        placeholder="Min"
-                                                                        value={formatSizeInputValue(fileFilters.minSizeMb)}
-                                                                        onChange={(e) => updateSizeFilter('minSizeMb', e.target.value)}
-                                                                        aria-label="Minimum file size"
-                                                                    />
-                                                                    <input
-                                                                        type="text"
-                                                                        placeholder="Max"
-                                                                        value={formatSizeInputValue(fileFilters.maxSizeMb)}
-                                                                        onChange={(e) => updateSizeFilter('maxSizeMb', e.target.value)}
-                                                                        aria-label="Maximum file size"
-                                                                    />
-                                                                </div>
-                                                            </div>
-                                                        </div>
-
-                                                        <div className="file-filter__section">
-                                                            <div className="file-filter__section-head">
-                                                                <span>Exclude extensions</span>
-                                                            </div>
-                                                            <input
-                                                                className="file-filter__text-input"
-                                                                type="text"
-                                                                placeholder="exe, zip, .tmp"
-                                                                value={fileFilters.excludedExtensions}
-                                                                onChange={(e) => updateExcludedExtensions(e.target.value)}
-                                                                aria-label="Excluded file extensions"
-                                                            />
-                                                        </div>
-
-                                                        <div className="file-filter__section">
-                                                            <div className="file-filter__section-head">
-                                                                <span>Modified date</span>
-                                                            </div>
-                                                            <div className="file-filter__size-row">
-                                                                <input
-                                                                    type="date"
-                                                                    value={fileFilters.modifiedFrom}
-                                                                    onChange={(e) => updateModifiedDateFilter('modifiedFrom', e.target.value)}
-                                                                    aria-label="Modified from"
-                                                                />
-                                                                <input
-                                                                    type="date"
-                                                                    value={fileFilters.modifiedTo}
-                                                                    onChange={(e) => updateModifiedDateFilter('modifiedTo', e.target.value)}
-                                                                    aria-label="Modified to"
-                                                                />
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                                <div className="file-filter__footer">
-                                                    <button
-                                                        type="button"
-                                                        className="file-filter__clear"
-                                                        onClick={clearFileFilters}
-                                                        disabled={!hasActiveFilter}
-                                                    >
-                                                        Reset filters
-                                                    </button>
-                                                    <button type="button" className="file-filter__done" onClick={closeFilterMenu}>
-                                                        Done
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    )}
+                                    <FileFilterModal
+                                        isOpen={filterMenuOpen}
+                                        isClosing={filterMenuClosing}
+                                        filterSummary={filterSummary}
+                                        query={query}
+                                        fileFilters={fileFilters}
+                                        hasActiveFilter={hasActiveFilter}
+                                        sizeSliderMax={sizeSliderMax}
+                                        sizeSliderMinValue={sizeSliderMinValue}
+                                        sizeSliderMaxValue={sizeSliderMaxValue}
+                                        sizeSliderMinPct={sizeSliderMinPct}
+                                        sizeSliderMaxPct={sizeSliderMaxPct}
+                                        onClose={closeFilterMenu}
+                                        onQueryChange={setQuery}
+                                        onClearFileTypes={() => setFileFilters((current) => ({ ...current, types: [] }))}
+                                        onToggleFileType={toggleFileTypeFilter}
+                                        onVisibilityChange={updateVisibilityFilter}
+                                        onSizeInputChange={updateSizeFilter}
+                                        onSizeSliderChange={updateSizeSlider}
+                                        onExcludedExtensionsChange={updateExcludedExtensions}
+                                        onModifiedDateChange={updateModifiedDateFilter}
+                                        onClearFilters={clearFileFilters}
+                                    />
                                 </div>
                             )}
 
