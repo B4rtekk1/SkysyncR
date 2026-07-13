@@ -163,6 +163,14 @@ export const RENAME_ICON = (
     </svg>
 )
 
+export const INFO_ICON = (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <circle cx="12" cy="12" r="8.25" stroke="currentColor" strokeWidth="1.7" />
+        <path d="M12 11v5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+        <circle cx="12" cy="8" r="1.1" fill="currentColor" />
+    </svg>
+)
+
 export const CHECK_ICON = (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
         <path d="M5 12.5 9.3 17 19 7" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />

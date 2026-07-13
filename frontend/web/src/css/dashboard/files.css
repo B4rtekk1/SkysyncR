@@ -436,6 +436,7 @@
 .file-card__action--download,
 .file-card__action--rename,
 .file-card__action--share,
+.file-card__action--info,
 .file-card__action--confirm,
 .file-card__action--cancel {
     display: inline-flex;
@@ -453,6 +454,9 @@
 .file-card__action--rename:focus-visible,
 .file-card__action--share:hover,
 .file-card__action--share:focus-visible,
+.file-card__action--info:hover,
+.file-card__action--info:focus-visible,
+.file-card__action--info.is-active,
 .file-card__action--confirm:hover,
 .file-card__action--confirm:focus-visible {
     color: var(--signal);
@@ -467,6 +471,102 @@
 .file-card__action--share.is-active {
     color: var(--signal);
     background: rgba(var(--signal-rgb), 0.08);
+}
+
+.file-card__info-wrap {
+    position: relative;
+    display: inline-flex;
+}
+
+.file-card__info-backdrop {
+    position: fixed;
+    z-index: 120;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px 14px;
+    background: rgba(0, 0, 0, 0.18);
+}
+
+.file-card__info-popover {
+    width: min(360px, calc(100vw - 28px));
+    max-height: calc(100vh - 48px);
+    overflow: auto;
+    padding: 12px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: var(--panel);
+    box-shadow: 0 18px 44px rgba(0, 0, 0, 0.28);
+    cursor: default;
+}
+
+.file-card__info-head {
+    position: sticky;
+    top: -12px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin: -12px -12px 10px;
+    padding: 12px;
+    border-bottom: 1px solid rgba(148, 163, 184, 0.14);
+    background: var(--panel);
+    color: var(--text);
+    font-size: 0.82rem;
+    font-weight: 700;
+}
+
+.file-card__info-head button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    border: none;
+    border-radius: 7px;
+    background: transparent;
+    color: var(--mist);
+    cursor: pointer;
+}
+
+.file-card__info-head button:hover,
+.file-card__info-head button:focus-visible {
+    color: #ef4444;
+    background: rgba(239, 68, 68, 0.08);
+}
+
+.file-card__info-list {
+    display: grid;
+    gap: 8px;
+    margin: 0;
+}
+
+.file-card__info-row {
+    display: grid;
+    grid-template-columns: minmax(86px, 0.38fr) minmax(0, 1fr);
+    gap: 10px;
+    padding-top: 8px;
+    border-top: 1px solid rgba(148, 163, 184, 0.14);
+}
+
+.file-card__info-row:first-child {
+    padding-top: 0;
+    border-top: none;
+}
+
+.file-card__info-row dt {
+    color: var(--mist);
+    font-size: 0.72rem;
+}
+
+.file-card__info-row dd {
+    min-width: 0;
+    margin: 0;
+    overflow-wrap: anywhere;
+    color: var(--text);
+    font-size: 0.74rem;
+    line-height: 1.35;
 }
 
 .file-card__action--cancel:hover,
