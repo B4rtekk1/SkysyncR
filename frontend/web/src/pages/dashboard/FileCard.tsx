@@ -7,9 +7,10 @@ import {
     type DragEvent,
     type KeyboardEvent as ReactKeyboardEvent,
 } from 'react'
+import { FileCardActions } from './FileCardActions'
 import { FileIcon } from './FileIcon'
 import { FileInfoPopover, type InfoPopoverPosition } from './FileInfoPopover'
-import { CANCEL_ICON, CHECK_ICON, DOWNLOAD_ICON, DRAG_HANDLE_ICON, INFO_ICON, RENAME_ICON, SHARE_ICON, STAR_ICON_FILLED, STAR_ICON_OUTLINE, TRASH_OPEN_ICON } from './icons'
+import { DRAG_HANDLE_ICON, STAR_ICON_FILLED, STAR_ICON_OUTLINE } from './icons'
 import type { Item, ViewKey } from './types'
 import { KIND_LABELS, formatBytes, formatRelative, kindFromFile, useDecryptReveal } from './fileUtils'
 import { isShared } from './fileCardUtils'
@@ -268,139 +269,42 @@ export function FileCard({
                 {isShared(item) && item.shared_by_user_name ? ` · shared by ${item.shared_by_user_name}` : ''}
             </p>
             {hasAction && (
-                <div className="file-card__actions">
-                    {isRenaming && (
-                        <>
-                            <button
-                                className="file-card__action file-card__action--confirm"
-                                type="button"
-                                onClick={(e) => {
-                                    e.stopPropagation()
-                                    void saveRename()
-                                }}
-                                disabled={renameSaving}
-                                aria-label={`Save name for ${item.filename}`}
-                                title="Save name"
-                            >
-                                {CHECK_ICON}
-                            </button>
-                            <button
-                                className="file-card__action file-card__action--cancel"
-                                type="button"
-                                onClick={(e) => {
-                                    e.stopPropagation()
-                                    cancelRename()
-                                }}
-                                disabled={renameSaving}
-                                aria-label={`Cancel rename for ${item.filename}`}
-                                title="Cancel"
-                            >
-                                {CANCEL_ICON}
-                            </button>
-                        </>
-                    )}
-                    {canRename && !isRenaming && (
-                        <button
-                            className="file-card__action file-card__action--rename"
-                            onClick={(e) => {
-                                e.stopPropagation()
-                                setRenameDraft(item.filename)
-                                setIsRenaming(true)
-                                selectFilenameWithoutExtension(item.filename)
-                            }}
-                            aria-label={`Rename ${item.filename}`}
-                            title="Rename"
-                            type="button"
-                        >
-                            {RENAME_ICON}
-                        </button>
-                    )}
-                    {!isRenaming && (
-                        <div className="file-card__info-wrap">
-                            <button
-                                className={`file-card__action file-card__action--info ${
-                                    isInfoOpen ? 'is-active' : ''
-                                }`}
-                                onClick={(e) => {
-                                    e.stopPropagation()
-                                    if (!isInfoOpen) updateInfoPosition()
-                                    setIsInfoOpen((current) => !current)
-                                }}
-                                aria-label={`Show details for ${item.filename}`}
-                                aria-expanded={isInfoOpen}
-                                title="Details"
-                                type="button"
-                            >
-                                {INFO_ICON}
-                            </button>
-                            {isInfoOpen && (
-                                <FileInfoPopover
-                                    item={item}
-                                    view={view}
-                                    typeLabel={typeLabel}
-                                    position={infoPosition}
-                                    onClose={() => setIsInfoOpen(false)}
-                                />
-                            )}
-                        </div>
-                    )}
-                    {canDownload && (
-                        <button
-                            className="file-card__action file-card__action--download"
-                            onClick={(e) => {
-                                e.stopPropagation()
-                                onDownload?.(item)
-                            }}
-                            aria-label={`Download ${item.filename}`}
-                            title="Download"
-                            type="button"
-                        >
-                            {DOWNLOAD_ICON}
-                        </button>
-                    )}
-                    {canShare && (
-                        <button
-                            className={`file-card__action file-card__action--share ${
-                                item.is_public ? 'is-active' : ''
-                            }`}
-                            onClick={(e) => {
-                                e.stopPropagation()
-                                void onShare?.(item)
-                            }}
-                            aria-label={`Share ${item.filename}`}
-                            aria-pressed={item.is_public}
-                            title="Share"
-                            type="button"
-                        >
-                            {SHARE_ICON}
-                        </button>
-                    )}
-                    {view === 'all' && onDelete && (
-                        <button
-                            className="file-card__action file-card__action--trash"
-                            onClick={(e) => {
-                                e.stopPropagation()
-                                onDelete(item.id)
-                            }}
-                            aria-label={`Move ${item.filename} to trash`}
-                            title="Move to trash"
-                            type="button"
-                        >
-                            {TRASH_OPEN_ICON}
-                        </button>
-                    )}
-                    {view === 'trash' && onRestore && (
-                        <button
-                            className="file-card__action"
-                            onClick={(e) => {
-                                e.stopPropagation()
-                                onRestore(item.id)
-                            }}
-                        >
-                            Restore
-                        </button>
-                    )}
-                </div>
+                <FileCardActions
+                    item={item}
+                    view={view}
+                    isRenaming={isRenaming}
+                    renameSaving={renameSaving}
+                    canRename={canRename}
+                    canDownload={canDownload}
+                    canShare={canShare}
+                    isInfoOpen={isInfoOpen}
+                    infoPopover={
+                        isInfoOpen ? (
+                            <FileInfoPopover
+                                item={item}
+                                view={view}
+                                typeLabel={typeLabel}
+                                position={infoPosition}
+                                onClose={() => setIsInfoOpen(false)}
+                            />
+                        ) : null
+                    }
+                    onSaveRename={() => void saveRename()}
+                    onCancelRename={cancelRename}
+                    onStartRename={() => {
+                        setRenameDraft(item.filename)
+                        setIsRenaming(true)
+                        selectFilenameWithoutExtension(item.filename)
+                    }}
+                    onToggleInfo={() => {
+                        if (!isInfoOpen) updateInfoPosition()
+                        setIsInfoOpen((current) => !current)
+                    }}
+                    onDownload={onDownload}
+                    onShare={onShare}
+                    onDelete={onDelete}
+                    onRestore={onRestore}
+                />
             )}
         </article>
     )
