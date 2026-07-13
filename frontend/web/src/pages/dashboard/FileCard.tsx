@@ -1,4 +1,5 @@
 import {
+    useCallback,
     useEffect,
     useRef,
     useState,
@@ -40,6 +41,11 @@ function formatSource(item: Item, view: ViewKey) {
     if (view === 'trash') return 'Trash'
     if (view === 'favourites') return 'Favourites'
     return 'My storage'
+}
+
+type InfoPopoverPosition = {
+    left: number
+    top: number
 }
 
 export function FileCard({
@@ -95,9 +101,11 @@ export function FileCard({
     const [favouriteTouched, setFavouriteTouched] = useState(false)
     const [isRenaming, setIsRenaming] = useState(false)
     const [isInfoOpen, setIsInfoOpen] = useState(false)
+    const [infoPosition, setInfoPosition] = useState<InfoPopoverPosition>({ left: 14, top: 14 })
     const [renameDraft, setRenameDraft] = useState(item.filename)
     const [renameSaving, setRenameSaving] = useState(false)
     const renameInputRef = useRef<HTMLInputElement>(null)
+    const cardRef = useRef<HTMLElement>(null)
     const canToggleFavourite = Boolean(onToggleFavourite && !isShared(item))
     const canRename = Boolean(onRename && !isShared(item) && view !== 'trash' && !pending)
     const canShare = Boolean(onShare && !isShared(item) && view !== 'trash' && !pending)
@@ -120,6 +128,32 @@ export function FileCard({
         ['File ID', item.id],
     ]
 
+    const updateInfoPosition = useCallback(() => {
+        const card = cardRef.current
+        if (!card) return
+
+        const rect = card.getBoundingClientRect()
+        const gap = 12
+        const edge = 14
+        const width = Math.min(360, window.innerWidth - edge * 2)
+        const right = rect.right + gap
+        const left = rect.left - width - gap
+        const fitsRight = right + width <= window.innerWidth - edge
+        const fitsLeft = left >= edge
+        const nextLeft = fitsRight
+            ? right
+            : fitsLeft
+              ? left
+              : Math.min(Math.max(rect.left, edge), window.innerWidth - width - edge)
+        const rawTop = fitsRight || fitsLeft ? rect.top : rect.bottom + gap
+        const maxTop = Math.max(edge, window.innerHeight - edge - 240)
+
+        setInfoPosition({
+            left: nextLeft,
+            top: Math.min(Math.max(rawTop, edge), maxTop),
+        })
+    }, [])
+
     useEffect(() => {
         if (!isInfoOpen) return
 
@@ -131,15 +165,32 @@ export function FileCard({
         return () => window.removeEventListener('keydown', handleKeyDown)
     }, [isInfoOpen])
 
+    useEffect(() => {
+        if (!isInfoOpen) return
+
+        updateInfoPosition()
+        window.addEventListener('resize', updateInfoPosition)
+        window.addEventListener('scroll', updateInfoPosition, true)
+        return () => {
+            window.removeEventListener('resize', updateInfoPosition)
+            window.removeEventListener('scroll', updateInfoPosition, true)
+        }
+    }, [isInfoOpen, updateInfoPosition])
+
     const infoPopover = isInfoOpen
         ? createPortal(
               <div
                   className="file-card__info-backdrop"
-                  onClick={() => setIsInfoOpen(false)}
+                  onClick={(e) => {
+                      e.preventDefault()
+                      e.stopPropagation()
+                      setIsInfoOpen(false)
+                  }}
                   role="presentation"
               >
                   <div
                       className="file-card__info-popover"
+                      style={{ left: infoPosition.left, top: infoPosition.top }}
                       role="dialog"
                       aria-label={`Details for ${item.filename}`}
                       onClick={(e) => e.stopPropagation()}
@@ -210,6 +261,7 @@ export function FileCard({
 
     return (
         <article
+            ref={cardRef}
             className={`file-card ${canPreview ? 'file-card--can-preview' : ''} ${
                 canToggleFavourite ? 'file-card--has-favourite' : ''
             } ${
@@ -365,6 +417,7 @@ export function FileCard({
                                 }`}
                                 onClick={(e) => {
                                     e.stopPropagation()
+                                    if (!isInfoOpen) updateInfoPosition()
                                     setIsInfoOpen((current) => !current)
                                 }}
                                 aria-label={`Show details for ${item.filename}`}

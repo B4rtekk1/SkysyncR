@@ -482,14 +482,11 @@
     position: fixed;
     z-index: 120;
     inset: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 24px 14px;
-    background: rgba(0, 0, 0, 0.18);
+    background: transparent;
 }
 
 .file-card__info-popover {
+    position: fixed;
     width: min(360px, calc(100vw - 28px));
     max-height: calc(100vh - 48px);
     overflow: auto;
