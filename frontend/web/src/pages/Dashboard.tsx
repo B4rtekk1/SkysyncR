@@ -149,6 +149,7 @@ function Dashboard() {
     const sortMenuCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
     const filterMenuRef = useRef<HTMLDivElement>(null)
     const filterMenuCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+    const searchInputRef = useRef<HTMLInputElement>(null)
     const navListRef = useRef<HTMLElement>(null)
     const navItemRefs = useRef<Partial<Record<ViewKey, HTMLButtonElement>>>({})
     const [navIndicator, setNavIndicator] = useState<NavIndicator>({
@@ -479,6 +480,33 @@ function Dashboard() {
         document.addEventListener('mousedown', onClickAway)
         return () => document.removeEventListener('mousedown', onClickAway)
     }, [closeFilterMenu, closeSortMenu])
+
+    useEffect(() => {
+        function onFindShortcut(e: KeyboardEvent) {
+            const isFindShortcut =
+                (e.ctrlKey || e.metaKey) &&
+                !e.altKey &&
+                !e.shiftKey &&
+                (e.code === 'KeyF' || e.key.toLowerCase() === 'f')
+
+            if (!isFindShortcut) return
+            if (filePreview) return
+
+            e.preventDefault()
+            e.stopPropagation()
+            setMenuOpen(false)
+            closeSortMenu()
+            closeFilterMenu()
+
+            requestAnimationFrame(() => {
+                searchInputRef.current?.focus()
+                searchInputRef.current?.select()
+            })
+        }
+
+        window.addEventListener('keydown', onFindShortcut, { capture: true })
+        return () => window.removeEventListener('keydown', onFindShortcut, { capture: true })
+    }, [closeFilterMenu, closeSortMenu, filePreview])
 
     useEffect(() => {
         return () => {
@@ -900,6 +928,7 @@ function Dashboard() {
                             <path d="M20 20l-4.35-4.35" stroke="currentColor" strokeWidth="1.6" />
                         </svg>
                         <input
+                            ref={searchInputRef}
                             type="text"
                             placeholder="Search your vault…"
                             value={query}

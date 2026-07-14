@@ -12,6 +12,16 @@ import type { FilePreviewState, Item } from '../types'
 
 const MAX_TEXT_PREVIEW_BYTES = 1024 * 1024
 
+function isEditableElement(target: EventTarget | null) {
+    if (!(target instanceof HTMLElement)) return false
+
+    return (
+        target instanceof HTMLInputElement ||
+        target instanceof HTMLTextAreaElement ||
+        target.isContentEditable
+    )
+}
+
 function previewKindFromFile(filename: string, mime: string | null): FilePreviewState['kind'] | null {
     const kind: FileKind = kindFromFile(filename, mime)
     if (kind === 'image') return 'image'
@@ -30,6 +40,7 @@ export function useFilePreview(
     const [filePreview, setFilePreview] = useState<FilePreviewState | null>(null)
     const filePreviewUrlRef = useRef<string | null>(null)
     const filePreviewRequestRef = useRef(0)
+    const findShortcutActiveRef = useRef(false)
 
     const decryptDownloadedFile = useCallback(async (item: Item): Promise<Blob> => {
         if (!privateKey) {
@@ -67,7 +78,25 @@ export function useFilePreview(
         if (!filePreview) return
 
         function onKeyDown(e: globalThis.KeyboardEvent) {
-            if (e.key === 'Escape') closeFilePreview()
+            const isFindShortcut =
+                (e.ctrlKey || e.metaKey) &&
+                !e.altKey &&
+                !e.shiftKey &&
+                (e.code === 'KeyF' || e.key.toLowerCase() === 'f')
+
+            if (isFindShortcut) {
+                findShortcutActiveRef.current = true
+                return
+            }
+
+            if (e.key !== 'Escape') return
+
+            if (isEditableElement(e.target) || findShortcutActiveRef.current) {
+                findShortcutActiveRef.current = false
+                return
+            }
+
+            closeFilePreview()
         }
 
         document.addEventListener('keydown', onKeyDown)

@@ -12,6 +12,17 @@ const MAX_ZOOM = 2.5
 const ZOOM_STEP = 0.25
 const ROTATION_STEP = 90
 
+type PdfSearchResult = {
+    pageNumber: number
+}
+
+type PdfSearchHighlight = {
+    height: number
+    left: number
+    top: number
+    width: number
+}
+
 function formatDate(iso: string) {
     return new Date(iso).toLocaleString(undefined, {
         dateStyle: 'medium',
@@ -108,6 +119,8 @@ function PdfPageThumbnail({
 export function PdfPreview({ item, url }: { item: Item; url: string }) {
     const canvasRef = useRef<HTMLCanvasElement | null>(null)
     const pageShellRef = useRef<HTMLDivElement | null>(null)
+    const searchInputRef = useRef<HTMLInputElement | null>(null)
+    const textLayerRef = useRef<HTMLDivElement | null>(null)
     const renderTaskRef = useRef<RenderTask | null>(null)
     const [pdfState, setPdfState] = useState<{
         error: string | null
@@ -121,6 +134,11 @@ export function PdfPreview({ item, url }: { item: Item; url: string }) {
     const [availableWidth, setAvailableWidth] = useState(0)
     const [rendering, setRendering] = useState(false)
     const [pagesHidden, setPagesHidden] = useState(false)
+    const [isSearchOpen, setIsSearchOpen] = useState(false)
+    const [searchQuery, setSearchQuery] = useState('')
+    const [searchResults, setSearchResults] = useState<PdfSearchResult[]>([])
+    const [activeSearchResult, setActiveSearchResult] = useState(0)
+    const [searchHighlights, setSearchHighlights] = useState<PdfSearchHighlight[]>([])
 
     const pdf = pdfState.url === url ? pdfState.pdf : null
     const error = pdfState.url === url ? pdfState.error : null
@@ -163,15 +181,88 @@ export function PdfPreview({ item, url }: { item: Item; url: string }) {
     }, [url])
 
     useEffect(() => {
+        const query = searchQuery.trim().toLocaleLowerCase()
+        if (!pdf || !query) {
+            queueMicrotask(() => {
+                setSearchResults([])
+                setActiveSearchResult(0)
+            })
+            return
+        }
+
+        let cancelled = false
+
+        void Promise.all(
+            Array.from({ length: pdf.numPages }, async (_, index) => {
+                const pageNumber = index + 1
+                const page = await pdf.getPage(pageNumber)
+                const textContent = await page.getTextContent()
+                const text = textContent.items
+                    .map((entry) => ('str' in entry ? entry.str : ''))
+                    .join(' ')
+                    .toLocaleLowerCase()
+
+                const matches: PdfSearchResult[] = []
+                let startIndex = 0
+                while (startIndex !== -1) {
+                    startIndex = text.indexOf(query, startIndex)
+                    if (startIndex !== -1) {
+                        matches.push({ pageNumber })
+                        startIndex += query.length
+                    }
+                }
+                return matches
+            }),
+        ).then((pageMatches) => {
+            if (cancelled) return
+            const results = pageMatches.flat()
+            setSearchResults(results)
+            setActiveSearchResult(0)
+            if (results[0]) setPageState({ pageNumber: results[0].pageNumber, url })
+        }).catch(() => {
+            if (!cancelled) setSearchResults([])
+        })
+
+        return () => {
+            cancelled = true
+        }
+    }, [pdf, searchQuery, url])
+
+    useEffect(() => {
+        function onFindShortcut(event: KeyboardEvent) {
+            const isFindShortcut =
+                (event.ctrlKey || event.metaKey) &&
+                !event.altKey &&
+                !event.shiftKey &&
+                (event.code === 'KeyF' || event.key.toLowerCase() === 'f')
+
+            if (!isFindShortcut) return
+
+            event.preventDefault()
+            event.stopPropagation()
+            setIsSearchOpen(true)
+            requestAnimationFrame(() => {
+                searchInputRef.current?.focus()
+                searchInputRef.current?.select()
+            })
+        }
+
+        window.addEventListener('keydown', onFindShortcut, { capture: true })
+        return () => window.removeEventListener('keydown', onFindShortcut, { capture: true })
+    }, [])
+
+    useEffect(() => {
         if (!pdf || !canvasRef.current) return
 
         let cancelled = false
+        let textLayer: pdfjs.TextLayer | null = null
         const canvas = canvasRef.current
         const context = canvas.getContext('2d')
         if (!context) return
 
         renderTaskRef.current?.cancel()
         renderTaskRef.current = null
+        setSearchHighlights([])
 
         pdf.getPage(pageNumber)
             .then((page) => {
@@ -197,6 +288,58 @@ export function PdfPreview({ item, url }: { item: Item; url: string }) {
 
                 const renderTask = page.render({ canvas, canvasContext: context, viewport })
                 renderTaskRef.current = renderTask
+
+                const searchTerm = searchQuery.trim().toLocaleLowerCase()
+                const textLayerContainer = textLayerRef.current
+                if (textLayerContainer) {
+                    textLayerContainer.replaceChildren()
+                    if (searchTerm) {
+                        void page.getTextContent().then(async (textContent) => {
+                            if (cancelled) return
+
+                            textLayer = new pdfjs.TextLayer({
+                                container: textLayerContainer,
+                                textContentSource: textContent,
+                                viewport,
+                            })
+                            textLayerContainer.style.setProperty('--total-scale-factor', String(viewport.scale))
+                            textLayerContainer.style.width = `${viewport.width}px`
+                            textLayerContainer.style.height = `${viewport.height}px`
+                            await textLayer.render()
+                            if (cancelled) return
+
+                            const layerBounds = textLayerContainer.getBoundingClientRect()
+                            const highlights: PdfSearchHighlight[] = []
+                            const highlightPadding = Math.max(1, viewport.scale * 0.75)
+                            const walker = document.createTreeWalker(textLayerContainer, NodeFilter.SHOW_TEXT)
+                            let textNode = walker.nextNode()
+
+                            while (textNode) {
+                                const text = textNode.textContent?.toLocaleLowerCase() ?? ''
+                                let matchIndex = text.indexOf(searchTerm)
+                                while (matchIndex !== -1) {
+                                    const range = document.createRange()
+                                    range.setStart(textNode, matchIndex)
+                                    range.setEnd(textNode, matchIndex + searchTerm.length)
+                                    for (const rect of range.getClientRects()) {
+                                        highlights.push({
+                                            height: rect.height + highlightPadding * 2,
+                                            left: rect.left - layerBounds.left - highlightPadding,
+                                            top: rect.top - layerBounds.top - highlightPadding,
+                                            width: rect.width + highlightPadding * 2,
+                                        })
+                                    }
+                                    matchIndex = text.indexOf(searchTerm, matchIndex + searchTerm.length)
+                                }
+                                textNode = walker.nextNode()
+                            }
+                            setSearchHighlights(highlights)
+                        }).catch(() => {
+                            if (!cancelled) setSearchHighlights([])
+                        })
+                    }
+                }
+
                 return renderTask.promise
             })
             .then(() => {
@@ -218,8 +361,9 @@ export function PdfPreview({ item, url }: { item: Item; url: string }) {
             cancelled = true
             renderTaskRef.current?.cancel()
             renderTaskRef.current = null
+            textLayer?.cancel()
         }
-    }, [availableWidth, fitWidth, pageNumber, pdf, rotation, url, zoom])
+    }, [availableWidth, fitWidth, pageNumber, pdf, rotation, searchQuery, url, zoom])
 
     const goToPage = (nextPage: number) => {
         if (!pageCount) return
@@ -235,8 +379,15 @@ export function PdfPreview({ item, url }: { item: Item; url: string }) {
         setRotation((currentRotation) => normalizeRotation(currentRotation + direction * ROTATION_STEP))
     }
 
+    const selectSearchResult = (nextIndex: number) => {
+        if (!searchResults.length) return
+        const index = (nextIndex + searchResults.length) % searchResults.length
+        setActiveSearchResult(index)
+        goToPage(searchResults[index].pageNumber)
+    }
+
     return (
-        <div className={`pdf-preview ${pagesHidden ? 'is-pages-hidden' : ''}`}>
+        <div className={`pdf-preview ${pagesHidden ? 'is-pages-hidden' : ''}`} data-pdf-preview="true">
             <div className="pdf-preview__viewer" aria-busy={loading || rendering}>
                 <div className="pdf-preview__toolbar" aria-label="PDF controls">
                     <div className="pdf-preview__page-controls">
@@ -319,6 +470,21 @@ export function PdfPreview({ item, url }: { item: Item; url: string }) {
                         <output>{fitWidth ? 'Fit' : zoomLabel}</output>
                         <button
                             type="button"
+                            className={isSearchOpen ? 'is-active' : ''}
+                            onClick={() => {
+                                setIsSearchOpen(true)
+                                requestAnimationFrame(() => searchInputRef.current?.focus())
+                            }}
+                            aria-label="Search in document"
+                            title="Search in document"
+                        >
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                                <circle cx="10.5" cy="10.5" r="5.5" stroke="currentColor" strokeWidth="1.6" />
+                                <path d="m15 15 4 4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+                            </svg>
+                        </button>
+                        <button
+                            type="button"
                             onClick={() => setPagesHidden((hidden) => !hidden)}
                             aria-controls="pdf-preview-pages-panel"
                             aria-expanded={!pagesHidden}
@@ -330,6 +496,29 @@ export function PdfPreview({ item, url }: { item: Item; url: string }) {
                                 <path d="M9 4v16M5.5 7h1M5.5 11.5h1M5.5 16h1" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
                             </svg>
                         </button>
+                        {isSearchOpen && (
+                            <div className="pdf-preview__find" role="search">
+                                <input
+                                    ref={searchInputRef}
+                                    type="search"
+                                    value={searchQuery}
+                                    onChange={(event) => setSearchQuery(event.target.value)}
+                                    onKeyDown={(event) => {
+                                        if (event.key === 'Enter') {
+                                            event.preventDefault()
+                                            selectSearchResult(activeSearchResult + (event.shiftKey ? -1 : 1))
+                                        }
+                                        if (event.key === 'Escape') setIsSearchOpen(false)
+                                    }}
+                                    placeholder="Find in document"
+                                    aria-label="Find in document"
+                                />
+                                <output>{searchQuery.trim() ? `${searchResults.length ? activeSearchResult + 1 : 0}/${searchResults.length}` : ''}</output>
+                                <button type="button" onClick={() => selectSearchResult(activeSearchResult - 1)} disabled={!searchResults.length} aria-label="Previous result">‹</button>
+                                <button type="button" onClick={() => selectSearchResult(activeSearchResult + 1)} disabled={!searchResults.length} aria-label="Next result">›</button>
+                                <button type="button" onClick={() => setIsSearchOpen(false)} aria-label="Close search">×</button>
+                            </div>
+                        )}
                     </div>
                 </div>
 
@@ -348,11 +537,27 @@ export function PdfPreview({ item, url }: { item: Item; url: string }) {
                             </a>
                         </div>
                     ) : (
-                        <canvas
-                            ref={canvasRef}
-                            className="pdf-preview__canvas"
-                            aria-label={`Page ${pageNumber} of ${item.filename}`}
-                        />
+                        <div className="pdf-preview__canvas-wrap">
+                            <canvas
+                                ref={canvasRef}
+                                className="pdf-preview__canvas"
+                                aria-label={`Page ${pageNumber} of ${item.filename}`}
+                            />
+                            <div ref={textLayerRef} className="pdf-preview__text-layer" aria-hidden="true" />
+                            <div className="pdf-preview__search-highlights" aria-hidden="true">
+                                {searchHighlights.map((highlight, index) => (
+                                    <span
+                                        key={`${highlight.left}-${highlight.top}-${index}`}
+                                        style={{
+                                            height: `${highlight.height}px`,
+                                            left: `${highlight.left}px`,
+                                            top: `${highlight.top}px`,
+                                            width: `${highlight.width}px`,
+                                        }}
+                                    />
+                                ))}
+                            </div>
+                        </div>
                     )}
                 </div>
             </div>
