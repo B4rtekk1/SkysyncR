@@ -120,6 +120,7 @@ export function PdfPreview({ item, url }: { item: Item; url: string }) {
     const [rotation, setRotation] = useState(0)
     const [availableWidth, setAvailableWidth] = useState(0)
     const [rendering, setRendering] = useState(false)
+    const [pagesHidden, setPagesHidden] = useState(false)
 
     const pdf = pdfState.url === url ? pdfState.pdf : null
     const error = pdfState.url === url ? pdfState.error : null
@@ -157,7 +158,7 @@ export function PdfPreview({ item, url }: { item: Item; url: string }) {
 
         return () => {
             cancelled = true
-            task.destroy()
+            void task.destroy()
         }
     }, [url])
 
@@ -235,7 +236,7 @@ export function PdfPreview({ item, url }: { item: Item; url: string }) {
     }
 
     return (
-        <div className="pdf-preview">
+        <div className={`pdf-preview ${pagesHidden ? 'is-pages-hidden' : ''}`}>
             <div className="pdf-preview__viewer" aria-busy={loading || rendering}>
                 <div className="pdf-preview__toolbar" aria-label="PDF controls">
                     <div className="pdf-preview__page-controls">
@@ -316,6 +317,19 @@ export function PdfPreview({ item, url }: { item: Item; url: string }) {
                             <span aria-hidden="true">+</span>
                         </button>
                         <output>{fitWidth ? 'Fit' : zoomLabel}</output>
+                        <button
+                            type="button"
+                            onClick={() => setPagesHidden((hidden) => !hidden)}
+                            aria-controls="pdf-preview-pages-panel"
+                            aria-expanded={!pagesHidden}
+                            aria-label={pagesHidden ? 'Show page thumbnails' : 'Hide page thumbnails'}
+                            title={pagesHidden ? 'Show page thumbnails' : 'Hide page thumbnails'}
+                        >
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                                <rect x="3.5" y="3.5" width="17" height="17" rx="1.5" stroke="currentColor" strokeWidth="1.5" />
+                                <path d="M9 4v16M5.5 7h1M5.5 11.5h1M5.5 16h1" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                            </svg>
+                        </button>
                     </div>
                 </div>
 
@@ -343,7 +357,7 @@ export function PdfPreview({ item, url }: { item: Item; url: string }) {
                 </div>
             </div>
 
-            <aside className="pdf-preview__side" aria-label="PDF details">
+            <aside id="pdf-preview-pages-panel" className="pdf-preview__side" aria-label="PDF details">
                 <section className="pdf-preview__pages" aria-label="Pages">
                     <div className="pdf-preview__side-head">
                         <strong>Pages</strong>

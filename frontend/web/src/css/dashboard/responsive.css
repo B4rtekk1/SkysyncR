@@ -322,6 +322,14 @@
     min-height: 520px;
 }
 
+.pdf-preview.is-pages-hidden {
+    grid-template-columns: minmax(0, 1fr);
+}
+
+.pdf-preview.is-pages-hidden .pdf-preview__side {
+    display: none;
+}
+
 .pdf-preview__viewer {
     min-width: 0;
     min-height: 0;
@@ -366,6 +374,10 @@
     font-family: var(--font-mono), monospace;
     font-size: 0.78rem;
     transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
+}
+
+.pdf-preview__toolbar button svg {
+    display: block;
 }
 
 .pdf-preview__toolbar button:hover,
@@ -1394,6 +1406,10 @@
     .pdf-preview {
         grid-template-columns: 1fr;
         grid-template-rows: minmax(0, 1fr) auto;
+    }
+
+    .pdf-preview.is-pages-hidden {
+        grid-template-rows: minmax(0, 1fr);
     }
 
     .pdf-preview__side {
