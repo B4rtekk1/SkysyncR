@@ -90,7 +90,7 @@ export async function loginUser(
   const res = await apiFetch(`${url}users/login`, {
     method: 'POST',
     headers: withDeviceHeaders({ 'Content-Type': 'application/json' }),
-    body: JSON.stringify(payload),
+    body: JSON.stringify({ ...payload, remember }),
   })
 
   if (!res.ok) {
@@ -103,7 +103,7 @@ export async function loginUser(
 }
 
 export async function verifyUser(token: string): Promise<void> {
-  const res = await apiFetch(`${url}users/verify?token=${token}`, {
+  const res = await apiFetch(`${url}users/verify?token=${encodeURIComponent(token)}`, {
     method: 'GET',
   })
 

@@ -32,6 +32,7 @@ pub struct RegisterRequest {
 pub struct LoginRequest {
     pub email: String,
     pub password: String,
+    pub remember: Option<bool>,
 }
 
 #[derive(Serialize)]
@@ -41,25 +42,13 @@ pub struct RegisterResponse {
 #[derive(Serialize)]
 pub struct LoginResponse {
     pub access_token: String,
-    pub refresh_token: String,
     pub expires_in: i64,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct RefreshRequest {
-    pub refresh_token: String,
 }
 
 #[derive(Serialize)]
 pub struct RefreshResponse {
     pub access_token: String,
-    pub refresh_token: String,
     pub expires_in: i64,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct LogoutRequest {
-    pub refresh_token: String,
 }
 
 #[derive(Debug, Deserialize)]

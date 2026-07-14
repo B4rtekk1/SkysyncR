@@ -7,8 +7,8 @@ use crate::db::refresh_tokens::{
 };
 use crate::db::users::*;
 use crate::models::users::{
-    CurrentUserResponse, LoginRequest, LoginResponse, LogoutRequest, RefreshRequest,
-    RefreshResponse, RegisterRequest, RegisterResponse,
+    CurrentUserResponse, LoginRequest, LoginResponse, RefreshResponse, RegisterRequest,
+    RegisterResponse,
 };
 use crate::state::AppState;
 use crate::utils::device::DeviceContext;
@@ -19,9 +19,11 @@ use crate::utils::validation::{
 use axum::{
     Json,
     extract::{ConnectInfo, Query, State},
-    http::HeaderMap,
+    http::{HeaderMap, HeaderValue, header},
+    response::{IntoResponse, Response},
 };
 use bcrypt::{DEFAULT_COST, hash};
+use chrono::Utc;
 use serde::Deserialize;
 use std::net::SocketAddr;
 
@@ -30,6 +32,82 @@ use crate::crypto::email::send_verification_email;
 #[derive(Deserialize)]
 pub struct VerifyParams {
     pub token: String,
+}
+
+const REFRESH_TOKEN_COOKIE: &str = "skysyncr_refresh_token";
+const REFRESH_PERSISTENCE_COOKIE: &str = "skysyncr_refresh_persistent";
+
+fn refresh_token_cookie(
+    token: &str,
+    session_expires_at: chrono::DateTime<Utc>,
+    is_dev: bool,
+    persistent: bool,
+) -> Result<HeaderValue, ApiError> {
+    let max_age = (session_expires_at - Utc::now()).num_seconds().max(0);
+    let max_age_attr = if persistent {
+        format!("; Max-Age={max_age}")
+    } else {
+        String::new()
+    };
+    let secure = if is_dev { "" } else { "; Secure" };
+    HeaderValue::from_str(&format!(
+        "{REFRESH_TOKEN_COOKIE}={token}{max_age_attr}; Path=/users; HttpOnly; SameSite=Lax{secure}"
+    ))
+    .map_err(|e| internal_error("build refresh cookie", e))
+}
+
+fn refresh_persistence_cookie(is_dev: bool, persistent: bool) -> Result<HeaderValue, ApiError> {
+    let secure = if is_dev { "" } else { "; Secure" };
+    let max_age = if persistent {
+        "; Max-Age=7776000"
+    } else {
+        "; Max-Age=0"
+    };
+
+    HeaderValue::from_str(&format!(
+        "{REFRESH_PERSISTENCE_COOKIE}=1{max_age}; Path=/users; HttpOnly; SameSite=Lax{secure}"
+    ))
+    .map_err(|e| internal_error("build refresh cookie", e))
+}
+
+fn clear_cookie(name: &str, is_dev: bool) -> HeaderValue {
+    let secure = if is_dev { "" } else { "; Secure" };
+    HeaderValue::from_str(&format!(
+        "{name}=; Max-Age=0; Path=/users; HttpOnly; SameSite=Lax{secure}"
+    ))
+    .expect("static clear cookie is valid")
+}
+
+fn refresh_token_from_cookie(headers: &HeaderMap) -> Result<String, ApiError> {
+    for value in headers.get_all(header::COOKIE) {
+        let Ok(raw) = value.to_str() else {
+            continue;
+        };
+
+        for cookie in raw.split(';') {
+            let cookie = cookie.trim();
+            if let Some(token) = cookie.strip_prefix(&format!("{REFRESH_TOKEN_COOKIE}=")) {
+                if token.is_empty() || token.len() > 128 {
+                    return Err(ApiError::BadRequest("Invalid refresh token".into()));
+                }
+                return Ok(token.to_string());
+            }
+        }
+    }
+
+    Err(ApiError::Unauthorized("Missing refresh token".into()))
+}
+
+fn has_cookie(headers: &HeaderMap, name: &str) -> bool {
+    let prefix = format!("{name}=");
+
+    headers.get_all(header::COOKIE).iter().any(|value| {
+        value.to_str().is_ok_and(|raw| {
+            raw.split(';')
+                .map(str::trim)
+                .any(|cookie| cookie.starts_with(&prefix))
+        })
+    })
 }
 
 pub async fn current_user(
@@ -114,7 +192,7 @@ async fn issue_token_pair(
     state: &AppState,
     user_id: uuid::Uuid,
     device: &DeviceContext,
-) -> Result<(String, String, i64), ApiError> {
+) -> Result<(String, String, i64, chrono::DateTime<Utc>), ApiError> {
     let refresh_token = generate_refresh_token();
     let session_expires_at = create_refresh_token(&state.db_pool, user_id, &refresh_token, device)
         .await
@@ -128,7 +206,7 @@ async fn issue_token_pair(
     )
     .map_err(|e| internal_error("generate access token", e))?;
 
-    Ok((access_token, refresh_token, expires_in))
+    Ok((access_token, refresh_token, expires_in, session_expires_at))
 }
 
 pub async fn login_user(
@@ -136,7 +214,7 @@ pub async fn login_user(
     headers: HeaderMap,
     State(state): State<AppState>,
     Json(payload): Json<LoginRequest>,
-) -> Result<Json<LoginResponse>, ApiError> {
+) -> Result<Response, ApiError> {
     let device = DeviceContext::from_headers(&headers, Some(peer.ip()))?;
     let email = payload.email.trim().to_lowercase();
     validate_email(&email).map_err(|msg| ApiError::BadRequest(msg.into()))?;
@@ -189,32 +267,47 @@ pub async fn login_user(
         .await
         .map_err(|e| internal_error("reset failed login", e))?;
 
-    let (access_token, refresh_token, expires_in) =
+    let (access_token, refresh_token, expires_in, session_expires_at) =
         issue_token_pair(&state, user_id, &device).await?;
 
     update_last_login(&state.db_pool, &email)
         .await
         .map_err(|e| internal_error("update last login", e))?;
 
-    Ok(Json(LoginResponse {
-        access_token,
-        refresh_token,
-        expires_in,
-    }))
+    let mut response_headers = HeaderMap::new();
+    let persistent = payload.remember.unwrap_or(true);
+    response_headers.append(
+        header::SET_COOKIE,
+        refresh_token_cookie(
+            &refresh_token,
+            session_expires_at,
+            state.config.is_dev,
+            persistent,
+        )?,
+    );
+    response_headers.append(
+        header::SET_COOKIE,
+        refresh_persistence_cookie(state.config.is_dev, persistent)?,
+    );
+
+    Ok((
+        response_headers,
+        Json(LoginResponse {
+            access_token,
+            expires_in,
+        }),
+    )
+        .into_response())
 }
 
 pub async fn refresh_tokens(
     ConnectInfo(peer): ConnectInfo<SocketAddr>,
     headers: HeaderMap,
     State(state): State<AppState>,
-    Json(payload): Json<RefreshRequest>,
-) -> Result<Json<RefreshResponse>, ApiError> {
-    if payload.refresh_token.is_empty() || payload.refresh_token.len() > 128 {
-        return Err(ApiError::BadRequest("Invalid refresh token".into()));
-    }
-
+) -> Result<Response, ApiError> {
+    let refresh_token = refresh_token_from_cookie(&headers)?;
     let device = DeviceContext::from_headers(&headers, Some(peer.ip()))?;
-    let stored = require_refresh_token(&state, &payload.refresh_token, &device).await?;
+    let stored = require_refresh_token(&state, &refresh_token, &device).await?;
 
     let (access_token, expires_in) = generate_access_token_capped(
         &stored.user_id.to_string(),
@@ -225,6 +318,7 @@ pub async fn refresh_tokens(
     .map_err(|e| internal_error("generate access token", e))?;
 
     let new_refresh_token = generate_refresh_token();
+    let persistent = has_cookie(&headers, REFRESH_PERSISTENCE_COOKIE);
     rotate_refresh_token(
         &state.db_pool,
         stored.id,
@@ -236,45 +330,85 @@ pub async fn refresh_tokens(
     .await
     .map_err(|e| internal_error("rotate refresh token", e))?;
 
-    Ok(Json(RefreshResponse {
-        access_token,
-        refresh_token: new_refresh_token,
-        expires_in,
-    }))
+    let mut response_headers = HeaderMap::new();
+    response_headers.append(
+        header::SET_COOKIE,
+        refresh_token_cookie(
+            &new_refresh_token,
+            stored.session_expires_at,
+            state.config.is_dev,
+            persistent,
+        )?,
+    );
+    response_headers.append(
+        header::SET_COOKIE,
+        refresh_persistence_cookie(state.config.is_dev, persistent)?,
+    );
+
+    Ok((
+        response_headers,
+        Json(RefreshResponse {
+            access_token,
+            expires_in,
+        }),
+    )
+        .into_response())
 }
 
 pub async fn logout_user(
     ConnectInfo(peer): ConnectInfo<SocketAddr>,
     headers: HeaderMap,
     State(state): State<AppState>,
-    Json(payload): Json<LogoutRequest>,
-) -> Result<&'static str, ApiError> {
+) -> Result<Response, ApiError> {
     let device = DeviceContext::from_headers(&headers, Some(peer.ip()))?;
 
-    if let Ok(stored) = require_refresh_token(&state, &payload.refresh_token, &device).await {
+    if let Ok(refresh_token) = refresh_token_from_cookie(&headers)
+        && let Ok(stored) = require_refresh_token(&state, &refresh_token, &device).await
+    {
         revoke_refresh_token(&state.db_pool, stored.id)
             .await
             .map_err(|e| internal_error("revoke refresh token", e))?;
     }
 
-    Ok("Logged out")
+    let mut response_headers = HeaderMap::new();
+    response_headers.append(
+        header::SET_COOKIE,
+        clear_cookie(REFRESH_TOKEN_COOKIE, state.config.is_dev),
+    );
+    response_headers.append(
+        header::SET_COOKIE,
+        clear_cookie(REFRESH_PERSISTENCE_COOKIE, state.config.is_dev),
+    );
+
+    Ok((response_headers, "Logged out").into_response())
 }
 
 pub async fn logout_all_sessions(
     ConnectInfo(peer): ConnectInfo<SocketAddr>,
     headers: HeaderMap,
     State(state): State<AppState>,
-    Json(payload): Json<LogoutRequest>,
-) -> Result<&'static str, ApiError> {
+) -> Result<Response, ApiError> {
     let device = DeviceContext::from_headers(&headers, Some(peer.ip()))?;
 
-    if let Ok(stored) = require_refresh_token(&state, &payload.refresh_token, &device).await {
+    if let Ok(refresh_token) = refresh_token_from_cookie(&headers)
+        && let Ok(stored) = require_refresh_token(&state, &refresh_token, &device).await
+    {
         revoke_all_user_refresh_tokens(&state.db_pool, stored.user_id)
             .await
             .map_err(|e| internal_error("revoke all refresh tokens", e))?;
     }
 
-    Ok("All sessions revoked")
+    let mut response_headers = HeaderMap::new();
+    response_headers.append(
+        header::SET_COOKIE,
+        clear_cookie(REFRESH_TOKEN_COOKIE, state.config.is_dev),
+    );
+    response_headers.append(
+        header::SET_COOKIE,
+        clear_cookie(REFRESH_PERSISTENCE_COOKIE, state.config.is_dev),
+    );
+
+    Ok((response_headers, "All sessions revoked").into_response())
 }
 
 pub async fn verify_email(

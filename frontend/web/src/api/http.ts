@@ -17,7 +17,7 @@ export async function apiFetch(
   init?: RequestInit,
 ): Promise<Response> {
   try {
-    return await fetch(input, init)
+    return await fetch(input, { credentials: 'include', ...init })
   } catch (err) {
     if (err instanceof TypeError) {
       throw new NetworkError()

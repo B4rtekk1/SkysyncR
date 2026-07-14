@@ -3,14 +3,14 @@ use crate::routes::folders::folders_routes;
 use crate::routes::storage::storage_routes;
 use crate::routes::users::{auth_limited_routes, users_routes};
 use crate::state::{AppConfig, AppState};
-use axum::http::{HeaderValue, Method};
+use axum::http::{HeaderValue, Method, header};
 use axum::routing::get;
 use axum::{Json, Router};
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 use std::net::SocketAddr;
 use tower_governor::governor::GovernorConfigBuilder;
-use tower_http::cors::{AllowOrigin, Any, CorsLayer};
+use tower_http::cors::{AllowOrigin, CorsLayer};
 use tower_http::set_header::SetResponseHeaderLayer;
 
 #[derive(Serialize, Deserialize)]
@@ -59,8 +59,13 @@ fn dev_cors_layer() -> CorsLayer {
             Method::DELETE,
             Method::OPTIONS,
         ])
-        .allow_headers(Any)
-        .expose_headers(Any)
+        .allow_headers([
+            header::AUTHORIZATION,
+            header::CONTENT_TYPE,
+            header::HeaderName::from_static("x-device-id"),
+        ])
+        .expose_headers([header::CONTENT_TYPE])
+        .allow_credentials(true)
 }
 
 fn security_headers_layer() -> SetResponseHeaderLayer<HeaderValue> {

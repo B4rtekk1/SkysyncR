@@ -403,7 +403,7 @@ function SettingsModal({ onClose, onSave }: SettingsModalProps) {
                                     <h2>Access</h2>
                                 </div>
                             </div>
-                            <p className="settings-muted">Sign out on this device and remove active tokens from local storage.</p>
+                            <p className="settings-muted">Sign out on this device and end the active session.</p>
                             <button className="btn btn--outline" type="button" onClick={signOut}>
                                 Sign out
                             </button>

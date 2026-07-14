@@ -12,71 +12,46 @@ const REFRESH_WAIT_TIMEOUT_MS = 12_000
 
 export interface TokenPair {
   access_token: string
-  refresh_token: string
   expires_in: number
 }
-
-type StorageKind = 'local' | 'session'
 
 type RefreshLock = {
   owner: string
   expiresAt: number
 }
 
+let accessToken: string | null = null
+let accessTokenExpiresAt: number | null = null
+
 function randomId(): string {
   return crypto.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`
 }
 
-function getActiveStorage(): Storage | null {
-  if (localStorage.getItem(ACCESS_TOKEN_KEY)) return localStorage
-  if (sessionStorage.getItem(ACCESS_TOKEN_KEY)) return sessionStorage
-  return null
-}
-
-function storageFor(kind: StorageKind): Storage {
-  return kind === 'local' ? localStorage : sessionStorage
-}
-
-export function saveTokens(tokens: TokenPair, remember: boolean) {
-  const storage = storageFor(remember ? 'local' : 'session')
-  const other = storageFor(remember ? 'session' : 'local')
-
-  other.removeItem(ACCESS_TOKEN_KEY)
-  other.removeItem(REFRESH_TOKEN_KEY)
-  other.removeItem(TOKEN_EXPIRES_AT_KEY)
-
-  const expiresAt = Date.now() + tokens.expires_in * 1000
-  storage.setItem(ACCESS_TOKEN_KEY, tokens.access_token)
-  storage.setItem(REFRESH_TOKEN_KEY, tokens.refresh_token)
-  storage.setItem(TOKEN_EXPIRES_AT_KEY, String(expiresAt))
-}
-
-export function clearTokens() {
+function clearLegacyStoredTokens() {
   for (const key of [ACCESS_TOKEN_KEY, REFRESH_TOKEN_KEY, TOKEN_EXPIRES_AT_KEY]) {
     localStorage.removeItem(key)
     sessionStorage.removeItem(key)
   }
 }
 
-export function getAccessToken(): string | null {
-  return (
-    localStorage.getItem(ACCESS_TOKEN_KEY) ??
-    sessionStorage.getItem(ACCESS_TOKEN_KEY)
-  )
+export function saveTokens(tokens: TokenPair, _remember?: boolean) {
+  accessToken = tokens.access_token
+  accessTokenExpiresAt = Date.now() + tokens.expires_in * 1000
+  clearLegacyStoredTokens()
 }
 
-function getRefreshToken(): string | null {
-  return (
-    localStorage.getItem(REFRESH_TOKEN_KEY) ??
-    sessionStorage.getItem(REFRESH_TOKEN_KEY)
-  )
+export function clearTokens() {
+  accessToken = null
+  accessTokenExpiresAt = null
+  clearLegacyStoredTokens()
+}
+
+export function getAccessToken(): string | null {
+  return accessToken
 }
 
 function getTokenExpiresAt(): number | null {
-  const raw =
-    localStorage.getItem(TOKEN_EXPIRES_AT_KEY) ??
-    sessionStorage.getItem(TOKEN_EXPIRES_AT_KEY)
-  return raw ? Number(raw) : null
+  return accessTokenExpiresAt
 }
 
 function isAccessTokenExpiringSoon(bufferMs = 60_000): boolean {
@@ -88,18 +63,15 @@ function isAccessTokenExpiringSoon(bufferMs = 60_000): boolean {
 let refreshPromise: Promise<string | null> | null = null
 
 function persistTokens(tokens: TokenPair) {
-  const storage = getActiveStorage() ?? localStorage
-  const expiresAt = Date.now() + tokens.expires_in * 1000
-  storage.setItem(ACCESS_TOKEN_KEY, tokens.access_token)
-  storage.setItem(REFRESH_TOKEN_KEY, tokens.refresh_token)
-  storage.setItem(TOKEN_EXPIRES_AT_KEY, String(expiresAt))
+  accessToken = tokens.access_token
+  accessTokenExpiresAt = Date.now() + tokens.expires_in * 1000
+  clearLegacyStoredTokens()
 }
 
-async function requestTokenRefresh(refreshToken: string): Promise<string | null> {
+async function requestTokenRefresh(): Promise<string | null> {
   const res = await apiFetch(`${API_BASE}users/refresh`, {
     method: 'POST',
-    headers: withDeviceHeaders({ 'Content-Type': 'application/json' }),
-    body: JSON.stringify({ refresh_token: refreshToken }),
+    headers: withDeviceHeaders(),
   })
 
   if (!res.ok) {
@@ -149,51 +121,40 @@ function releaseRefreshLock(owner: string) {
   }
 }
 
-function shouldCoordinateRefresh(refreshToken: string): boolean {
-  return localStorage.getItem(REFRESH_TOKEN_KEY) === refreshToken
-}
-
-function waitForRefreshedToken(previousRefreshToken: string): Promise<string | null> {
+function waitForRefreshLock(): Promise<void> {
   return new Promise((resolve) => {
     let done = false
 
-    function finish(token: string | null) {
+    function finish() {
       if (done) return
       done = true
       window.removeEventListener('storage', check)
       window.clearInterval(interval)
       window.clearTimeout(timeout)
-      resolve(token)
+      resolve()
     }
 
     function check() {
-      const current = getAccessToken()
-      const refreshToken = getRefreshToken()
-      if (current && refreshToken !== previousRefreshToken && !isAccessTokenExpiringSoon()) {
-        finish(current)
+      const lock = readRefreshLock()
+      if (!lock || lock.expiresAt <= Date.now()) {
+        finish()
       }
     }
 
     const interval = window.setInterval(check, 100)
-    const timeout = window.setTimeout(() => finish(null), REFRESH_WAIT_TIMEOUT_MS)
+    const timeout = window.setTimeout(finish, REFRESH_WAIT_TIMEOUT_MS)
     window.addEventListener('storage', check)
     check()
   })
 }
 
 async function refreshAccessToken(): Promise<string | null> {
-  let refreshToken = getRefreshToken()
-  if (!refreshToken) return null
-
-  if (!shouldCoordinateRefresh(refreshToken)) {
-    return requestTokenRefresh(refreshToken)
-  }
-
   const owner = randomId()
 
   while (!tryAcquireRefreshLock(owner)) {
-    const token = await waitForRefreshedToken(refreshToken)
-    if (token) return token
+    await waitForRefreshLock()
+    const current = getAccessToken()
+    if (current && !isAccessTokenExpiringSoon()) return current
   }
 
   try {
@@ -202,8 +163,7 @@ async function refreshAccessToken(): Promise<string | null> {
       return current
     }
 
-    refreshToken = getRefreshToken()
-    return refreshToken ? requestTokenRefresh(refreshToken) : null
+    return requestTokenRefresh()
   } finally {
     releaseRefreshLock(owner)
   }
@@ -233,17 +193,13 @@ export async function authHeader(): Promise<HeadersInit> {
 }
 
 export async function logout(): Promise<void> {
-  const refreshToken = getRefreshToken()
-  if (refreshToken) {
-    try {
-      await apiFetch(`${API_BASE}users/logout`, {
-        method: 'POST',
-        headers: withDeviceHeaders({ 'Content-Type': 'application/json' }),
-        body: JSON.stringify({ refresh_token: refreshToken }),
-      })
-    } catch {
-      // best-effort
-    }
+  try {
+    await apiFetch(`${API_BASE}users/logout`, {
+      method: 'POST',
+      headers: withDeviceHeaders(),
+    })
+  } catch {
+    // best-effort
   }
   clearTokens()
 }
@@ -266,7 +222,7 @@ export async function authenticatedFetch(
 
   const response = await apiFetch(input, { ...init, headers })
 
-  if (response.status === 401 && getRefreshToken()) {
+  if (response.status === 401) {
     const newToken = await refreshAccessToken()
     if (newToken) {
       headers.set('Authorization', `Bearer ${newToken}`)
@@ -276,3 +232,5 @@ export async function authenticatedFetch(
 
   return response
 }
+
+clearLegacyStoredTokens()
