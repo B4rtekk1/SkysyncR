@@ -150,15 +150,15 @@ export async function getStorageQuota(): Promise<StorageQuota> {
 
 export async function uploadFile(params: {
     encryptedFile: Blob
-    originalFilename: string
+    storedFilename: string
     originalMimeType: string | null
     folderId?: string
     wrappedKey: ArrayBuffer
     encryptionNonce: ArrayBuffer
 }): Promise<ApiFile> {
     const form = new FormData()
-    form.append('file', params.encryptedFile, params.originalFilename)
-    form.append('filename', params.originalFilename)
+    form.append('file', params.encryptedFile, 'encrypted.bin')
+    form.append('filename', params.storedFilename)
     if (params.originalMimeType) form.append('mime_type', params.originalMimeType)
     if (params.folderId) form.append('folder_id', params.folderId)
     form.append('encrypted_key', arrayBufferToBase64(params.wrappedKey))

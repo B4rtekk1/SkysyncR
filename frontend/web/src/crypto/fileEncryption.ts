@@ -51,7 +51,7 @@ export async function unwrapFileKeyForUser(
         rawKey,
         { name: 'AES-GCM', length: 256 },
         false,
-        ['decrypt'],
+        ['encrypt', 'decrypt'],
     )
 }
 
@@ -88,6 +88,30 @@ export async function encryptText(
 
 export function encryptedTextEnvelope(ciphertext: ArrayBuffer, nonce: Uint8Array): string {
     return `aes-gcm:v1:${arrayBufferToBase64(nonce)}:${arrayBufferToBase64(ciphertext)}`
+}
+
+export async function encryptTextEnvelope(value: string, key: CryptoKey): Promise<string> {
+    const { ciphertext, nonce } = await encryptText(value, key)
+    return encryptedTextEnvelope(ciphertext, nonce)
+}
+
+export function isEncryptedTextEnvelope(value: string | null | undefined): value is string {
+    return typeof value === 'string' && value.startsWith('aes-gcm:v1:')
+}
+
+export async function decryptTextEnvelope(value: string, key: CryptoKey): Promise<string> {
+    const [, , nonce, ciphertext] = value.split(':')
+    if (!nonce || !ciphertext) {
+        throw new Error('Invalid encrypted text envelope')
+    }
+
+    const plaintext = await crypto.subtle.decrypt(
+        { name: 'AES-GCM', iv: base64ToBuffer(nonce) as BufferSource },
+        key,
+        base64ToBuffer(ciphertext) as BufferSource,
+    )
+
+    return new TextDecoder().decode(plaintext)
 }
 
 function arrayBufferToBase64(buffer: ArrayBuffer | Uint8Array): string {

@@ -8,7 +8,7 @@ import React, {
     type ChangeEvent,
     type DragEvent,
 } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import '../App.css'
 import '../css/Dashbord.css'
 import ThemeToggle from '../components/ThemeToggle'
@@ -20,6 +20,7 @@ import {
     listTrash,
     listSharedFilesWithMe,
     getStorageQuota,
+    renameFile,
     shareFolder,
     updateFileNote,
     type ApiFile,
@@ -27,8 +28,8 @@ import {
     type StorageQuota,
 } from '../api/files'
 import { logout } from '../api/auth'
-import { getCurrentUser } from '../api/users'
-import { loadActivePrivateKey } from '../crypto/storage'
+import { getUnlockedVaultSession } from '../api/session'
+import { encryptTextEnvelope, isEncryptedTextEnvelope, unwrapFileKeyForUser } from '../crypto/fileEncryption'
 import { EmptyPane } from './dashboard/EmptyPane'
 import { FileCard } from './dashboard/FileCard'
 import { FileFilterModal } from './dashboard/FileFilterModal'
@@ -83,9 +84,31 @@ import { useLayoutModeSwitch } from './dashboard/hooks/useLayoutModeSwitch'
 import { useNavOrdering } from './dashboard/hooks/useNavOrdering'
 import { useSidebarState } from './dashboard/hooks/useSidebarState'
 import { useStorageSummary } from './dashboard/hooks/useStorageSummary'
+import { decryptFilesMetadata } from './dashboard/encryptedMetadata'
 import type { FileFilters, FileSortKey, FileTypeFilterKey, FileVisibilityFilterKey, Item, NavIndicator, ShareableItem, ViewKey } from './dashboard/types'
 
+async function migratePlaintextFileMetadata(files: ApiFile[], privateKey: CryptoKey) {
+    await Promise.allSettled(
+        files.map(async (file) => {
+            const shouldEncryptFilename = !isEncryptedTextEnvelope(file.filename)
+            const shouldEncryptNote = Boolean(file.note) && !isEncryptedTextEnvelope(file.note)
+            if (!shouldEncryptFilename && !shouldEncryptNote) return
+
+            const fileKey = await unwrapFileKeyForUser(file.encrypted_key, privateKey)
+            await Promise.all([
+                shouldEncryptFilename
+                    ? renameFile(file.id, await encryptTextEnvelope(file.filename, fileKey))
+                    : Promise.resolve(),
+                shouldEncryptNote && file.note
+                    ? updateFileNote(file.id, await encryptTextEnvelope(file.note, fileKey))
+                    : Promise.resolve(),
+            ])
+        }),
+    )
+}
+
 function Dashboard() {
+    const navigate = useNavigate()
     const [view, setView] = useState<ViewKey>(() => loadActiveView())
     const [items, setItems] = useState<Item[]>([])
     const [folders, setFolders] = useState<ApiFolder[]>([])
@@ -177,13 +200,13 @@ function Dashboard() {
             prev.map((current) => {
                 if (current.id !== updated.id) return current
 
-                return { ...updated, filename: current.filename, mime_type: current.mime_type }
+                return { ...updated, filename: current.filename, mime_type: current.mime_type, note: current.note }
             }),
         )
         setItems((prev) =>
             prev.map((current) =>
                 current.id === updated.id
-                    ? { ...updated, filename: current.filename, mime_type: current.mime_type }
+                    ? { ...updated, filename: current.filename, mime_type: current.mime_type, note: current.note }
                     : current,
             ),
         )
@@ -241,12 +264,14 @@ function Dashboard() {
     const refreshQuota = useCallback(async () => {
         try {
             const [quotaData, fileData] = await Promise.all([getStorageQuota(), listFiles()])
+            const visibleFileData = privateKey ? await decryptFilesMetadata(fileData, privateKey) : fileData
+            if (privateKey) void migratePlaintextFileMetadata(fileData, privateKey)
             setQuota(quotaData)
-            setStorageItems(applyLocalFileMetadata(fileData))
+            setStorageItems(applyLocalFileMetadata(visibleFileData))
         } catch {
             setQuota(null)
         }
-    }, [])
+    }, [privateKey])
 
     const { ingestFiles } = useFileUpload({
         publicKey,
@@ -271,6 +296,7 @@ function Dashboard() {
         setShareLoading,
         setFavouriteIds,
         refreshQuota,
+        privateKey,
     })
 
     useEffect(() => {
@@ -280,26 +306,29 @@ function Dashboard() {
 
     useEffect(() => {
         let active = true
-        getCurrentUser()
-            .then((user) => {
+        getUnlockedVaultSession()
+            .then((session) => {
                 if (!active) return
-                setPublicKey(user.public_key)
-                return loadActivePrivateKey(user.id)
-            })
-            .then((key) => {
-                if (active) setPrivateKey(key ?? null)
+                if (!session) {
+                    navigate('/login', { replace: true })
+                    return
+                }
+
+                setPublicKey(session.user.public_key)
+                setPrivateKey(session.privateKey)
             })
             .catch(() => {
                 if (active) {
                     setPublicKey(null)
                     setPrivateKey(null)
+                    navigate('/login', { replace: true })
                 }
             })
 
         return () => {
             active = false
         }
-    }, [])
+    }, [navigate])
 
     useLayoutEffect(() => {
         function updateNavIndicator() {
@@ -368,6 +397,8 @@ function Dashboard() {
                     return
                 }
 
+                if (!privateKey) return
+
                 let fileData: ApiFile[]
                 let folderData: ApiFolder[] = []
 
@@ -390,7 +421,9 @@ function Dashboard() {
                 }
 
                 if (active) {
-                    const withLocalMetadata = applyLocalFileMetadata(fileData)
+                    const visibleFileData = await decryptFilesMetadata(fileData, privateKey)
+                    if (view !== 'shared') void migratePlaintextFileMetadata(fileData, privateKey)
+                    const withLocalMetadata = applyLocalFileMetadata(visibleFileData)
                     setItems(applySavedOrder(withLocalMetadata, view))
                     setFolders(folderData)
                     if (view === 'all' || view === 'favourites') {
@@ -409,7 +442,7 @@ function Dashboard() {
         return () => {
             active = false
         }
-    }, [activeFolderId, view])
+    }, [activeFolderId, privateKey, view])
 
     const closeSortMenu = useCallback(() => {
         if (!sortMenuOpen || sortMenuClosing) return
@@ -481,18 +514,24 @@ function Dashboard() {
         setNoteSaving(true)
         setError(null)
         try {
-            const updated = await updateFileNote(item.id, note)
+            if (!privateKey) {
+                throw new Error('Private key is locked. Sign in again to save encrypted notes.')
+            }
+
+            const fileKey = await unwrapFileKeyForUser(item.encrypted_key, privateKey)
+            const encryptedNote = note.trim() ? await encryptTextEnvelope(note, fileKey) : ''
+            const updated = await updateFileNote(item.id, encryptedNote)
             setItems((prev) =>
                 prev.map((current) =>
                     current.id === item.id
-                        ? { ...updated, filename: current.filename, mime_type: current.mime_type }
+                        ? { ...updated, filename: current.filename, mime_type: current.mime_type, note: note.trim() ? note : null }
                         : current,
                 ),
             )
             setStorageItems((prev) =>
                 prev.map((current) =>
                     current.id === item.id
-                        ? { ...updated, filename: current.filename, mime_type: current.mime_type }
+                        ? { ...updated, filename: current.filename, mime_type: current.mime_type, note: note.trim() ? note : null }
                         : current,
                 ),
             )

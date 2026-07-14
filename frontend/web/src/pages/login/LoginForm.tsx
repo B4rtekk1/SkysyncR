@@ -1,6 +1,7 @@
 import { type SubmitEvent, useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { getValidAccessToken } from '../../api/auth.ts'
+import { clearTokens } from '../../api/auth.ts'
+import { getUnlockedVaultSession } from '../../api/session.ts'
 import { ApiRequestError, getCurrentUser, loginUser } from '../../api/users.ts'
 import { isNetworkError } from '../../api/http.ts'
 import { decryptPrivateKey } from '../../crypto/keys'
@@ -32,9 +33,9 @@ function LoginForm() {
   useEffect(() => {
     let active = true
 
-    getValidAccessToken()
-      .then((token) => {
-        if (active && token) {
+    getUnlockedVaultSession()
+      .then((session) => {
+        if (active && session) {
           navigate('/dashboard', { replace: true })
         }
       })
@@ -166,6 +167,7 @@ function LoginForm() {
       const encryptedPrivateKey = await loadEncryptedPrivateKey(user.id)
 
       if (!encryptedPrivateKey) {
+        clearTokens()
         setError({
           title: 'This device cannot unlock the vault',
           message: 'The encrypted private key is not stored in this browser.',
@@ -178,6 +180,7 @@ function LoginForm() {
       try {
         privateKey = await decryptPrivateKey(encryptedPrivateKey, password)
       } catch {
+        clearTokens()
         setError({
           title: 'Saved key could not be unlocked',
           message: 'The local private key does not match this password or is corrupted.',

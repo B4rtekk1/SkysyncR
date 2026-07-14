@@ -2,10 +2,10 @@ import { useCallback, type Dispatch, type SetStateAction } from 'react'
 import { uploadFile, type ApiFile } from '../../../api/files'
 import {
     encryptFile,
+    encryptTextEnvelope,
     generateFileKey,
     wrapFileKeyForUser,
 } from '../../../crypto/fileEncryption'
-import { saveLocalFileMetadata } from '../storage'
 import type { Item } from '../types'
 
 type UseFileUploadOptions = {
@@ -65,13 +65,14 @@ export function useFileUpload({
                 try {
                     const key = await generateFileKey()
                     const { ciphertext, nonce } = await encryptFile(file, key)
+                    const encryptedFilename = await encryptTextEnvelope(file.name, key)
                     const wrappedKey = await wrapFileKeyForUser(key, publicKey)
                     const originalMimeType = file.type || null
                     const encryptedBlob = new Blob([ciphertext], { type: originalMimeType || 'application/octet-stream' })
 
                     const saved = await uploadFile({
                         encryptedFile: encryptedBlob,
-                        originalFilename: file.name,
+                        storedFilename: encryptedFilename,
                         originalMimeType,
                         folderId: folderId ?? undefined,
                         wrappedKey,
@@ -83,10 +84,6 @@ export function useFileUpload({
                         filename: file.name,
                         mime_type: file.type || null,
                     }
-                    saveLocalFileMetadata(saved.id, {
-                        filename: file.name,
-                        mime_type: file.type || null,
-                    })
                     setItems((prev) => prev.map((i) => (i.id === tempId ? visibleSaved : i)))
                 } catch (e) {
                     setItems((prev) => prev.filter((i) => i.id !== tempId))

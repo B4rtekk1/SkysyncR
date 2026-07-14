@@ -5,7 +5,7 @@ import Login from './pages/Login'
 import Register from './pages/Register'
 import VerifyEmail from "./pages/VerifyUser";
 import Dashboard from './pages/Dashboard'
-import {getValidAccessToken} from './api/auth'
+import {getUnlockedVaultSession} from './api/session'
 
 function LandingRoute() {
     const navigate = useNavigate()
@@ -13,9 +13,9 @@ function LandingRoute() {
     useEffect(() => {
         let active = true
 
-        getValidAccessToken()
-            .then((token) => {
-                if (active && token) {
+        getUnlockedVaultSession()
+            .then((session) => {
+                if (active && session) {
                     navigate('/dashboard', {replace: true})
                 }
             })

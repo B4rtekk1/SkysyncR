@@ -6,7 +6,8 @@ import {
     softDeleteFile,
     type ApiFile,
 } from '../../../api/files'
-import { saveFavouriteIds, saveLocalFileMetadata } from '../storage'
+import { encryptTextEnvelope, unwrapFileKeyForUser } from '../../../crypto/fileEncryption'
+import { saveFavouriteIds } from '../storage'
 import type { Item, ShareableItem } from '../types'
 
 type UseFileActionsOptions = {
@@ -17,6 +18,7 @@ type UseFileActionsOptions = {
     setShareLoading: Dispatch<SetStateAction<boolean>>
     setFavouriteIds: Dispatch<SetStateAction<Set<string>>>
     refreshQuota: () => Promise<void>
+    privateKey: CryptoKey | null
 }
 
 export function useFileActions({
@@ -27,6 +29,7 @@ export function useFileActions({
     setShareLoading,
     setFavouriteIds,
     refreshQuota,
+    privateKey,
 }: UseFileActionsOptions) {
     const handleDelete = useCallback(
         async (id: string) => {
@@ -61,6 +64,12 @@ export function useFileActions({
             if (!nextName || nextName === previousName) return
 
             setError(null)
+
+            if (!privateKey) {
+                setError('Private key is locked. Sign in again to rename encrypted files.')
+                return
+            }
+
             setItems((prev) =>
                 prev.map((current) =>
                     current.id === item.id ? { ...current, filename: nextName, updated_at: new Date().toISOString() } : current,
@@ -68,12 +77,10 @@ export function useFileActions({
             )
 
             try {
-                const renamed = await renameFile(item.id, nextName)
-                const visibleRenamed = { ...renamed, filename: nextName, mime_type: item.mime_type }
-                saveLocalFileMetadata(item.id, {
-                    filename: nextName,
-                    mime_type: item.mime_type,
-                })
+                const fileKey = await unwrapFileKeyForUser(item.encrypted_key, privateKey)
+                const encryptedName = await encryptTextEnvelope(nextName, fileKey)
+                const renamed = await renameFile(item.id, encryptedName)
+                const visibleRenamed = { ...renamed, filename: nextName, mime_type: item.mime_type, note: item.note }
                 setItems((prev) => prev.map((current) => (current.id === item.id ? visibleRenamed : current)))
                 setStorageItems((prev) => prev.map((current) => (current.id === item.id ? visibleRenamed : current)))
             } catch (e) {
@@ -86,7 +93,7 @@ export function useFileActions({
                 throw e
             }
         },
-        [setError, setItems, setStorageItems],
+        [privateKey, setError, setItems, setStorageItems],
     )
 
     const handleShare = useCallback(
@@ -103,7 +110,7 @@ export function useFileActions({
             setError(null)
             try {
                 const shared = await shareFile(item.id, isPublic)
-                const visibleShared = { ...shared, filename: item.filename, mime_type: item.mime_type }
+                const visibleShared = { ...shared, filename: item.filename, mime_type: item.mime_type, note: item.note }
                 setItems((prev) => prev.map((current) => (current.id === item.id ? visibleShared : current)))
                 setStorageItems((prev) => prev.map((current) => (current.id === item.id ? visibleShared : current)))
                 setShareItem(visibleShared)

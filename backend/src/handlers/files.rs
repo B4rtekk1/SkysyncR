@@ -494,7 +494,7 @@ fn validate_upload_metadata(field_name: &str, value: &str) -> Result<String, Api
     if trimmed.is_empty() {
         return Err(ApiError::BadRequest(format!("Missing {field_name}")));
     }
-    let max_len = if field_name == "filename" { 512 } else { 255 };
+    let max_len = if field_name == "filename" { 4096 } else { 255 };
     if trimmed.len() > max_len {
         return Err(ApiError::BadRequest(format!("{field_name} is too large")));
     }
@@ -503,7 +503,7 @@ fn validate_upload_metadata(field_name: &str, value: &str) -> Result<String, Api
 }
 
 fn normalize_file_note(value: &str) -> Result<Option<String>, ApiError> {
-    const MAX_NOTE_LEN: usize = 20_000;
+    const MAX_NOTE_LEN: usize = 40_000;
     let trimmed = value.trim();
 
     if trimmed.is_empty() {

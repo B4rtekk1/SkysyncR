@@ -322,13 +322,142 @@
     min-height: 520px;
 }
 
-.pdf-preview__frame {
-    width: 100%;
-    height: 100%;
-    min-height: 520px;
+.pdf-preview__viewer {
+    min-width: 0;
+    min-height: 0;
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr);
+    overflow: hidden;
     border: 1px solid rgba(246, 248, 251, 0.12);
     border-radius: 10px;
-    background: #f8fafc;
+    background: rgba(5, 12, 22, 0.62);
+    box-shadow: 0 20px 60px -34px rgba(0, 0, 0, 0.75);
+}
+
+.pdf-preview__toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px;
+    border-bottom: 1px solid rgba(246, 248, 251, 0.1);
+    background: rgba(5, 12, 22, 0.82);
+}
+
+.pdf-preview__page-controls,
+.pdf-preview__zoom-controls {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+}
+
+.pdf-preview__toolbar button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 32px;
+    height: 32px;
+    border: 1px solid rgba(246, 248, 251, 0.12);
+    border-radius: 8px;
+    background: rgba(15, 23, 42, 0.74);
+    color: var(--mist);
+    cursor: pointer;
+    font-family: var(--font-mono), monospace;
+    font-size: 0.78rem;
+    transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
+}
+
+.pdf-preview__toolbar button:hover,
+.pdf-preview__toolbar button:focus-visible,
+.pdf-preview__toolbar button.is-active {
+    border-color: rgba(var(--signal-rgb), 0.42);
+    background: rgba(var(--signal-rgb), 0.1);
+    color: var(--signal);
+}
+
+.pdf-preview__toolbar button:disabled {
+    cursor: not-allowed;
+    opacity: 0.44;
+}
+
+.pdf-preview__toolbar label {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    min-width: 0;
+    color: var(--mist);
+    font-size: 0.74rem;
+}
+
+.pdf-preview__toolbar input {
+    width: 58px;
+    height: 32px;
+    border: 1px solid rgba(246, 248, 251, 0.12);
+    border-radius: 8px;
+    background: rgba(15, 23, 42, 0.74);
+    color: var(--paper);
+    font: inherit;
+    text-align: center;
+}
+
+.pdf-preview__toolbar input:focus {
+    border-color: rgba(var(--signal-rgb), 0.52);
+    outline: none;
+}
+
+.pdf-preview__toolbar em,
+.pdf-preview__toolbar output {
+    color: var(--mist);
+    font-family: var(--font-mono), monospace;
+    font-size: 0.72rem;
+    font-style: normal;
+    white-space: nowrap;
+}
+
+.pdf-preview__zoom-controls output {
+    width: 42px;
+    text-align: right;
+}
+
+.pdf-preview__page-shell {
+    position: relative;
+    min-width: 0;
+    min-height: 0;
+    overflow: auto;
+    display: grid;
+    align-items: start;
+    justify-items: center;
+    padding: 16px;
+    background:
+        radial-gradient(circle at center, rgba(246, 248, 251, 0.08), transparent 62%),
+        #111827;
+}
+
+.pdf-preview__canvas {
+    display: block;
+    max-width: none;
+    border-radius: 4px;
+    background: #fff;
+    box-shadow: 0 18px 54px -28px rgba(0, 0, 0, 0.88);
+}
+
+.pdf-preview__status {
+    position: absolute;
+    top: 16px;
+    left: 50%;
+    z-index: 2;
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 12px;
+    border: 1px solid rgba(246, 248, 251, 0.12);
+    border-radius: 999px;
+    background: rgba(5, 12, 22, 0.86);
+    color: var(--mist);
+    font-size: 0.78rem;
+    transform: translateX(-50%);
+    box-shadow: 0 16px 40px -26px rgba(0, 0, 0, 0.8);
 }
 
 .pdf-preview__fallback {
@@ -336,10 +465,11 @@
     place-items: center;
     align-content: center;
     gap: 12px;
+    width: 100%;
     height: 100%;
     min-height: 360px;
     padding: 24px;
-    color: #0f172a;
+    color: var(--paper);
     text-align: center;
 }
 
@@ -348,8 +478,127 @@
 }
 
 .pdf-preview__fallback a {
-    color: #0f766e;
+    color: var(--signal);
     font-weight: 700;
+}
+
+.pdf-preview__side {
+    display: grid;
+    grid-template-rows: minmax(0, 1fr) auto;
+    gap: 10px;
+    border: 1px solid rgba(246, 248, 251, 0.12);
+    border-radius: 10px;
+    background: rgba(5, 12, 22, 0.48);
+    overflow: hidden;
+}
+
+.pdf-preview__pages {
+    min-height: 0;
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr);
+}
+
+.pdf-preview__side-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 14px 14px 10px;
+    border-bottom: 1px solid rgba(246, 248, 251, 0.1);
+}
+
+.pdf-preview__side-head strong {
+    color: var(--paper);
+    font-family: var(--font-mono), monospace;
+    font-size: 0.78rem;
+    font-weight: 700;
+}
+
+.pdf-preview__side-head span {
+    color: var(--mist);
+    font-family: var(--font-mono), monospace;
+    font-size: 0.72rem;
+}
+
+.pdf-preview__page-list {
+    min-height: 0;
+    overflow: auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    padding: 10px;
+}
+
+.pdf-preview__page-list button {
+    display: grid;
+    justify-items: center;
+    gap: 6px;
+    width: 124px;
+    min-height: 0;
+    padding: 8px 6px;
+    border: 1px solid transparent;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--mist);
+    cursor: pointer;
+    font: inherit;
+    text-align: left;
+    transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
+}
+
+.pdf-preview__page-list button:hover,
+.pdf-preview__page-list button:focus-visible,
+.pdf-preview__page-list button.is-active {
+    border-color: rgba(var(--signal-rgb), 0.32);
+    background: rgba(var(--signal-rgb), 0.09);
+    color: var(--signal);
+}
+
+.pdf-preview__thumb {
+    display: grid;
+    place-items: center;
+    width: 104px;
+    min-height: 132px;
+    padding: 6px;
+    border: 1px solid rgba(246, 248, 251, 0.14);
+    border-radius: 6px;
+    background: rgba(15, 23, 42, 0.68);
+    box-shadow: 0 14px 30px -24px rgba(0, 0, 0, 0.8);
+}
+
+.pdf-preview__page-list button.is-active .pdf-preview__thumb {
+    border-color: rgba(var(--signal-rgb), 0.58);
+    box-shadow: 0 0 0 2px rgba(var(--signal-rgb), 0.12), 0 14px 30px -24px rgba(0, 0, 0, 0.8);
+}
+
+.pdf-preview__thumb canvas {
+    display: block;
+    max-width: 92px;
+    height: auto;
+    border-radius: 3px;
+    background: #fff;
+}
+
+.pdf-preview__page-list em {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 28px;
+    height: 24px;
+    border-radius: 6px;
+    background: rgba(246, 248, 251, 0.06);
+    color: inherit;
+    font-family: var(--font-mono), monospace;
+    font-size: 0.7rem;
+    font-style: normal;
+}
+
+.pdf-preview__page-list p {
+    margin: 0;
+    padding: 4px;
+    color: var(--mist);
+    font-size: 0.78rem;
 }
 
 .pdf-preview__info {
@@ -358,9 +607,7 @@
     gap: 10px;
     margin: 0;
     padding: 14px;
-    border: 1px solid rgba(246, 248, 251, 0.12);
-    border-radius: 10px;
-    background: rgba(5, 12, 22, 0.48);
+    border-top: 1px solid rgba(246, 248, 251, 0.1);
 }
 
 .pdf-preview__info div {
@@ -1149,6 +1396,21 @@
         grid-template-rows: minmax(0, 1fr) auto;
     }
 
+    .pdf-preview__side {
+        grid-template-rows: auto auto;
+    }
+
+    .pdf-preview__pages {
+        grid-template-rows: auto auto;
+    }
+
+    .pdf-preview__page-list {
+        flex-direction: row;
+        align-items: flex-start;
+        overflow-x: auto;
+        overflow-y: hidden;
+    }
+
     .pdf-preview__info {
         grid-template-columns: repeat(3, minmax(0, 1fr));
     }
@@ -1213,12 +1475,40 @@
         gap: 10px;
     }
 
-    .pdf-preview__frame {
+    .pdf-preview__viewer {
         min-height: 420px;
+    }
+
+    .pdf-preview__toolbar {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .pdf-preview__page-controls,
+    .pdf-preview__zoom-controls {
+        justify-content: space-between;
+        width: 100%;
+    }
+
+    .pdf-preview__page-shell {
+        padding: 10px;
     }
 
     .pdf-preview__info {
         grid-template-columns: 1fr;
+    }
+
+    .pdf-preview__page-list {
+        align-items: flex-start;
+    }
+
+    .pdf-preview__page-list button {
+        width: 112px;
+    }
+
+    .pdf-preview__thumb {
+        width: 96px;
+        min-height: 124px;
     }
 
     .video-viewer {
