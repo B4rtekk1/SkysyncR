@@ -98,7 +98,7 @@ export async function loginUser(
   }
 
   const tokens: LoginResponse = await res.json()
-  saveTokens(tokens, remember)
+  saveTokens(tokens)
   return tokens
 }
 

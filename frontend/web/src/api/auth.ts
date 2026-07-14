@@ -1,6 +1,6 @@
 const API_BASE = import.meta.env.VITE_API_BASE ?? 'http://localhost:3000/'
 
-import { deviceHeaders, withDeviceHeaders } from './device'
+import { withDeviceHeaders } from './device'
 import { apiFetch } from './http'
 import { clearActivePrivateKeys } from '../crypto/storage'
 
@@ -35,7 +35,7 @@ function clearLegacyStoredTokens() {
   }
 }
 
-export function saveTokens(tokens: TokenPair, _remember?: boolean) {
+export function saveTokens(tokens: TokenPair) {
   accessToken = tokens.access_token
   accessTokenExpiresAt = Date.now() + tokens.expires_in * 1000
   clearLegacyStoredTokens()
@@ -183,14 +183,6 @@ export async function getValidAccessToken(): Promise<string | null> {
   }
 
   return refreshPromise
-}
-
-export async function authHeader(): Promise<HeadersInit> {
-  const token = await getValidAccessToken()
-  if (token) {
-    return withDeviceHeaders({ Authorization: `Bearer ${token}` })
-  }
-  return deviceHeaders()
 }
 
 export async function logout(): Promise<void> {
