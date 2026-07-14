@@ -12,7 +12,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import '../App.css'
 import '../css/Dashbord.css'
 import ThemeToggle from '../components/ThemeToggle'
-import SettingsModal from './Settings'
+import SettingsModal, { AVATAR_STORAGE_KEY } from './Settings'
 import {
     listFiles,
     listFolders,
@@ -132,6 +132,10 @@ function Dashboard() {
     const [draggedCardId, setDraggedCardId] = useState<string | null>(null)
     const [dropTargetId, setDropTargetId] = useState<string | null>(null)
     const [settingsOpen, setSettingsOpen] = useState(false)
+    const [displayName, setDisplayName] = useState(() => {
+        return localStorage.getItem('display_name') || sessionStorage.getItem('display_name') || 'You'
+    })
+    const [avatarUrl, setAvatarUrl] = useState(() => localStorage.getItem(AVATAR_STORAGE_KEY) || '')
     const [noteItem, setNoteItem] = useState<Item | null>(null)
     const [noteSaving, setNoteSaving] = useState(false)
     const [folderCreateOpen, setFolderCreateOpen] = useState(false)
@@ -256,11 +260,6 @@ function Dashboard() {
     )
     const sizeSliderMinPct = (sizeSliderMinValue / sizeSliderMax) * 100
     const sizeSliderMaxPct = (sizeSliderMaxValue / sizeSliderMax) * 100
-
-    // TODO: replace with a real "current user" fetch once api/users.ts exposes one.
-    const displayName = useMemo(() => {
-        return localStorage.getItem('display_name') || sessionStorage.getItem('display_name') || 'You'
-    }, [])
 
     const refreshQuota = useCallback(async () => {
         try {
@@ -949,7 +948,7 @@ function Dashboard() {
                                 onClick={() => setMenuOpen((v) => !v)}
                                 aria-label="Account menu"
                             >
-                                {displayName.charAt(0).toUpperCase()}
+                                {avatarUrl ? <img src={avatarUrl} alt="" /> : displayName.charAt(0).toUpperCase()}
                             </button>
                             {menuOpen && (
                                 <div className="shell__menu">
@@ -1381,7 +1380,15 @@ function Dashboard() {
                     onSaveText={handleSaveTextFile}
                 />
             )}
-            {settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} />}
+            {settingsOpen && (
+                <SettingsModal
+                    onClose={() => setSettingsOpen(false)}
+                    onSave={(profile) => {
+                        setDisplayName(profile.displayName || 'You')
+                        setAvatarUrl(profile.avatarUrl)
+                    }}
+                />
+            )}
             {folderCreateOpen && (
                 <div className="file-filter__modal is-opening" role="dialog" aria-modal="true" aria-labelledby="folder-create-title">
                     <div className="file-filter__dialog folder-create">

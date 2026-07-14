@@ -289,55 +289,59 @@ export function PdfPreview({ item, url }: { item: Item; url: string }) {
                 const renderTask = page.render({ canvas, canvasContext: context, viewport })
                 renderTaskRef.current = renderTask
 
-                const searchTerm = searchQuery.trim().toLocaleLowerCase()
                 const textLayerContainer = textLayerRef.current
                 if (textLayerContainer) {
                     textLayerContainer.replaceChildren()
-                    if (searchTerm) {
-                        void page.getTextContent().then(async (textContent) => {
-                            if (cancelled) return
+                    textLayerContainer.style.setProperty('--total-scale-factor', String(viewport.scale))
+                    textLayerContainer.style.width = `${viewport.width}px`
+                    textLayerContainer.style.height = `${viewport.height}px`
 
-                            textLayer = new pdfjs.TextLayer({
-                                container: textLayerContainer,
-                                textContentSource: textContent,
-                                viewport,
-                            })
-                            textLayerContainer.style.setProperty('--total-scale-factor', String(viewport.scale))
-                            textLayerContainer.style.width = `${viewport.width}px`
-                            textLayerContainer.style.height = `${viewport.height}px`
-                            await textLayer.render()
-                            if (cancelled) return
+                    void page.getTextContent().then(async (textContent) => {
+                        if (cancelled) return
 
-                            const layerBounds = textLayerContainer.getBoundingClientRect()
-                            const highlights: PdfSearchHighlight[] = []
-                            const highlightPadding = Math.max(1, viewport.scale * 0.75)
-                            const walker = document.createTreeWalker(textLayerContainer, NodeFilter.SHOW_TEXT)
-                            let textNode = walker.nextNode()
-
-                            while (textNode) {
-                                const text = textNode.textContent?.toLocaleLowerCase() ?? ''
-                                let matchIndex = text.indexOf(searchTerm)
-                                while (matchIndex !== -1) {
-                                    const range = document.createRange()
-                                    range.setStart(textNode, matchIndex)
-                                    range.setEnd(textNode, matchIndex + searchTerm.length)
-                                    for (const rect of range.getClientRects()) {
-                                        highlights.push({
-                                            height: rect.height + highlightPadding * 2,
-                                            left: rect.left - layerBounds.left - highlightPadding,
-                                            top: rect.top - layerBounds.top - highlightPadding,
-                                            width: rect.width + highlightPadding * 2,
-                                        })
-                                    }
-                                    matchIndex = text.indexOf(searchTerm, matchIndex + searchTerm.length)
-                                }
-                                textNode = walker.nextNode()
-                            }
-                            setSearchHighlights(highlights)
-                        }).catch(() => {
-                            if (!cancelled) setSearchHighlights([])
+                        textLayer = new pdfjs.TextLayer({
+                            container: textLayerContainer,
+                            textContentSource: textContent,
+                            viewport,
                         })
-                    }
+                        await textLayer.render()
+                        if (cancelled) return
+
+                        const searchTerm = searchQuery.trim().toLocaleLowerCase()
+                        if (!searchTerm) {
+                            setSearchHighlights([])
+                            return
+                        }
+
+                        const layerBounds = textLayerContainer.getBoundingClientRect()
+                        const highlights: PdfSearchHighlight[] = []
+                        const highlightPadding = Math.max(1, viewport.scale * 0.75)
+                        const walker = document.createTreeWalker(textLayerContainer, NodeFilter.SHOW_TEXT)
+                        let textNode = walker.nextNode()
+
+                        while (textNode) {
+                            const text = textNode.textContent?.toLocaleLowerCase() ?? ''
+                            let matchIndex = text.indexOf(searchTerm)
+                            while (matchIndex !== -1) {
+                                const range = document.createRange()
+                                range.setStart(textNode, matchIndex)
+                                range.setEnd(textNode, matchIndex + searchTerm.length)
+                                for (const rect of range.getClientRects()) {
+                                    highlights.push({
+                                        height: rect.height + highlightPadding * 2,
+                                        left: rect.left - layerBounds.left - highlightPadding,
+                                        top: rect.top - layerBounds.top - highlightPadding,
+                                        width: rect.width + highlightPadding * 2,
+                                    })
+                                }
+                                matchIndex = text.indexOf(searchTerm, matchIndex + searchTerm.length)
+                            }
+                            textNode = walker.nextNode()
+                        }
+                        setSearchHighlights(highlights)
+                    }).catch(() => {
+                        if (!cancelled) setSearchHighlights([])
+                    })
                 }
 
                 return renderTask.promise
@@ -537,13 +541,19 @@ export function PdfPreview({ item, url }: { item: Item; url: string }) {
                             </a>
                         </div>
                     ) : (
-                        <div className="pdf-preview__canvas-wrap">
+                        <div className="pdf-preview__canvas-wrap" onDragStart={(event) => event.preventDefault()}>
                             <canvas
                                 ref={canvasRef}
                                 className="pdf-preview__canvas"
+                                draggable={false}
                                 aria-label={`Page ${pageNumber} of ${item.filename}`}
                             />
-                            <div ref={textLayerRef} className="pdf-preview__text-layer" aria-hidden="true" />
+                            <div
+                                ref={textLayerRef}
+                                className="pdf-preview__text-layer"
+                                draggable={false}
+                                aria-hidden="true"
+                            />
                             <div className="pdf-preview__search-highlights" aria-hidden="true">
                                 {searchHighlights.map((highlight, index) => (
                                     <span

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState, type ChangeEvent } from 'react'
 import '../App.css'
 import '../css/Dashbord.css'
 import '../css/Settings.css'
@@ -17,6 +17,7 @@ import type { LayoutMode, ViewKey } from './dashboard/types'
 
 type SettingsState = {
     displayName: string
+    avatarUrl: string
     defaultView: ViewKey
     layoutMode: LayoutMode
     uploadProtection: boolean
@@ -26,10 +27,13 @@ type SettingsState = {
 }
 
 const SETTINGS_STORAGE_KEY = 'settings_preferences'
+export const AVATAR_STORAGE_KEY = 'avatar_url'
 const SETTINGS_ANIMATION_MS = 220
+const MAX_AVATAR_BYTES = 2 * 1024 * 1024
 
 const DEFAULT_SETTINGS: SettingsState = {
     displayName: '',
+    avatarUrl: '',
     defaultView: 'all',
     layoutMode: 'grid',
     uploadProtection: true,
@@ -47,22 +51,29 @@ const themeOptions: Array<{ value: ThemePreference; label: string }> = [
 
 type SettingsModalProps = {
     onClose: () => void
+    onSave?: (profile: { displayName: string; avatarUrl: string }) => void
 }
 
 function loadSettings(): SettingsState {
     try {
         const raw = localStorage.getItem(SETTINGS_STORAGE_KEY)
-        return raw ? { ...DEFAULT_SETTINGS, ...(JSON.parse(raw) as Partial<SettingsState>) } : DEFAULT_SETTINGS
+        const saved = raw ? (JSON.parse(raw) as Partial<SettingsState>) : {}
+        return {
+            ...DEFAULT_SETTINGS,
+            ...saved,
+            avatarUrl: saved.avatarUrl || localStorage.getItem(AVATAR_STORAGE_KEY) || '',
+        }
     } catch {
         return DEFAULT_SETTINGS
     }
 }
 
-function SettingsModal({ onClose }: SettingsModalProps) {
+function SettingsModal({ onClose, onSave }: SettingsModalProps) {
     const [settings, setSettings] = useState<SettingsState>(() => loadSettings())
     const [email, setEmail] = useState<string | null>(null)
     const [saved, setSaved] = useState(false)
     const [closing, setClosing] = useState(false)
+    const [avatarError, setAvatarError] = useState<string | null>(null)
     const { theme, themePreference, setThemePreference } = useTheme()
     const initials = useMemo(() => {
         const source = settings.displayName || email || 'S'
@@ -123,18 +134,58 @@ function SettingsModal({ onClose }: SettingsModalProps) {
     function updateSetting<K extends keyof SettingsState>(key: K, value: SettingsState[K]) {
         setSettings((prev) => ({ ...prev, [key]: value }))
         setSaved(false)
+        if (key === 'avatarUrl') setAvatarError(null)
+    }
+
+    function updateAvatar(e: ChangeEvent<HTMLInputElement>) {
+        const file = e.target.files?.[0]
+        e.target.value = ''
+        if (!file) return
+
+        if (!file.type.startsWith('image/')) {
+            setAvatarError('Choose an image file.')
+            return
+        }
+
+        if (file.size > MAX_AVATAR_BYTES) {
+            setAvatarError('Avatar image must be 2 MB or smaller.')
+            return
+        }
+
+        const reader = new FileReader()
+        reader.onload = () => {
+            if (typeof reader.result !== 'string') {
+                setAvatarError('Could not read this image.')
+                return
+            }
+
+            updateSetting('avatarUrl', reader.result)
+        }
+        reader.onerror = () => setAvatarError('Could not read this image.')
+        reader.readAsDataURL(file)
+    }
+
+    function clearAvatar() {
+        updateSetting('avatarUrl', '')
     }
 
     function saveSettings() {
         try {
             localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(settings))
             localStorage.setItem('display_name', settings.displayName)
+            if (settings.avatarUrl) {
+                localStorage.setItem(AVATAR_STORAGE_KEY, settings.avatarUrl)
+            } else {
+                localStorage.removeItem(AVATAR_STORAGE_KEY)
+            }
             saveActiveView(settings.defaultView)
             saveLayoutMode(settings.layoutMode)
             localStorage.setItem(LAYOUT_MODE_STORAGE_KEY, settings.layoutMode)
+            onSave?.({ displayName: settings.displayName, avatarUrl: settings.avatarUrl })
             setSaved(true)
         } catch {
             setSaved(false)
+            setAvatarError('Could not save avatar in this browser.')
         }
     }
 
@@ -183,8 +234,29 @@ function SettingsModal({ onClose }: SettingsModalProps) {
                                 <span className="settings-badge">Local</span>
                             </div>
                             <div className="settings-profile">
-                                <div className="settings-profile__avatar">{initials}</div>
+                                <div className="settings-profile__avatar">
+                                    {settings.avatarUrl ? (
+                                        <img src={settings.avatarUrl} alt="" />
+                                    ) : (
+                                        initials
+                                    )}
+                                </div>
                                 <div className="settings-profile__fields">
+                                    <div className="settings-avatar-actions">
+                                        <label className="btn btn--outline settings-avatar-picker">
+                                            Choose avatar
+                                            <input type="file" accept="image/*" onChange={updateAvatar} />
+                                        </label>
+                                        <button
+                                            className="btn btn--outline"
+                                            type="button"
+                                            onClick={clearAvatar}
+                                            disabled={!settings.avatarUrl}
+                                        >
+                                            Remove
+                                        </button>
+                                    </div>
+                                    {avatarError && <p className="settings-error">{avatarError}</p>}
                                     <label className="settings-field">
                                         <span>Display name</span>
                                         <input

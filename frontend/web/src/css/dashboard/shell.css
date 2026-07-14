@@ -564,8 +564,11 @@
 }
 
 .shell__avatar {
+    display: grid;
+    place-items: center;
     width: 34px;
     height: 34px;
+    padding: 0;
     border-radius: 50%;
     border: 1px solid var(--line);
     background: var(--panel-2);
@@ -574,11 +577,20 @@
     font-size: 0.85rem;
     font-weight: 600;
     cursor: pointer;
+    overflow: hidden;
     transition: border-color 0.15s ease;
 }
 
 .shell__avatar:hover {
     border-color: var(--signal);
+}
+
+.shell__avatar img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    border-radius: inherit;
+    object-fit: cover;
 }
 
 .shell__menu {

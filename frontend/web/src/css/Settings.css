@@ -237,11 +237,45 @@
     font-family: var(--font-display), sans-serif;
     font-size: 1.4rem;
     font-weight: 600;
+    overflow: hidden;
+}
+
+.settings-profile__avatar img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    border-radius: inherit;
+    object-fit: cover;
 }
 
 .settings-profile__fields {
     display: grid;
     gap: 12px;
+}
+
+.settings-avatar-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.settings-avatar-picker {
+    cursor: pointer;
+}
+
+.settings-avatar-picker input {
+    display: none;
+}
+
+.settings-avatar-actions .btn:disabled {
+    cursor: default;
+    opacity: 0.55;
+}
+
+.settings-error {
+    margin: 0;
+    color: var(--amber);
+    font-size: 0.78rem;
 }
 
 .settings-field {
