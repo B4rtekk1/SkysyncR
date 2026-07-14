@@ -12,7 +12,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import '../App.css'
 import '../css/Dashbord.css'
 import ThemeToggle from '../components/ThemeToggle'
-import SettingsModal, { AVATAR_STORAGE_KEY } from './Settings'
+import SettingsModal, { loadUserSettings } from './Settings'
 import {
     listFiles,
     listFolders,
@@ -29,6 +29,7 @@ import {
 } from '../api/files'
 import { logout } from '../api/auth'
 import { getUnlockedVaultSession } from '../api/session'
+import type { CurrentUserResponse } from '../api/users'
 import { encryptTextEnvelope, isEncryptedTextEnvelope, unwrapFileKeyForUser } from '../crypto/fileEncryption'
 import { EmptyPane } from './dashboard/EmptyPane'
 import { FileCard } from './dashboard/FileCard'
@@ -132,10 +133,9 @@ function Dashboard() {
     const [draggedCardId, setDraggedCardId] = useState<string | null>(null)
     const [dropTargetId, setDropTargetId] = useState<string | null>(null)
     const [settingsOpen, setSettingsOpen] = useState(false)
-    const [displayName, setDisplayName] = useState(() => {
-        return localStorage.getItem('display_name') || sessionStorage.getItem('display_name') || 'You'
-    })
-    const [avatarUrl, setAvatarUrl] = useState(() => localStorage.getItem(AVATAR_STORAGE_KEY) || '')
+    const [currentUser, setCurrentUser] = useState<CurrentUserResponse | null>(null)
+    const [displayName, setDisplayName] = useState('You')
+    const [avatarUrl, setAvatarUrl] = useState('')
     const [noteItem, setNoteItem] = useState<Item | null>(null)
     const [noteSaving, setNoteSaving] = useState(false)
     const [folderCreateOpen, setFolderCreateOpen] = useState(false)
@@ -314,11 +314,16 @@ function Dashboard() {
                     return
                 }
 
+                setCurrentUser(session.user)
                 setPublicKey(session.user.public_key)
                 setPrivateKey(session.privateKey)
+                const localSettings = loadUserSettings(session.user)
+                setDisplayName(localSettings.displayName || session.user.display_name || 'You')
+                setAvatarUrl(localSettings.avatarUrl)
             })
             .catch(() => {
                 if (active) {
+                    setCurrentUser(null)
                     setPublicKey(null)
                     setPrivateKey(null)
                     navigate('/login', { replace: true })
@@ -1382,6 +1387,7 @@ function Dashboard() {
             )}
             {settingsOpen && (
                 <SettingsModal
+                    currentUser={currentUser}
                     onClose={() => setSettingsOpen(false)}
                     onSave={(profile) => {
                         setDisplayName(profile.displayName || 'You')

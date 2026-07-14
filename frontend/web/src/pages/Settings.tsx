@@ -5,7 +5,7 @@ import '../css/Settings.css'
 import ThemeToggle from '../components/ThemeToggle'
 import { useTheme, type ThemePreference } from '../hooks/UseTheme'
 import { logout } from '../api/auth'
-import { getCurrentUser } from '../api/users'
+import type { CurrentUserResponse } from '../api/users'
 import { NAV_ICONS } from './dashboard/icons'
 import {
     LAYOUT_MODE_STORAGE_KEY,
@@ -50,35 +50,50 @@ const themeOptions: Array<{ value: ThemePreference; label: string }> = [
 ]
 
 type SettingsModalProps = {
+    currentUser: CurrentUserResponse | null
     onClose: () => void
     onSave?: (profile: { displayName: string; avatarUrl: string }) => void
 }
 
-function loadSettings(): SettingsState {
+function userSettingsStorageKey(userId: string): string {
+    return `${SETTINGS_STORAGE_KEY}:${userId}`
+}
+
+export function loadUserSettings(user: CurrentUserResponse | null): SettingsState {
     try {
-        const raw = localStorage.getItem(SETTINGS_STORAGE_KEY)
+        const raw = user ? localStorage.getItem(userSettingsStorageKey(user.id)) : null
         const saved = raw ? (JSON.parse(raw) as Partial<SettingsState>) : {}
         return {
             ...DEFAULT_SETTINGS,
             ...saved,
-            avatarUrl: saved.avatarUrl || localStorage.getItem(AVATAR_STORAGE_KEY) || '',
+            displayName: saved.displayName || user?.display_name || '',
+            avatarUrl: saved.avatarUrl || '',
         }
     } catch {
-        return DEFAULT_SETTINGS
+        return {
+            ...DEFAULT_SETTINGS,
+            displayName: user?.display_name || '',
+        }
     }
 }
 
-function SettingsModal({ onClose, onSave }: SettingsModalProps) {
-    const [settings, setSettings] = useState<SettingsState>(() => loadSettings())
-    const [email, setEmail] = useState<string | null>(null)
+function clearLegacyProfileStorage() {
+    localStorage.removeItem(SETTINGS_STORAGE_KEY)
+    localStorage.removeItem(AVATAR_STORAGE_KEY)
+    localStorage.removeItem('display_name')
+    sessionStorage.removeItem('display_name')
+}
+
+function SettingsModal({ currentUser, onClose, onSave }: SettingsModalProps) {
+    const [settings, setSettings] = useState<SettingsState>(() => loadUserSettings(currentUser))
     const [saved, setSaved] = useState(false)
     const [closing, setClosing] = useState(false)
     const [avatarError, setAvatarError] = useState<string | null>(null)
     const { theme, themePreference, setThemePreference } = useTheme()
     const initials = useMemo(() => {
-        const source = settings.displayName || email || 'S'
+        const source = settings.displayName || currentUser?.email || 'S'
         return source.trim().charAt(0).toUpperCase()
-    }, [settings.displayName, email])
+    }, [settings.displayName, currentUser?.email])
 
     const requestClose = useCallback(() => {
         setClosing((alreadyClosing) => {
@@ -90,37 +105,8 @@ function SettingsModal({ onClose, onSave }: SettingsModalProps) {
     }, [onClose])
 
     useEffect(() => {
-        let active = true
-        getCurrentUser()
-            .then((user) => {
-                if (!active) return
-                setEmail(user.email)
-                setSettings((prev) => ({
-                    ...prev,
-                    displayName:
-                        prev.displayName ||
-                        user.display_name ||
-                        localStorage.getItem('display_name') ||
-                        sessionStorage.getItem('display_name') ||
-                        '',
-                }))
-            })
-            .catch(() => {
-                if (!active) return
-                setSettings((prev) => ({
-                    ...prev,
-                    displayName:
-                        prev.displayName ||
-                        localStorage.getItem('display_name') ||
-                        sessionStorage.getItem('display_name') ||
-                        '',
-                }))
-            })
-
-        return () => {
-            active = false
-        }
-    }, [])
+        setSettings(loadUserSettings(currentUser))
+    }, [currentUser])
 
     useEffect(() => {
         function closeOnEscape(e: KeyboardEvent) {
@@ -171,13 +157,10 @@ function SettingsModal({ onClose, onSave }: SettingsModalProps) {
 
     function saveSettings() {
         try {
-            localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(settings))
-            localStorage.setItem('display_name', settings.displayName)
-            if (settings.avatarUrl) {
-                localStorage.setItem(AVATAR_STORAGE_KEY, settings.avatarUrl)
-            } else {
-                localStorage.removeItem(AVATAR_STORAGE_KEY)
+            if (currentUser) {
+                localStorage.setItem(userSettingsStorageKey(currentUser.id), JSON.stringify(settings))
             }
+            clearLegacyProfileStorage()
             saveActiveView(settings.defaultView)
             saveLayoutMode(settings.layoutMode)
             localStorage.setItem(LAYOUT_MODE_STORAGE_KEY, settings.layoutMode)
@@ -267,7 +250,7 @@ function SettingsModal({ onClose, onSave }: SettingsModalProps) {
                                     </label>
                                     <label className="settings-field">
                                         <span>Email</span>
-                                        <input value={email ?? 'Unavailable'} readOnly />
+                                        <input value={currentUser?.email ?? 'Unavailable'} readOnly />
                                     </label>
                                 </div>
                             </div>
