@@ -2,6 +2,7 @@ import type { EncryptedPrivateKey } from './keys'
 
 const DB_NAME = 'skysyncr-vault'
 const STORE_NAME = 'keys'
+const ACTIVE_PRIVATE_KEY_PREFIX = 'active-private-key:'
 const activePrivateKeyId = (userId: string) => `active-private-key:${userId}`
 
 function openDb(): Promise<IDBDatabase> {
@@ -64,5 +65,28 @@ export async function loadActivePrivateKey(
     const req = tx.objectStore(STORE_NAME).get(activePrivateKeyId(userId))
     req.onsuccess = () => resolve(req.result)
     req.onerror = () => reject(req.error)
+  })
+}
+
+export async function clearActivePrivateKeys(): Promise<void> {
+  const db = await openDb()
+  await new Promise<void>((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, 'readwrite')
+    const store = tx.objectStore(STORE_NAME)
+    const req = store.openKeyCursor()
+
+    req.onsuccess = () => {
+      const cursor = req.result
+      if (!cursor) return
+
+      if (typeof cursor.key === 'string' && cursor.key.startsWith(ACTIVE_PRIVATE_KEY_PREFIX)) {
+        store.delete(cursor.key)
+      }
+
+      cursor.continue()
+    }
+    req.onerror = () => reject(req.error)
+    tx.oncomplete = () => resolve()
+    tx.onerror = () => reject(tx.error)
   })
 }

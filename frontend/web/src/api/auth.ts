@@ -2,6 +2,7 @@ const API_BASE = import.meta.env.VITE_API_BASE ?? 'http://localhost:3000/'
 
 import { deviceHeaders, withDeviceHeaders } from './device'
 import { apiFetch } from './http'
+import { clearActivePrivateKeys } from '../crypto/storage'
 
 const ACCESS_TOKEN_KEY = 'access_token'
 const REFRESH_TOKEN_KEY = 'refresh_token'
@@ -201,6 +202,7 @@ export async function logout(): Promise<void> {
   } catch {
     // best-effort
   }
+  await clearActivePrivateKeys()
   clearTokens()
 }
 
