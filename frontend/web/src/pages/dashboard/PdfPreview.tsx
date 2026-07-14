@@ -31,13 +31,11 @@ function PdfPageThumbnail({
     active,
     pageNumber,
     pdf,
-    rotation,
     onSelect,
 }: {
     active: boolean
     pageNumber: number
     pdf: PDFDocumentProxy
-    rotation: number
     onSelect: (pageNumber: number) => void
 }) {
     const canvasRef = useRef<HTMLCanvasElement | null>(null)
@@ -58,10 +56,10 @@ function PdfPageThumbnail({
             .then((page) => {
                 if (cancelled) return null
 
-                const baseViewport = page.getViewport({ rotation, scale: 1 })
+                const baseViewport = page.getViewport({ scale: 1 })
                 const thumbnailWidth = 92
                 const scale = thumbnailWidth / baseViewport.width
-                const viewport = page.getViewport({ rotation, scale })
+                const viewport = page.getViewport({ scale })
                 const outputScale = window.devicePixelRatio || 1
 
                 canvas.width = Math.floor(viewport.width * outputScale)
@@ -89,7 +87,7 @@ function PdfPageThumbnail({
             renderTaskRef.current?.cancel()
             renderTaskRef.current = null
         }
-    }, [pageNumber, pdf, rotation])
+    }, [pageNumber, pdf])
 
     return (
         <button
@@ -360,7 +358,6 @@ export function PdfPreview({ item, url }: { item: Item; url: string }) {
                                     active={page === pageNumber}
                                     pageNumber={page}
                                     pdf={pdf}
-                                    rotation={rotation}
                                     onSelect={goToPage}
                                 />
                                 ) : null
