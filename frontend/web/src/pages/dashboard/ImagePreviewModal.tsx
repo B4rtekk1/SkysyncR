@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { CANCEL_ICON, CHECK_ICON, DOWNLOAD_ICON, RENAME_ICON } from './icons'
 import type { FilePreviewState, Item } from './types'
 import { formatBytes } from './fileUtils'
@@ -25,12 +25,6 @@ export function ImagePreviewModal({
     const [editError, setEditError] = useState<string | null>(null)
     const canEditText = preview.text !== null && !('permissions' in preview.item)
     const hasTextChanges = editDraft !== (preview.text ?? '')
-
-    useEffect(() => {
-        if (!preview.startEditing || preview.text === null) return
-        setEditDraft(preview.text)
-        setIsEditingText(true)
-    }, [preview.item.id, preview.startEditing, preview.text])
 
     const cancelEdit = () => {
         setEditDraft(preview.text ?? '')

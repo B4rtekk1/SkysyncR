@@ -1,42 +1,18 @@
 import type { FileFilters, FileSortKey, FileTypeFilterKey, Group, GroupInvite, Item, LayoutMode, ViewKey } from './types'
 export const FAVOURITES_STORAGE_KEY = 'favourite_file_ids'
-export const LOCAL_FILE_META_STORAGE_KEY = 'local_file_metadata'
 export const LAYOUT_MODE_STORAGE_KEY = 'file_layout_mode'
 export const FILE_SORT_STORAGE_KEY = 'file_sort'
 export const FILE_FILTER_STORAGE_KEY = 'file_filter'
 export const GROUPS_STORAGE_KEY = 'groups'
 export const LEGACY_GROUP_INVITES_STORAGE_KEY = 'group_invites'
+const LEGACY_LOCAL_FILE_META_STORAGE_KEY = 'local_file_metadata'
 
-type LocalFileMeta = {
-    filename: string
-    mime_type: string | null
-}
-
-export function loadLocalFileMetadata(): Record<string, LocalFileMeta> {
+export function clearLegacyLocalFileMetadata() {
     try {
-        const raw = localStorage.getItem(LOCAL_FILE_META_STORAGE_KEY)
-        return raw ? (JSON.parse(raw) as Record<string, LocalFileMeta>) : {}
+        localStorage.removeItem(LEGACY_LOCAL_FILE_META_STORAGE_KEY)
     } catch {
-        return {}
+        // ignore storage failures (e.g. private browsing)
     }
-}
-
-export function saveLocalFileMetadata(id: string, metadata: LocalFileMeta) {
-    try {
-        const current = loadLocalFileMetadata()
-        current[id] = metadata
-        localStorage.setItem(LOCAL_FILE_META_STORAGE_KEY, JSON.stringify(current))
-    } catch {
-        // keep server-side encrypted metadata as the fallback
-    }
-}
-
-export function applyLocalFileMetadata<T extends Item>(data: T[]): T[] {
-    const metadata = loadLocalFileMetadata()
-    return data.map((item) => {
-        const local = metadata[item.id]
-        return local ? { ...item, filename: local.filename, mime_type: local.mime_type } : item
-    })
 }
 
 export function loadFavouriteIds(): Set<string> {

@@ -6,7 +6,6 @@ import {
     generateFileKey,
     wrapFileKeyForUser,
 } from '../../../crypto/fileEncryption'
-import { saveLocalFileMetadata } from '../storage'
 import type { Item } from '../types'
 
 type UseFileUploadOptions = {
@@ -26,17 +25,6 @@ export function useFileUpload({
     setError,
     refreshQuota,
 }: UseFileUploadOptions) {
-    function generalMimeType(mimeType: string | null): string | null {
-        if (!mimeType) return null
-        const normalized = mimeType.toLowerCase()
-        if (normalized.startsWith('image/')) return 'image/*'
-        if (normalized.startsWith('video/')) return 'video/*'
-        if (normalized.startsWith('audio/')) return 'audio/*'
-        if (normalized.startsWith('text/')) return 'text/*'
-        if (normalized === 'application/pdf') return 'application/pdf'
-        return 'application/octet-stream'
-    }
-
     const ingestFileArray = useCallback(
         async (files: File[]) => {
             const savedItems: ApiFile[] = []
@@ -86,24 +74,22 @@ export function useFileUpload({
                     const encryptedFilename = await encryptTextEnvelope(file.name, key)
                     const wrappedKey = await wrapFileKeyForUser(key, publicKey)
                     const originalMimeType = file.type || null
-                    const storedMimeType = generalMimeType(originalMimeType)
+                    const encryptedMimeType = originalMimeType
+                        ? await encryptTextEnvelope(originalMimeType, key)
+                        : null
                     const encryptedBlob = new Blob([ciphertext], {
-                        type: storedMimeType || 'application/octet-stream',
+                        type: 'application/octet-stream',
                     })
 
                     const saved = await uploadFile({
                         encryptedFile: encryptedBlob,
                         storedFilename: encryptedFilename,
-                        storedMimeType,
+                        storedMimeType: encryptedMimeType,
                         folderId: folderId ?? undefined,
                         wrappedKey,
                         encryptionNonce: nonce.buffer as ArrayBuffer,
                     })
 
-                    saveLocalFileMetadata(saved.id, {
-                        filename: file.name,
-                        mime_type: originalMimeType,
-                    })
                     const visibleSaved = {
                         ...saved,
                         filename: file.name,

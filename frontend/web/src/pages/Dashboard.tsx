@@ -74,8 +74,8 @@ import {
 } from './dashboard/fileFilters'
 import {
     NAV_LABELS,
-    applyLocalFileMetadata,
     applySavedOrder,
+    clearLegacyLocalFileMetadata,
     loadActiveView,
     loadFileFilter,
     loadFileSort,
@@ -283,7 +283,7 @@ function Dashboard() {
             const visibleFileData = privateKey ? await decryptFilesMetadata(fileData, privateKey) : fileData
             if (privateKey) void migratePlaintextFileMetadata(fileData, privateKey)
             setQuota(quotaData)
-            setStorageItems(applyLocalFileMetadata(visibleFileData))
+            setStorageItems(visibleFileData)
             setFavouriteIds(new Set(fileData.filter((file) => file.is_favourite).map((file) => file.id)))
         } catch {
             setQuota(null)
@@ -317,6 +317,10 @@ function Dashboard() {
         refreshQuota,
         privateKey,
     })
+
+    useEffect(() => {
+        clearLegacyLocalFileMetadata()
+    }, [])
 
     useEffect(() => {
         const timeout = setTimeout(() => void refreshQuota(), 0)
@@ -450,11 +454,10 @@ function Dashboard() {
                         decryptFoldersMetadata(folderData, privateKey),
                     ])
                     if (view !== 'shared') void migratePlaintextFileMetadata(fileData, privateKey)
-                    const withLocalMetadata = applyLocalFileMetadata(visibleFileData)
-                    setItems(applySavedOrder(withLocalMetadata, view))
+                    setItems(applySavedOrder(visibleFileData, view))
                     setFolders(visibleFolderData)
                     if (view === 'all' || view === 'favourites') {
-                        setStorageItems(withLocalMetadata as ApiFile[])
+                        setStorageItems(visibleFileData as ApiFile[])
                         setFavouriteIds(new Set(fileData.filter((file) => file.is_favourite).map((file) => file.id)))
                     }
                 }
@@ -1539,6 +1542,7 @@ function Dashboard() {
             </div>
             {filePreview && (
                 <ImagePreviewModal
+                    key={filePreview.item.id}
                     preview={filePreview}
                     onClose={closeFilePreview}
                     onDownload={handleDownload}

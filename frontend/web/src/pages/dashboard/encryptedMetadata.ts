@@ -21,26 +21,33 @@ export async function decryptFileMetadata<T extends ApiFile | SharedFile>(
     item: T,
     privateKey: CryptoKey,
 ): Promise<T> {
-    if (!isEncryptedTextEnvelope(item.filename) && !isEncryptedTextEnvelope(item.note)) {
+    if (
+        !isEncryptedTextEnvelope(item.filename) &&
+        !isEncryptedTextEnvelope(item.mime_type) &&
+        !isEncryptedTextEnvelope(item.note)
+    ) {
         return item
     }
 
     try {
         const fileKey = await unwrapFileKeyForUser(item.encrypted_key, privateKey)
-        const [filename, note] = await Promise.all([
+        const [filename, mimeType, note] = await Promise.all([
             decryptMaybeEncrypted(item.filename, fileKey),
+            decryptMaybeEncrypted(item.mime_type, fileKey),
             decryptMaybeEncrypted(item.note, fileKey),
         ])
 
         return {
             ...item,
             filename: filename ?? item.filename,
+            mime_type: mimeType,
             note,
         }
     } catch {
         return {
             ...item,
             filename: isEncryptedTextEnvelope(item.filename) ? 'Encrypted filename' : item.filename,
+            mime_type: isEncryptedTextEnvelope(item.mime_type) ? null : item.mime_type,
             note: isEncryptedTextEnvelope(item.note) ? null : item.note,
         }
     }
