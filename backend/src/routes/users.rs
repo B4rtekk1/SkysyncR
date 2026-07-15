@@ -13,7 +13,7 @@ pub fn users_routes() -> Router<AppState> {
         .route("/users/refresh", post(refresh_tokens))
         .route("/users/logout", post(logout_user))
         .route("/users/logout-all", post(logout_all_sessions))
-        .route("/users/verify", get(verify_email))
+        .route("/users/verify", post(verify_email))
 }
 
 pub fn auth_limited_routes() -> Router<AppState> {

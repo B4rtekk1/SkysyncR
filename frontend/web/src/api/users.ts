@@ -103,8 +103,10 @@ export async function loginUser(
 }
 
 export async function verifyUser(token: string): Promise<void> {
-  const res = await apiFetch(`${url}users/verify?token=${encodeURIComponent(token)}`, {
-    method: 'GET',
+  const res = await apiFetch(`${url}users/verify`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ token }),
   })
 
   if (!res.ok) {

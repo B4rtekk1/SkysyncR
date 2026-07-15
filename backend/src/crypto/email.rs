@@ -3,6 +3,7 @@ use lettre::transport::smtp::authentication::Credentials;
 use lettre::{AsyncSmtpTransport, AsyncTransport, Message, Tokio1Executor};
 use rand::Rng;
 use rand::distributions::Alphanumeric;
+use sha2::{Digest, Sha256};
 
 pub fn generate_verification_token() -> String {
     let token: String = rand::thread_rng()
@@ -13,13 +14,19 @@ pub fn generate_verification_token() -> String {
     token
 }
 
+pub fn hash_verification_token(token: &str) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(token.as_bytes());
+    hex::encode(hasher.finalize())
+}
+
 pub async fn send_verification_email(
     to_email: &str,
     token: &str,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let frontend_url =
         std::env::var("FRONTEND_URL").unwrap_or_else(|_| "http://localhost:5173".to_string());
-    let link = format!("{}/verify?token={}", frontend_url, token);
+    let link = format!("{}/verify#token={}", frontend_url, token);
 
     let smtp_host = std::env::var("SMTP_HOST")?;
     let smtp_username = std::env::var("SMTP_USERNAME")?;

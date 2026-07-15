@@ -1,4 +1,4 @@
-use crate::crypto::email::generate_verification_token;
+use crate::crypto::email::{generate_verification_token, hash_verification_token};
 use sqlx::PgPool;
 use uuid::Uuid;
 
@@ -15,6 +15,7 @@ pub async fn create_user(
     verification_ttl_hours: i64,
 ) -> Result<(Uuid, String), sqlx::Error> {
     let token = generate_verification_token();
+    let token_hash = hash_verification_token(&token);
     let user_id = sqlx::query!(
         r#"
         INSERT INTO users (
@@ -28,7 +29,7 @@ pub async fn create_user(
         new_user.password_hash,
         new_user.public_key,
         new_user.display_name,
-        token,
+        token_hash,
         verification_ttl_hours as i32
     )
     .fetch_one(pool)
@@ -69,6 +70,7 @@ pub async fn compare_passwords(
 }
 
 pub async fn verify_email_token(pool: &PgPool, token: &str) -> Result<bool, sqlx::Error> {
+    let token_hash = hash_verification_token(token);
     let result = sqlx::query!(
         r#"
         UPDATE users
@@ -79,7 +81,7 @@ pub async fn verify_email_token(pool: &PgPool, token: &str) -> Result<bool, sqlx
           AND (verification_token_expires_at IS NULL OR verification_token_expires_at > NOW())
         RETURNING id
         "#,
-        token
+        token_hash
     )
     .fetch_optional(pool)
     .await?;

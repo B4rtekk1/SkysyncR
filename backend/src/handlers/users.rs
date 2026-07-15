@@ -17,7 +17,7 @@ use crate::utils::validation::{
 };
 use axum::{
     Json,
-    extract::{Query, State},
+    extract::State,
     http::{HeaderMap, HeaderValue, header},
     response::{IntoResponse, Response},
 };
@@ -420,7 +420,7 @@ pub async fn logout_all_sessions(
 
 pub async fn verify_email(
     State(state): State<AppState>,
-    Query(params): Query<VerifyParams>,
+    Json(params): Json<VerifyParams>,
 ) -> Result<&'static str, ApiError> {
     if params.token.is_empty() || params.token.len() > 128 {
         return Err(ApiError::BadRequest("Invalid verification token".into()));
