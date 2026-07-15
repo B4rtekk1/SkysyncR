@@ -4,6 +4,7 @@ use crate::handlers::users::{
 };
 use crate::state::AppState;
 use axum::Router;
+use axum::extract::DefaultBodyLimit;
 use axum::routing::{get, patch, post};
 
 pub fn users_routes() -> Router<AppState> {
@@ -14,6 +15,7 @@ pub fn users_routes() -> Router<AppState> {
         .route("/users/logout", post(logout_user))
         .route("/users/logout-all", post(logout_all_sessions))
         .route("/users/verify", post(verify_email))
+        .layer(DefaultBodyLimit::max(4 * 1024 * 1024))
 }
 
 pub fn auth_limited_routes() -> Router<AppState> {

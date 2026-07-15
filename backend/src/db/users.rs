@@ -9,6 +9,42 @@ pub struct NewUser<'a> {
     pub public_key: &'a str,
 }
 
+pub async fn ensure_user_settings_columns(pool: &PgPool) -> Result<(), sqlx::Error> {
+    sqlx::query("ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url TEXT")
+        .execute(pool)
+        .await?;
+    sqlx::query(
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS default_view TEXT NOT NULL DEFAULT 'all'",
+    )
+    .execute(pool)
+    .await?;
+    sqlx::query(
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS layout_mode TEXT NOT NULL DEFAULT 'grid'",
+    )
+    .execute(pool)
+    .await?;
+    sqlx::query("ALTER TABLE users ADD COLUMN IF NOT EXISTS upload_protection BOOLEAN NOT NULL DEFAULT TRUE")
+        .execute(pool)
+        .await?;
+    sqlx::query(
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS compact_metadata BOOLEAN NOT NULL DEFAULT TRUE",
+    )
+    .execute(pool)
+    .await?;
+    sqlx::query(
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS device_lock BOOLEAN NOT NULL DEFAULT FALSE",
+    )
+    .execute(pool)
+    .await?;
+    sqlx::query(
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS sync_on_metered BOOLEAN NOT NULL DEFAULT FALSE",
+    )
+    .execute(pool)
+    .await?;
+
+    Ok(())
+}
+
 pub async fn create_user(
     pool: &PgPool,
     new_user: NewUser<'_>,
@@ -114,7 +150,14 @@ pub struct CurrentUserCryptoProfile {
     pub id: Uuid,
     pub email: String,
     pub display_name: Option<String>,
+    pub avatar_url: Option<String>,
     pub public_key: Option<String>,
+    pub default_view: String,
+    pub layout_mode: String,
+    pub upload_protection: bool,
+    pub compact_metadata: bool,
+    pub device_lock: bool,
+    pub sync_on_metered: bool,
     pub trash_retention_days: i32,
 }
 
@@ -122,9 +165,37 @@ pub async fn get_current_user_crypto_profile(
     pool: &PgPool,
     user_id: Uuid,
 ) -> Result<Option<CurrentUserCryptoProfile>, sqlx::Error> {
-    let result = sqlx::query_as::<_, (Uuid, String, Option<String>, Option<String>, i32)>(
+    let result = sqlx::query_as::<
+        _,
+        (
+            Uuid,
+            String,
+            Option<String>,
+            Option<String>,
+            Option<String>,
+            String,
+            String,
+            bool,
+            bool,
+            bool,
+            bool,
+            i32,
+        ),
+    >(
         r#"
-        SELECT id, email, display_name, public_key, trash_retention_days
+        SELECT
+            id,
+            email,
+            display_name,
+            avatar_url,
+            public_key,
+            default_view,
+            layout_mode,
+            upload_protection,
+            compact_metadata,
+            device_lock,
+            sync_on_metered,
+            trash_retention_days
         FROM users
         WHERE id = $1
           AND is_active = TRUE
@@ -135,35 +206,141 @@ pub async fn get_current_user_crypto_profile(
     .await?;
 
     Ok(result.map(
-        |(id, email, display_name, public_key, trash_retention_days)| CurrentUserCryptoProfile {
+        |(
             id,
             email,
             display_name,
+            avatar_url,
             public_key,
+            default_view,
+            layout_mode,
+            upload_protection,
+            compact_metadata,
+            device_lock,
+            sync_on_metered,
+            trash_retention_days,
+        )| CurrentUserCryptoProfile {
+            id,
+            email,
+            display_name,
+            avatar_url,
+            public_key,
+            default_view,
+            layout_mode,
+            upload_protection,
+            compact_metadata,
+            device_lock,
+            sync_on_metered,
             trash_retention_days,
         },
     ))
 }
 
-pub async fn update_user_trash_retention_days(
+pub struct UserSettingsUpdate {
+    pub display_name: Option<String>,
+    pub avatar_url: Option<String>,
+    pub default_view: Option<String>,
+    pub layout_mode: Option<String>,
+    pub upload_protection: Option<bool>,
+    pub compact_metadata: Option<bool>,
+    pub device_lock: Option<bool>,
+    pub sync_on_metered: Option<bool>,
+    pub trash_retention_days: Option<i32>,
+}
+
+pub struct UserSettingsRecord {
+    pub display_name: Option<String>,
+    pub avatar_url: Option<String>,
+    pub default_view: String,
+    pub layout_mode: String,
+    pub upload_protection: bool,
+    pub compact_metadata: bool,
+    pub device_lock: bool,
+    pub sync_on_metered: bool,
+    pub trash_retention_days: i32,
+}
+
+pub async fn update_user_settings_record(
     pool: &PgPool,
     user_id: Uuid,
-    trash_retention_days: i32,
-) -> Result<Option<i32>, sqlx::Error> {
-    sqlx::query_scalar::<_, i32>(
+    update: UserSettingsUpdate,
+) -> Result<Option<UserSettingsRecord>, sqlx::Error> {
+    let result = sqlx::query_as::<
+        _,
+        (
+            Option<String>,
+            Option<String>,
+            String,
+            String,
+            bool,
+            bool,
+            bool,
+            bool,
+            i32,
+        ),
+    >(
         r#"
         UPDATE users
-        SET trash_retention_days = $1,
+        SET display_name = COALESCE($1, display_name),
+            avatar_url = COALESCE($2, avatar_url),
+            default_view = COALESCE($3, default_view),
+            layout_mode = COALESCE($4, layout_mode),
+            upload_protection = COALESCE($5, upload_protection),
+            compact_metadata = COALESCE($6, compact_metadata),
+            device_lock = COALESCE($7, device_lock),
+            sync_on_metered = COALESCE($8, sync_on_metered),
+            trash_retention_days = COALESCE($9, trash_retention_days),
             updated_at = NOW()
-        WHERE id = $2
+        WHERE id = $10
           AND is_active = TRUE
-        RETURNING trash_retention_days
+        RETURNING
+            display_name,
+            avatar_url,
+            default_view,
+            layout_mode,
+            upload_protection,
+            compact_metadata,
+            device_lock,
+            sync_on_metered,
+            trash_retention_days
         "#,
     )
-    .bind(trash_retention_days)
+    .bind(update.display_name)
+    .bind(update.avatar_url)
+    .bind(update.default_view)
+    .bind(update.layout_mode)
+    .bind(update.upload_protection)
+    .bind(update.compact_metadata)
+    .bind(update.device_lock)
+    .bind(update.sync_on_metered)
+    .bind(update.trash_retention_days)
     .bind(user_id)
     .fetch_optional(pool)
-    .await
+    .await?;
+
+    Ok(result.map(
+        |(
+            display_name,
+            avatar_url,
+            default_view,
+            layout_mode,
+            upload_protection,
+            compact_metadata,
+            device_lock,
+            sync_on_metered,
+            trash_retention_days,
+        )| UserSettingsRecord {
+            display_name,
+            avatar_url,
+            default_view,
+            layout_mode,
+            upload_protection,
+            compact_metadata,
+            device_lock,
+            sync_on_metered,
+            trash_retention_days,
+        },
+    ))
 }
 
 pub async fn update_last_login(pool: &PgPool, email: &str) -> Result<(), sqlx::Error> {

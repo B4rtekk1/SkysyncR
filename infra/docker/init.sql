@@ -9,6 +9,12 @@ CREATE TABLE IF NOT EXISTS users
     verification_token_expires_at   timestamptz,
     display_name                    TEXT,
     avatar_url                      TEXT,
+    default_view                    TEXT        NOT NULL DEFAULT 'all',
+    layout_mode                     TEXT        NOT NULL DEFAULT 'grid',
+    upload_protection               BOOLEAN     NOT NULL DEFAULT TRUE,
+    compact_metadata                BOOLEAN     NOT NULL DEFAULT TRUE,
+    device_lock                     BOOLEAN     NOT NULL DEFAULT FALSE,
+    sync_on_metered                 BOOLEAN     NOT NULL DEFAULT FALSE,
     trash_retention_days            INT         NOT NULL DEFAULT 30,
     is_active                       BOOLEAN     NOT NULL DEFAULT TRUE,
     failed_login_attempts           INT         NOT NULL DEFAULT 0,
@@ -221,6 +227,13 @@ ALTER TABLE files ADD COLUMN IF NOT EXISTS share_expires_at timestamptz;
 ALTER TABLE files ADD COLUMN IF NOT EXISTS share_download_limit INT;
 ALTER TABLE files ADD COLUMN IF NOT EXISTS share_download_count INT NOT NULL DEFAULT 0;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS trash_retention_days INT NOT NULL DEFAULT 30;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS default_view TEXT NOT NULL DEFAULT 'all';
+ALTER TABLE users ADD COLUMN IF NOT EXISTS layout_mode TEXT NOT NULL DEFAULT 'grid';
+ALTER TABLE users ADD COLUMN IF NOT EXISTS upload_protection BOOLEAN NOT NULL DEFAULT TRUE;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS compact_metadata BOOLEAN NOT NULL DEFAULT TRUE;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS device_lock BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS sync_on_metered BOOLEAN NOT NULL DEFAULT FALSE;
 ALTER TABLE folders ADD COLUMN IF NOT EXISTS encrypted_key bytea;
 ALTER TABLE folders ADD COLUMN IF NOT EXISTS is_public BOOLEAN NOT NULL DEFAULT FALSE;
 ALTER TABLE folders ADD COLUMN IF NOT EXISTS share_token TEXT;

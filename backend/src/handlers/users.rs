@@ -121,7 +121,14 @@ pub async fn current_user(
         id: profile.id,
         email: profile.email,
         display_name: profile.display_name,
+        avatar_url: profile.avatar_url,
         public_key: profile.public_key,
+        default_view: profile.default_view,
+        layout_mode: profile.layout_mode,
+        upload_protection: profile.upload_protection,
+        compact_metadata: profile.compact_metadata,
+        device_lock: profile.device_lock,
+        sync_on_metered: profile.sync_on_metered,
         trash_retention_days: profile.trash_retention_days,
     }))
 }
@@ -131,24 +138,118 @@ pub async fn update_user_settings(
     auth: AuthUser,
     Json(payload): Json<UpdateUserSettingsRequest>,
 ) -> Result<Json<UserSettingsResponse>, ApiError> {
-    if !(1..=365).contains(&payload.trash_retention_days) {
+    let display_name = payload
+        .display_name
+        .as_deref()
+        .map(validate_optional_display_name)
+        .transpose()?
+        .flatten();
+    let avatar_url = payload
+        .avatar_url
+        .as_deref()
+        .map(validate_avatar_url)
+        .transpose()?
+        .flatten();
+    let default_view = payload
+        .default_view
+        .as_deref()
+        .map(validate_default_view)
+        .transpose()?
+        .flatten();
+    let layout_mode = payload
+        .layout_mode
+        .as_deref()
+        .map(validate_layout_mode)
+        .transpose()?
+        .flatten();
+
+    if let Some(trash_retention_days) = payload.trash_retention_days
+        && !(1..=365).contains(&trash_retention_days)
+    {
         return Err(ApiError::BadRequest(
             "Trash retention must be between 1 and 365 days".into(),
         ));
     }
 
-    let trash_retention_days = update_user_trash_retention_days(
+    let settings = update_user_settings_record(
         &state.db_pool,
         auth.user_id,
-        payload.trash_retention_days,
+        UserSettingsUpdate {
+            display_name,
+            avatar_url,
+            default_view,
+            layout_mode,
+            upload_protection: payload.upload_protection,
+            compact_metadata: payload.compact_metadata,
+            device_lock: payload.device_lock,
+            sync_on_metered: payload.sync_on_metered,
+            trash_retention_days: payload.trash_retention_days,
+        },
     )
     .await
     .map_err(|e| internal_error("update user settings", e))?
     .ok_or_else(|| ApiError::Unauthorized("User not found".into()))?;
 
     Ok(Json(UserSettingsResponse {
-        trash_retention_days,
+        display_name: settings.display_name,
+        avatar_url: settings.avatar_url,
+        default_view: settings.default_view,
+        layout_mode: settings.layout_mode,
+        upload_protection: settings.upload_protection,
+        compact_metadata: settings.compact_metadata,
+        device_lock: settings.device_lock,
+        sync_on_metered: settings.sync_on_metered,
+        trash_retention_days: settings.trash_retention_days,
     }))
+}
+
+fn validate_optional_display_name(value: &str) -> Result<Option<String>, ApiError> {
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        return Ok(None);
+    }
+
+    validate_display_name(trimmed).map_err(|msg| ApiError::BadRequest(msg.into()))?;
+    Ok(Some(trimmed.to_string()))
+}
+
+fn validate_avatar_url(value: &str) -> Result<Option<String>, ApiError> {
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        return Ok(Some(String::new()));
+    }
+
+    if trimmed.len() > 3_000_000 {
+        return Err(ApiError::BadRequest("Avatar image is too large".into()));
+    }
+    if !trimmed.starts_with("data:image/") {
+        return Err(ApiError::BadRequest(
+            "Avatar must be an image data URL".into(),
+        ));
+    }
+
+    Ok(Some(trimmed.to_string()))
+}
+
+fn validate_default_view(value: &str) -> Result<Option<String>, ApiError> {
+    let trimmed = value.trim();
+    if matches!(
+        trimmed,
+        "all" | "favourites" | "shared" | "groups" | "calendar" | "trash"
+    ) {
+        return Ok(Some(trimmed.to_string()));
+    }
+
+    Err(ApiError::BadRequest("Invalid default view".into()))
+}
+
+fn validate_layout_mode(value: &str) -> Result<Option<String>, ApiError> {
+    let trimmed = value.trim();
+    if matches!(trimmed, "grid" | "list") {
+        return Ok(Some(trimmed.to_string()));
+    }
+
+    Err(ApiError::BadRequest("Invalid layout mode".into()))
 }
 
 async fn require_refresh_token(

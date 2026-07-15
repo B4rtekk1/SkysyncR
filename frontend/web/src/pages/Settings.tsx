@@ -8,7 +8,6 @@ import { logout } from '../api/auth'
 import { updateUserSettings, type CurrentUserResponse } from '../api/users'
 import { NAV_ICONS } from './dashboard/icons'
 import {
-    LAYOUT_MODE_STORAGE_KEY,
     NAV_LABELS,
     saveActiveView,
     saveLayoutMode,
@@ -18,14 +17,13 @@ import {
     clearLegacyProfileStorage,
     DEFAULT_SETTINGS,
     loadUserSettings,
-    userSettingsStorageKey,
     type SettingsState,
 } from './settingsPreferences'
 
 const SETTINGS_ANIMATION_MS = 220
 const MAX_AVATAR_BYTES = 2 * 1024 * 1024
 
-const viewOptions: ViewKey[] = ['all', 'favourites', 'shared', 'groups', 'trash']
+const viewOptions: ViewKey[] = ['all', 'favourites', 'shared', 'groups', 'calendar', 'trash']
 const themeOptions: Array<{ value: ThemePreference; label: string }> = [
     { value: 'system', label: 'System' },
     { value: 'light', label: 'Light' },
@@ -35,7 +33,7 @@ const themeOptions: Array<{ value: ThemePreference; label: string }> = [
 type SettingsModalProps = {
     currentUser: CurrentUserResponse | null
     onClose: () => void
-    onSave?: (profile: { displayName: string; avatarUrl: string; trashRetentionDays: number }) => void
+    onSave?: (profile: SettingsState) => void
 }
 
 function SettingsModalContent({ currentUser, onClose, onSave }: SettingsModalProps) {
@@ -118,21 +116,39 @@ function SettingsModalContent({ currentUser, onClose, onSave }: SettingsModalPro
             const settingsToSave = { ...settings }
             if (currentUser) {
                 const savedRemote = await updateUserSettings({
+                    display_name: settingsToSave.displayName,
+                    avatar_url: settingsToSave.avatarUrl,
+                    default_view: settingsToSave.defaultView,
+                    layout_mode: settingsToSave.layoutMode,
+                    upload_protection: settingsToSave.uploadProtection,
+                    compact_metadata: settingsToSave.compactMetadata,
+                    device_lock: settingsToSave.deviceLock,
+                    sync_on_metered: settingsToSave.syncOnMetered,
                     trash_retention_days: settingsToSave.trashRetentionDays,
                 })
+                settingsToSave.displayName = savedRemote.display_name ?? ''
+                settingsToSave.avatarUrl = savedRemote.avatar_url ?? ''
+                settingsToSave.defaultView = savedRemote.default_view as ViewKey
+                settingsToSave.layoutMode = savedRemote.layout_mode === 'list' ? 'list' : 'grid'
+                settingsToSave.uploadProtection = savedRemote.upload_protection
+                settingsToSave.compactMetadata = savedRemote.compact_metadata
+                settingsToSave.deviceLock = savedRemote.device_lock
+                settingsToSave.syncOnMetered = savedRemote.sync_on_metered
                 settingsToSave.trashRetentionDays = savedRemote.trash_retention_days
                 setSettings(settingsToSave)
-            }
-            if (currentUser) {
-                localStorage.setItem(userSettingsStorageKey(currentUser.id), JSON.stringify(settingsToSave))
             }
             clearLegacyProfileStorage()
             saveActiveView(settingsToSave.defaultView)
             saveLayoutMode(settingsToSave.layoutMode)
-            localStorage.setItem(LAYOUT_MODE_STORAGE_KEY, settingsToSave.layoutMode)
             onSave?.({
                 displayName: settingsToSave.displayName,
                 avatarUrl: settingsToSave.avatarUrl,
+                defaultView: settingsToSave.defaultView,
+                layoutMode: settingsToSave.layoutMode,
+                uploadProtection: settingsToSave.uploadProtection,
+                compactMetadata: settingsToSave.compactMetadata,
+                deviceLock: settingsToSave.deviceLock,
+                syncOnMetered: settingsToSave.syncOnMetered,
                 trashRetentionDays: settingsToSave.trashRetentionDays,
             })
             setSaved(true)
@@ -184,7 +200,7 @@ function SettingsModalContent({ currentUser, onClose, onSave }: SettingsModalPro
                                     <p className="settings-kicker">Profile</p>
                                     <h2>Identity</h2>
                                 </div>
-                                <span className="settings-badge">Local</span>
+                                <span className="settings-badge">Synced</span>
                             </div>
                             <div className="settings-profile">
                                 <div className="settings-profile__avatar">

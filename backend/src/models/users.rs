@@ -76,17 +76,40 @@ pub struct CurrentUserResponse {
     pub id: Uuid,
     pub email: String,
     pub display_name: Option<String>,
+    pub avatar_url: Option<String>,
     pub public_key: Option<String>,
+    pub default_view: String,
+    pub layout_mode: String,
+    pub upload_protection: bool,
+    pub compact_metadata: bool,
+    pub device_lock: bool,
+    pub sync_on_metered: bool,
     pub trash_retention_days: i32,
 }
 
 #[derive(Debug, Deserialize)]
 pub struct UpdateUserSettingsRequest {
-    pub trash_retention_days: i32,
+    pub display_name: Option<String>,
+    pub avatar_url: Option<String>,
+    pub default_view: Option<String>,
+    pub layout_mode: Option<String>,
+    pub upload_protection: Option<bool>,
+    pub compact_metadata: Option<bool>,
+    pub device_lock: Option<bool>,
+    pub sync_on_metered: Option<bool>,
+    pub trash_retention_days: Option<i32>,
 }
 
 #[derive(Debug, Serialize)]
 pub struct UserSettingsResponse {
+    pub display_name: Option<String>,
+    pub avatar_url: Option<String>,
+    pub default_view: String,
+    pub layout_mode: String,
+    pub upload_protection: bool,
+    pub compact_metadata: bool,
+    pub device_lock: bool,
+    pub sync_on_metered: bool,
     pub trash_retention_days: i32,
 }
 

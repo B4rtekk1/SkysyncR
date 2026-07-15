@@ -1503,7 +1503,18 @@ function Dashboard() {
                         setAvatarUrl(profile.avatarUrl)
                         setCurrentUser((current) =>
                             current
-                                ? { ...current, trash_retention_days: profile.trashRetentionDays }
+                                ? {
+                                      ...current,
+                                      display_name: profile.displayName || null,
+                                      avatar_url: profile.avatarUrl || null,
+                                      default_view: profile.defaultView,
+                                      layout_mode: profile.layoutMode,
+                                      upload_protection: profile.uploadProtection,
+                                      compact_metadata: profile.compactMetadata,
+                                      device_lock: profile.deviceLock,
+                                      sync_on_metered: profile.syncOnMetered,
+                                      trash_retention_days: profile.trashRetentionDays,
+                                  }
                                 : current,
                         )
                     }}

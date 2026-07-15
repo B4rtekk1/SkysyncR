@@ -25,7 +25,38 @@ export interface CurrentUserResponse {
   id: string
   email: string
   display_name: string | null
+  avatar_url: string | null
   public_key: string | null
+  default_view: string
+  layout_mode: string
+  upload_protection: boolean
+  compact_metadata: boolean
+  device_lock: boolean
+  sync_on_metered: boolean
+  trash_retention_days: number
+}
+
+export type UserSettingsPayload = {
+  display_name: string
+  avatar_url: string
+  default_view: string
+  layout_mode: string
+  upload_protection: boolean
+  compact_metadata: boolean
+  device_lock: boolean
+  sync_on_metered: boolean
+  trash_retention_days: number
+}
+
+export type UserSettingsResponse = {
+  display_name: string | null
+  avatar_url: string | null
+  default_view: string
+  layout_mode: string
+  upload_protection: boolean
+  compact_metadata: boolean
+  device_lock: boolean
+  sync_on_metered: boolean
   trash_retention_days: number
 }
 
@@ -141,7 +172,7 @@ export async function getCurrentUserWithAccessToken(accessToken: string): Promis
   return res.json()
 }
 
-export async function updateUserSettings(payload: { trash_retention_days: number }): Promise<{ trash_retention_days: number }> {
+export async function updateUserSettings(payload: UserSettingsPayload): Promise<UserSettingsResponse> {
   const res = await authenticatedFetch(`${url}users/settings`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },

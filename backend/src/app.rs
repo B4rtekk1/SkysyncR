@@ -97,6 +97,9 @@ pub async fn run_server() {
     crate::db::groups::ensure_groups_tables(&pool)
         .await
         .expect("Failed to ensure groups tables");
+    crate::db::users::ensure_user_settings_columns(&pool)
+        .await
+        .expect("Failed to ensure user settings columns");
 
     if config.is_dev {
         println!("Running in development mode");
