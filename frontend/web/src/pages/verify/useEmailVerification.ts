@@ -18,11 +18,7 @@ export function useEmailVerification(token: string | null) {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    if (!token) {
-      setStatus('error')
-      setError('Missing verification token.')
-      return
-    }
+    if (!token) return
 
     let active = true
 
@@ -51,6 +47,10 @@ export function useEmailVerification(token: string | null) {
       active = false
     }
   }, [token])
+
+  if (!token) {
+    return { status: 'error' as VerificationStatus, error: 'Missing verification token.' }
+  }
 
   return { status, error }
 }

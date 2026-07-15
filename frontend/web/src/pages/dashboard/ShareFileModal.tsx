@@ -193,12 +193,13 @@ export function ShareFileModal({
     )
     const [copied, setCopied] = useState(false)
     const [error, setError] = useState<string | null>(null)
+    const [sharePreviewBaseTime] = useState(() => Date.now())
     const requestedShareRef = useRef<string | null>(null)
     const qr = useMemo(() => (shareUrl ? createQrPath(shareUrl) : null), [shareUrl])
     const isFileShare = 'filename' in item
     const title = isFileShare ? item.filename : item.name
     const linkInputValue = shareUrl ?? (item.is_public || loading ? 'Generating link...' : 'Link is inactive')
-    const selectedExpiresAt = shareDuration === null ? null : new Date(Date.now() + shareDuration * 1000)
+    const selectedExpiresAt = shareDuration === null ? null : new Date(sharePreviewBaseTime + shareDuration * 1000)
     const expiryLabel = selectedExpiresAt
         ? `Expires ${selectedExpiresAt.toLocaleString([], {
               dateStyle: 'medium',

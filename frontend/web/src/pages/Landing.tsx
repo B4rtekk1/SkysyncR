@@ -15,7 +15,10 @@ function Landing() {
   const [navSolid, setNavSolid] = useState(false)
   const featuresRef = useRef<HTMLDivElement>(null)
   const [featuresVisible, setFeaturesVisible] = useState(false)
-  const [verificationPromptEmail, setVerificationPromptEmail] = useState<string | null>(null)
+  const [verificationPromptEmail] = useState<string | null>(() => {
+    const state = location.state as LandingLocationState | null
+    return state?.verificationPromptEmail ?? null
+  })
 
   useEffect(() => {
     const t = setTimeout(() => setLoaded(true), 40)
@@ -31,7 +34,6 @@ function Landing() {
     const state = location.state as LandingLocationState | null
     if (!state?.verificationPromptEmail) return
 
-    setVerificationPromptEmail(state.verificationPromptEmail)
     navigate(location.pathname, { replace: true, state: null })
   }, [location.pathname, location.state, navigate])
 
