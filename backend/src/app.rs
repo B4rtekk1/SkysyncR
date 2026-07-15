@@ -1,3 +1,4 @@
+use crate::routes::calendar::calendar_routes;
 use crate::routes::files::files_routes;
 use crate::routes::folders::folders_routes;
 use crate::routes::storage::storage_routes;
@@ -89,6 +90,10 @@ pub async fn run_server() {
     let pool = connect().await;
     let config = AppConfig::from_env();
 
+    crate::db::calendar::ensure_calendar_entries_table(&pool)
+        .await
+        .expect("Failed to ensure calendar_entries table");
+
     if config.is_dev {
         println!("Running in development mode");
     }
@@ -120,6 +125,7 @@ pub async fn run_server() {
         .merge(storage_routes())
         .merge(files_routes())
         .merge(folders_routes())
+        .merge(calendar_routes())
         .with_state(state)
         .layer(security_header_layer(
             header::X_CONTENT_TYPE_OPTIONS,

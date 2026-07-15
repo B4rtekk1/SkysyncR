@@ -1,5 +1,11 @@
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react'
 import type { ApiFile } from '../../api/files'
+import {
+    createCalendarEntry,
+    deleteCalendarEntry,
+    listCalendarEntries,
+    type CalendarEntryKind,
+} from '../../api/calendar'
 import { formatBytes, kindFromFile, KIND_LABELS, type FileKind } from './fileUtils'
 
 type CalendarPanelProps = {
@@ -12,7 +18,6 @@ type CalendarViewMode = 'month' | 'week'
 type CalendarSourceFilter = 'all' | 'root' | 'folders'
 type CalendarKindFilter = 'all' | FileKind
 
-type CalendarEntryKind = 'event' | 'deadline'
 type CalendarDropdownId = 'period' | 'kind' | 'source' | 'reminder' | 'file' | null
 
 type CalendarEntry = {
@@ -133,12 +138,38 @@ function loadCalendarEntries(): CalendarEntry[] {
     }
 }
 
-function saveCalendarEntries(entries: CalendarEntry[]) {
-    try {
-        localStorage.setItem(CALENDAR_ENTRIES_STORAGE_KEY, JSON.stringify(entries))
-    } catch {
-        // Ignore storage failures; the calendar still works for the current session.
+function fromApiEntry(entry: {
+    id: string
+    kind: CalendarEntryKind
+    date: string
+    time: string
+    title: string
+    note: string
+    reminder: string
+    file_id: string | null
+}): CalendarEntry {
+    return {
+        id: entry.id,
+        kind: entry.kind,
+        date: entry.date,
+        time: entry.time.slice(0, 5),
+        title: entry.title,
+        note: entry.note,
+        reminder: entry.reminder,
+        fileId: entry.file_id,
     }
+}
+
+function entryKey(entry: { kind: string; date: string; time: string; title: string; note: string; reminder: string; file_id?: string | null; fileId?: string | null }) {
+    return [
+        entry.kind,
+        entry.date,
+        entry.time.slice(0, 5),
+        entry.title,
+        entry.note,
+        entry.reminder,
+        entry.file_id ?? entry.fileId ?? '',
+    ].join('\u001f')
 }
 
 type CalendarDropdownProps<T extends string> = {
@@ -236,6 +267,7 @@ export function CalendarPanel({ files, onPreview, onDownload }: CalendarPanelPro
     const [entryReminder, setEntryReminder] = useState('')
     const [entryFileId, setEntryFileId] = useState('')
     const [openDropdown, setOpenDropdown] = useState<CalendarDropdownId>(null)
+    const [entrySyncError, setEntrySyncError] = useState<string | null>(null)
 
     const filteredFiles = useMemo(() => {
         return files.filter((file) => {
@@ -336,10 +368,53 @@ export function CalendarPanel({ files, onPreview, onDownload }: CalendarPanelPro
         }
     }, [])
 
-    function updateEntries(nextEntries: CalendarEntry[]) {
-        setEntries(nextEntries)
-        saveCalendarEntries(nextEntries)
-    }
+    useEffect(() => {
+        let active = true
+
+        async function loadSyncedEntries() {
+            try {
+                setEntrySyncError(null)
+                const remoteEntries = await listCalendarEntries()
+                if (!active) return
+
+                const localEntries = loadCalendarEntries()
+                if (localEntries.length === 0) {
+                    setEntries(remoteEntries.map(fromApiEntry))
+                    return
+                }
+
+                const remoteKeys = new Set(remoteEntries.map(entryKey))
+                const entriesToMigrate = localEntries.filter((entry) => !remoteKeys.has(entryKey(entry)))
+                const migrated = await Promise.all(
+                    entriesToMigrate.map((entry) =>
+                        createCalendarEntry({
+                            kind: entry.kind,
+                            date: entry.date,
+                            time: entry.time.slice(0, 5),
+                            title: entry.title,
+                            note: entry.note,
+                            reminder: entry.reminder,
+                            file_id: entry.fileId,
+                        }),
+                    ),
+                )
+
+                localStorage.removeItem(CALENDAR_ENTRIES_STORAGE_KEY)
+                if (active) setEntries([...remoteEntries, ...migrated].map(fromApiEntry))
+            } catch (error) {
+                if (active) {
+                    setEntrySyncError(error instanceof Error ? error.message : 'Could not sync calendar entries.')
+                    setEntries(loadCalendarEntries())
+                }
+            }
+        }
+
+        void loadSyncedEntries()
+
+        return () => {
+            active = false
+        }
+    }, [])
 
     function shiftPeriod(offset: number) {
         setVisibleDate((current) => {
@@ -377,31 +452,44 @@ export function CalendarPanel({ files, onPreview, onDownload }: CalendarPanelPro
         if (viewMode === 'week') setVisibleDate(day.date)
     }
 
-    function handleCreateEntry(event: FormEvent<HTMLFormElement>) {
+    async function handleCreateEntry(event: FormEvent<HTMLFormElement>) {
         event.preventDefault()
         const title = entryTitle.trim() || (linkedFile ? linkedFile.filename : '')
         if (!title) return
 
-        const nextEntry: CalendarEntry = {
-            id: crypto.randomUUID(),
-            kind: entryKind,
-            date: selectedDateKey,
-            time: entryTime,
-            title,
-            note: entryNote.trim(),
-            reminder: entryReminder,
-            fileId: entryFileId || null,
-        }
+        try {
+            setEntrySyncError(null)
+            const created = await createCalendarEntry({
+                kind: entryKind,
+                date: selectedDateKey,
+                time: entryTime,
+                title,
+                note: entryNote.trim(),
+                reminder: entryReminder,
+                file_id: entryFileId || null,
+            })
 
-        updateEntries([...entries, nextEntry])
-        setEntryTitle('')
-        setEntryNote('')
-        setEntryReminder('')
-        setEntryFileId('')
+            setEntries((current) => [...current, fromApiEntry(created)])
+            setEntryTitle('')
+            setEntryNote('')
+            setEntryReminder('')
+            setEntryFileId('')
+        } catch (error) {
+            setEntrySyncError(error instanceof Error ? error.message : 'Could not save calendar entry.')
+        }
     }
 
-    function deleteEntry(id: string) {
-        updateEntries(entries.filter((entry) => entry.id !== id))
+    async function deleteEntry(id: string) {
+        const previousEntries = entries
+        setEntries((current) => current.filter((entry) => entry.id !== id))
+
+        try {
+            setEntrySyncError(null)
+            await deleteCalendarEntry(id)
+        } catch (error) {
+            setEntries(previousEntries)
+            setEntrySyncError(error instanceof Error ? error.message : 'Could not delete calendar entry.')
+        }
     }
 
     return (
@@ -558,6 +646,11 @@ export function CalendarPanel({ files, onPreview, onDownload }: CalendarPanelPro
                     </div>
 
                     <form className="calendar-panel__form" onSubmit={handleCreateEntry}>
+                        {entrySyncError && (
+                            <p className="calendar-panel__sync-error" role="alert">
+                                {entrySyncError}
+                            </p>
+                        )}
                         <div className="calendar-panel__segments" role="group" aria-label="Entry type">
                             <button
                                 className={entryKind === 'event' ? 'is-active' : ''}
@@ -643,7 +736,7 @@ export function CalendarPanel({ files, onPreview, onDownload }: CalendarPanelPro
                                                         Preview
                                                     </button>
                                                 )}
-                                                <button type="button" onClick={() => deleteEntry(entry.id)}>
+                                                <button type="button" onClick={() => void deleteEntry(entry.id)}>
                                                     Delete
                                                 </button>
                                             </div>

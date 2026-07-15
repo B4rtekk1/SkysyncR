@@ -168,6 +168,22 @@ CREATE TABLE IF NOT EXISTS notifications
 );
 CREATE INDEX idx_notifications_user_id ON notifications (user_id, is_read);
 
+CREATE TABLE IF NOT EXISTS calendar_entries
+(
+    id         UUID PRIMARY KEY     DEFAULT gen_random_uuid(),
+    owner_id   UUID        NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+    kind       TEXT        NOT NULL CHECK (kind IN ('event', 'deadline')),
+    date       TEXT        NOT NULL,
+    time       TEXT        NOT NULL,
+    title      TEXT        NOT NULL,
+    note       TEXT        NOT NULL DEFAULT '',
+    reminder   TEXT        NOT NULL DEFAULT '',
+    file_id    UUID        REFERENCES files (id) ON DELETE SET NULL,
+    created_at timestamptz NOT NULL DEFAULT NOW(),
+    updated_at timestamptz NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_calendar_entries_owner_date ON calendar_entries (owner_id, date);
+
 CREATE TABLE IF NOT EXISTS storage_quotas
 (
     user_id    UUID PRIMARY KEY REFERENCES users (id) ON DELETE CASCADE,
@@ -205,3 +221,18 @@ ALTER TABLE folders ADD COLUMN IF NOT EXISTS encrypted_key bytea;
 ALTER TABLE folders ADD COLUMN IF NOT EXISTS is_public BOOLEAN NOT NULL DEFAULT FALSE;
 ALTER TABLE folders ADD COLUMN IF NOT EXISTS share_token TEXT;
 ALTER TABLE folders ADD COLUMN IF NOT EXISTS description TEXT;
+CREATE TABLE IF NOT EXISTS calendar_entries
+(
+    id         UUID PRIMARY KEY     DEFAULT gen_random_uuid(),
+    owner_id   UUID        NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+    kind       TEXT        NOT NULL CHECK (kind IN ('event', 'deadline')),
+    date       TEXT        NOT NULL,
+    time       TEXT        NOT NULL,
+    title      TEXT        NOT NULL,
+    note       TEXT        NOT NULL DEFAULT '',
+    reminder   TEXT        NOT NULL DEFAULT '',
+    file_id    UUID        REFERENCES files (id) ON DELETE SET NULL,
+    created_at timestamptz NOT NULL DEFAULT NOW(),
+    updated_at timestamptz NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_calendar_entries_owner_date ON calendar_entries (owner_id, date);

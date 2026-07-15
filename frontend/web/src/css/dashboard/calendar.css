@@ -569,6 +569,17 @@
     color: var(--signal);
 }
 
+.calendar-panel__sync-error {
+    margin: 0;
+    padding: 9px 10px;
+    border: 1px solid rgba(255, 176, 76, 0.26);
+    border-radius: 8px;
+    background: rgba(255, 176, 76, 0.08);
+    color: var(--amber);
+    font-size: 0.78rem;
+    line-height: 1.35;
+}
+
 .calendar-panel__section {
     display: grid;
     gap: 10px;
