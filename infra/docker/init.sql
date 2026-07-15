@@ -9,6 +9,7 @@ CREATE TABLE IF NOT EXISTS users
     verification_token_expires_at   timestamptz,
     display_name                    TEXT,
     avatar_url                      TEXT,
+    trash_retention_days            INT         NOT NULL DEFAULT 30,
     is_active                       BOOLEAN     NOT NULL DEFAULT TRUE,
     failed_login_attempts           INT         NOT NULL DEFAULT 0,
     locked_until                    timestamptz,
@@ -192,6 +193,7 @@ ALTER TABLE refresh_tokens DROP COLUMN IF EXISTS ip_address;
 ALTER TABLE refresh_tokens DROP COLUMN IF EXISTS device_id;
 ALTER TABLE audit_logs DROP COLUMN IF EXISTS ip_address;
 ALTER TABLE files ADD COLUMN IF NOT EXISTS note TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS trash_retention_days INT NOT NULL DEFAULT 30;
 ALTER TABLE folders ADD COLUMN IF NOT EXISTS encrypted_key bytea;
 ALTER TABLE folders ADD COLUMN IF NOT EXISTS is_public BOOLEAN NOT NULL DEFAULT FALSE;
 ALTER TABLE folders ADD COLUMN IF NOT EXISTS share_token TEXT;

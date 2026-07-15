@@ -8,7 +8,7 @@ use crate::db::refresh_tokens::{
 use crate::db::users::*;
 use crate::models::users::{
     CurrentUserResponse, LoginRequest, LoginResponse, RefreshResponse, RegisterRequest,
-    RegisterResponse,
+    RegisterResponse, UpdateUserSettingsRequest, UserSettingsResponse,
 };
 use crate::state::AppState;
 use crate::utils::errors::{ApiError, internal_error, map_db_error};
@@ -122,6 +122,32 @@ pub async fn current_user(
         email: profile.email,
         display_name: profile.display_name,
         public_key: profile.public_key,
+        trash_retention_days: profile.trash_retention_days,
+    }))
+}
+
+pub async fn update_user_settings(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Json(payload): Json<UpdateUserSettingsRequest>,
+) -> Result<Json<UserSettingsResponse>, ApiError> {
+    if !(1..=365).contains(&payload.trash_retention_days) {
+        return Err(ApiError::BadRequest(
+            "Trash retention must be between 1 and 365 days".into(),
+        ));
+    }
+
+    let trash_retention_days = update_user_trash_retention_days(
+        &state.db_pool,
+        auth.user_id,
+        payload.trash_retention_days,
+    )
+    .await
+    .map_err(|e| internal_error("update user settings", e))?
+    .ok_or_else(|| ApiError::Unauthorized("User not found".into()))?;
+
+    Ok(Json(UserSettingsResponse {
+        trash_retention_days,
     }))
 }
 

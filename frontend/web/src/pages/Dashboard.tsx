@@ -1312,7 +1312,7 @@ function Dashboard() {
                             body={
                                 hasActiveFilter || query
                                     ? 'Adjust the search or filter to see more deleted files.'
-                                    : "Deleted files stay here for 30 days before they're gone for good."
+                                    : `Deleted files stay here for ${currentUser?.trash_retention_days ?? 30} days before they're gone for good.`
                             }
                         />
                     )}
@@ -1415,6 +1415,11 @@ function Dashboard() {
                     onSave={(profile) => {
                         setDisplayName(profile.displayName || 'You')
                         setAvatarUrl(profile.avatarUrl)
+                        setCurrentUser((current) =>
+                            current
+                                ? { ...current, trash_retention_days: profile.trashRetentionDays }
+                                : current,
+                        )
                     }}
                 />
             )}

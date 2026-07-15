@@ -77,6 +77,17 @@ pub struct CurrentUserResponse {
     pub email: String,
     pub display_name: Option<String>,
     pub public_key: Option<String>,
+    pub trash_retention_days: i32,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct UpdateUserSettingsRequest {
+    pub trash_retention_days: i32,
+}
+
+#[derive(Debug, Serialize)]
+pub struct UserSettingsResponse {
+    pub trash_retention_days: i32,
 }
 
 impl From<User> for UserResponse {

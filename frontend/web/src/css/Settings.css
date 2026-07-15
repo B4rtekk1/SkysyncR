@@ -418,6 +418,51 @@
     flex-shrink: 0;
 }
 
+.settings-retention {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 96px;
+    align-items: center;
+    gap: 14px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--panel);
+    padding: 14px;
+    color: var(--paper);
+}
+
+.settings-retention span {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.settings-retention strong {
+    font-size: 0.9rem;
+}
+
+.settings-retention small {
+    color: var(--mist);
+    font-size: 0.78rem;
+    line-height: 1.4;
+}
+
+.settings-retention input {
+    width: 100%;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--panel-2);
+    color: var(--paper);
+    padding: 9px 10px;
+    font: inherit;
+    outline: none;
+}
+
+.settings-retention input:focus {
+    border-color: var(--signal);
+    box-shadow: 0 0 0 3px rgba(var(--signal-rgb), 0.12);
+}
+
 .settings-panel--danger {
     display: flex;
     flex-direction: column;
@@ -505,6 +550,10 @@
 
     .settings-toggle {
         align-items: flex-start;
+    }
+
+    .settings-retention {
+        grid-template-columns: 1fr;
     }
 }
 

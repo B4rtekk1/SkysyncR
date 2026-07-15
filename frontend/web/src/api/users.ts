@@ -26,6 +26,7 @@ export interface CurrentUserResponse {
   email: string
   display_name: string | null
   public_key: string | null
+  trash_retention_days: number
 }
 
 export class ApiRequestError extends Error {
@@ -133,6 +134,20 @@ export async function getCurrentUserWithAccessToken(accessToken: string): Promis
 
   if (!res.ok) {
     await throwApiError(res, 'Could not load user profile')
+  }
+
+  return res.json()
+}
+
+export async function updateUserSettings(payload: { trash_retention_days: number }): Promise<{ trash_retention_days: number }> {
+  const res = await authenticatedFetch(`${url}users/settings`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+
+  if (!res.ok) {
+    await throwApiError(res, 'Could not save settings')
   }
 
   return res.json()

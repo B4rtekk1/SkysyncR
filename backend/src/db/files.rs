@@ -1,5 +1,5 @@
 use base64::{Engine as _, engine::general_purpose};
-use chrono::{DateTime, Duration, Utc};
+use chrono::{DateTime, Utc};
 use serde::{Serialize, Serializer};
 use sqlx::{FromRow, PgPool};
 use uuid::Uuid;
@@ -301,20 +301,19 @@ pub async fn list_expired_deleted_files(
     retention_days: i64,
     limit: i64,
 ) -> Result<Vec<FilePurgeTarget>, sqlx::Error> {
-    let cutoff = Utc::now() - Duration::days(retention_days);
-
     sqlx::query_as::<_, FilePurgeTarget>(
         r#"
-        SELECT id, storage_path
-        FROM files
-        WHERE is_deleted = TRUE
-          AND deleted_at IS NOT NULL
-          AND deleted_at <= $1
-        ORDER BY deleted_at ASC
+        SELECT f.id, f.storage_path
+        FROM files f
+        JOIN users u ON u.id = f.owner_id
+        WHERE f.is_deleted = TRUE
+          AND f.deleted_at IS NOT NULL
+          AND f.deleted_at <= NOW() - (COALESCE(u.trash_retention_days, $1::int)::int * interval '1 day')
+        ORDER BY f.deleted_at ASC
         LIMIT $2
         "#,
     )
-    .bind(cutoff)
+    .bind(retention_days as i32)
     .bind(limit)
     .fetch_all(pool)
     .await

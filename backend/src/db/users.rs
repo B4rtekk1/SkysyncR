@@ -113,15 +113,16 @@ pub struct CurrentUserCryptoProfile {
     pub email: String,
     pub display_name: Option<String>,
     pub public_key: Option<String>,
+    pub trash_retention_days: i32,
 }
 
 pub async fn get_current_user_crypto_profile(
     pool: &PgPool,
     user_id: Uuid,
 ) -> Result<Option<CurrentUserCryptoProfile>, sqlx::Error> {
-    let result = sqlx::query_as::<_, (Uuid, String, Option<String>, Option<String>)>(
+    let result = sqlx::query_as::<_, (Uuid, String, Option<String>, Option<String>, i32)>(
         r#"
-        SELECT id, email, display_name, public_key
+        SELECT id, email, display_name, public_key, trash_retention_days
         FROM users
         WHERE id = $1
           AND is_active = TRUE
@@ -132,13 +133,35 @@ pub async fn get_current_user_crypto_profile(
     .await?;
 
     Ok(result.map(
-        |(id, email, display_name, public_key)| CurrentUserCryptoProfile {
+        |(id, email, display_name, public_key, trash_retention_days)| CurrentUserCryptoProfile {
             id,
             email,
             display_name,
             public_key,
+            trash_retention_days,
         },
     ))
+}
+
+pub async fn update_user_trash_retention_days(
+    pool: &PgPool,
+    user_id: Uuid,
+    trash_retention_days: i32,
+) -> Result<Option<i32>, sqlx::Error> {
+    sqlx::query_scalar::<_, i32>(
+        r#"
+        UPDATE users
+        SET trash_retention_days = $1,
+            updated_at = NOW()
+        WHERE id = $2
+          AND is_active = TRUE
+        RETURNING trash_retention_days
+        "#,
+    )
+    .bind(trash_retention_days)
+    .bind(user_id)
+    .fetch_optional(pool)
+    .await
 }
 
 pub async fn update_last_login(pool: &PgPool, email: &str) -> Result<(), sqlx::Error> {

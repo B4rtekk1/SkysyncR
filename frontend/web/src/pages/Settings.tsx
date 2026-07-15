@@ -5,7 +5,7 @@ import '../css/Settings.css'
 import ThemeToggle from '../components/ThemeToggle'
 import { useTheme, type ThemePreference } from '../hooks/UseTheme'
 import { logout } from '../api/auth'
-import type { CurrentUserResponse } from '../api/users'
+import { updateUserSettings, type CurrentUserResponse } from '../api/users'
 import { NAV_ICONS } from './dashboard/icons'
 import {
     LAYOUT_MODE_STORAGE_KEY,
@@ -24,6 +24,7 @@ type SettingsState = {
     compactMetadata: boolean
     deviceLock: boolean
     syncOnMetered: boolean
+    trashRetentionDays: number
 }
 
 const SETTINGS_STORAGE_KEY = 'settings_preferences'
@@ -40,6 +41,7 @@ const DEFAULT_SETTINGS: SettingsState = {
     compactMetadata: true,
     deviceLock: false,
     syncOnMetered: false,
+    trashRetentionDays: 30,
 }
 
 const viewOptions: ViewKey[] = ['all', 'favourites', 'shared', 'groups', 'trash']
@@ -52,7 +54,7 @@ const themeOptions: Array<{ value: ThemePreference; label: string }> = [
 type SettingsModalProps = {
     currentUser: CurrentUserResponse | null
     onClose: () => void
-    onSave?: (profile: { displayName: string; avatarUrl: string }) => void
+    onSave?: (profile: { displayName: string; avatarUrl: string; trashRetentionDays: number }) => void
 }
 
 function userSettingsStorageKey(userId: string): string {
@@ -68,6 +70,7 @@ export function loadUserSettings(user: CurrentUserResponse | null): SettingsStat
             ...saved,
             displayName: saved.displayName || user?.display_name || '',
             avatarUrl: saved.avatarUrl || '',
+            trashRetentionDays: user?.trash_retention_days ?? saved.trashRetentionDays ?? DEFAULT_SETTINGS.trashRetentionDays,
         }
     } catch {
         return {
@@ -89,6 +92,7 @@ function SettingsModal({ currentUser, onClose, onSave }: SettingsModalProps) {
     const [saved, setSaved] = useState(false)
     const [closing, setClosing] = useState(false)
     const [avatarError, setAvatarError] = useState<string | null>(null)
+    const [saveError, setSaveError] = useState<string | null>(null)
     const { theme, themePreference, setThemePreference } = useTheme()
     const initials = useMemo(() => {
         const source = settings.displayName || currentUser?.email || 'S'
@@ -120,6 +124,7 @@ function SettingsModal({ currentUser, onClose, onSave }: SettingsModalProps) {
     function updateSetting<K extends keyof SettingsState>(key: K, value: SettingsState[K]) {
         setSettings((prev) => ({ ...prev, [key]: value }))
         setSaved(false)
+        setSaveError(null)
         if (key === 'avatarUrl') setAvatarError(null)
     }
 
@@ -155,20 +160,38 @@ function SettingsModal({ currentUser, onClose, onSave }: SettingsModalProps) {
         updateSetting('avatarUrl', '')
     }
 
-    function saveSettings() {
+    function updateTrashRetentionDays(value: string) {
+        const parsed = Number.parseInt(value, 10)
+        const nextValue = Number.isFinite(parsed) ? Math.min(365, Math.max(1, parsed)) : DEFAULT_SETTINGS.trashRetentionDays
+        updateSetting('trashRetentionDays', nextValue)
+    }
+
+    async function saveSettings() {
         try {
+            const settingsToSave = { ...settings }
             if (currentUser) {
-                localStorage.setItem(userSettingsStorageKey(currentUser.id), JSON.stringify(settings))
+                const savedRemote = await updateUserSettings({
+                    trash_retention_days: settingsToSave.trashRetentionDays,
+                })
+                settingsToSave.trashRetentionDays = savedRemote.trash_retention_days
+                setSettings(settingsToSave)
+            }
+            if (currentUser) {
+                localStorage.setItem(userSettingsStorageKey(currentUser.id), JSON.stringify(settingsToSave))
             }
             clearLegacyProfileStorage()
-            saveActiveView(settings.defaultView)
-            saveLayoutMode(settings.layoutMode)
-            localStorage.setItem(LAYOUT_MODE_STORAGE_KEY, settings.layoutMode)
-            onSave?.({ displayName: settings.displayName, avatarUrl: settings.avatarUrl })
+            saveActiveView(settingsToSave.defaultView)
+            saveLayoutMode(settingsToSave.layoutMode)
+            localStorage.setItem(LAYOUT_MODE_STORAGE_KEY, settingsToSave.layoutMode)
+            onSave?.({
+                displayName: settingsToSave.displayName,
+                avatarUrl: settingsToSave.avatarUrl,
+                trashRetentionDays: settingsToSave.trashRetentionDays,
+            })
             setSaved(true)
         } catch {
             setSaved(false)
-            setAvatarError('Could not save avatar in this browser.')
+            setSaveError('Could not save settings.')
         }
     }
 
@@ -365,6 +388,20 @@ function SettingsModal({ currentUser, onClose, onSave }: SettingsModalProps) {
                                         onChange={(e) => updateSetting('deviceLock', e.target.checked)}
                                     />
                                 </label>
+                                <label className="settings-retention">
+                                    <span>
+                                        <strong>Trash retention</strong>
+                                        <small>Files in trash are permanently deleted after this many days.</small>
+                                    </span>
+                                    <input
+                                        type="number"
+                                        min={1}
+                                        max={365}
+                                        value={settings.trashRetentionDays}
+                                        onChange={(e) => updateTrashRetentionDays(e.target.value)}
+                                        aria-label="Trash retention days"
+                                    />
+                                </label>
                                 <label className="settings-toggle">
                                     <span>
                                         <strong>Sync on metered networks</strong>
@@ -394,6 +431,7 @@ function SettingsModal({ currentUser, onClose, onSave }: SettingsModalProps) {
                     </div>
 
                     <div className="settings-actions">
+                        {saveError && <p className="settings-error">{saveError}</p>}
                         <button className="btn btn--outline" type="button" onClick={requestClose}>
                             Close
                         </button>

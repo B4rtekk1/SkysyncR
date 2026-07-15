@@ -49,7 +49,7 @@ impl AppConfig {
         let trash_retention_days = std::env::var("TRASH_RETENTION_DAYS")
             .ok()
             .and_then(|v| v.parse().ok())
-            .filter(|days| *days >= 1)
+            .filter(|days| (1..=365).contains(days))
             .unwrap_or(30);
 
         let trash_purge_interval_hours = std::env::var("TRASH_PURGE_INTERVAL_HOURS")
