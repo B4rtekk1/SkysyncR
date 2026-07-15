@@ -23,6 +23,9 @@ function isEditableElement(target: EventTarget | null) {
 }
 
 function previewKindFromFile(filename: string, mime: string | null): FilePreviewState['kind'] | null {
+    const normalizedMime = mime?.toLowerCase() ?? ''
+    if (normalizedMime.startsWith('text/')) return 'text'
+
     const kind: FileKind = kindFromFile(filename, mime)
     if (kind === 'image') return 'image'
     if (kind === 'video') return 'video'
@@ -119,7 +122,7 @@ export function useFilePreview(
         }
     }
 
-    async function handleFilePreview(item: Item) {
+    async function handleFilePreview(item: Item, options?: { startEditing?: boolean }) {
         const previewKind = previewKindFromFile(item.filename, item.mime_type)
         if (!previewKind) return
 
@@ -132,7 +135,7 @@ export function useFilePreview(
         filePreviewRequestRef.current = requestId
         clearFilePreviewUrl()
         setError(null)
-        setFilePreview({ item, kind: previewKind, url: null, text: null, loading: true })
+        setFilePreview({ item, kind: previewKind, url: null, text: null, loading: true, startEditing: options?.startEditing })
 
         try {
             const previewBlob = await decryptDownloadedFile(item)
@@ -146,14 +149,14 @@ export function useFilePreview(
                 }
 
                 filePreviewUrlRef.current = url
-                setFilePreview({ item, kind: previewKind, url, text: null, loading: false })
+                setFilePreview({ item, kind: previewKind, url, text: null, loading: false, startEditing: options?.startEditing })
                 return
             }
 
             const text = await previewBlob.text()
             if (filePreviewRequestRef.current !== requestId) return
 
-            setFilePreview({ item, kind: previewKind, url: null, text, loading: false })
+            setFilePreview({ item, kind: previewKind, url: null, text, loading: false, startEditing: options?.startEditing })
         } catch (e) {
             if (filePreviewRequestRef.current === requestId) {
                 setFilePreview(null)
@@ -181,15 +184,23 @@ export function useFilePreview(
             encryptionNonce: encrypted.nonce,
         })
 
-        onFileUpdated(updated)
+        const visibleUpdated = {
+            ...updated,
+            filename: item.filename,
+            mime_type: item.mime_type,
+            note: item.note,
+        }
+
+        onFileUpdated(visibleUpdated)
         setFilePreview((current) => {
             if (!current || current.item.id !== item.id || current.kind !== 'text') return current
 
             return {
                 ...current,
-                item: { ...updated, mime_type: item.mime_type },
+                item: visibleUpdated,
                 text,
                 loading: false,
+                startEditing: false,
             }
         })
     }

@@ -37,9 +37,11 @@ export function useFileUpload({
         return 'application/octet-stream'
     }
 
-    const ingestFiles = useCallback(
-        async (fileList: FileList) => {
-            for (const file of Array.from(fileList)) {
+    const ingestFileArray = useCallback(
+        async (files: File[]) => {
+            const savedItems: ApiFile[] = []
+
+            for (const file of files) {
                 const tempId = `pending-${Date.now()}-${Math.random().toString(36).slice(2)}`
                 const now = new Date().toISOString()
                 const placeholder: ApiFile = {
@@ -107,6 +109,7 @@ export function useFileUpload({
                         filename: file.name,
                         mime_type: file.type || null,
                     }
+                    savedItems.push(visibleSaved)
                     setItems((prev) => prev.map((i) => (i.id === tempId ? visibleSaved : i)))
                 } catch (e) {
                     setItems((prev) => prev.filter((i) => i.id !== tempId))
@@ -121,9 +124,15 @@ export function useFileUpload({
             }
 
             await refreshQuota()
+            return savedItems
         },
         [folderId, publicKey, refreshQuota, setError, setItems, setPendingIds],
     )
 
-    return { ingestFiles }
+    const ingestFiles = useCallback(
+        (fileList: FileList) => ingestFileArray(Array.from(fileList)),
+        [ingestFileArray],
+    )
+
+    return { ingestFiles, ingestFileArray }
 }

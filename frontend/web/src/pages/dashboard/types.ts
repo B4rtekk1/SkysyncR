@@ -40,6 +40,7 @@ export type FilePreviewState = {
     url: string | null
     text: string | null
     loading: boolean
+    startEditing?: boolean
 }
 export type GroupInviteRole = 'viewer' | 'editor' | 'admin'
 

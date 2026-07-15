@@ -151,6 +151,9 @@ function Dashboard() {
     const [folderNameDraft, setFolderNameDraft] = useState('')
     const [folderDescriptionDraft, setFolderDescriptionDraft] = useState('')
     const [folderSaving, setFolderSaving] = useState(false)
+    const [fileCreateOpen, setFileCreateOpen] = useState(false)
+    const [fileNameDraft, setFileNameDraft] = useState('Untitled.txt')
+    const [fileSaving, setFileSaving] = useState(false)
     const [shareItem, setShareItem] = useState<ShareableItem | null>(null)
     const [shareLoading, setShareLoading] = useState(false)
     const [publicKey, setPublicKey] = useState<string | null>(null)
@@ -287,7 +290,7 @@ function Dashboard() {
         }
     }, [privateKey])
 
-    const { ingestFiles } = useFileUpload({
+    const { ingestFiles, ingestFileArray } = useFileUpload({
         publicKey,
         folderId: view === 'all' ? activeFolderId : null,
         setItems,
@@ -547,6 +550,47 @@ function Dashboard() {
         if (e.target.files && e.target.files.length > 0) {
             void ingestFiles(e.target.files)
             e.target.value = ''
+        }
+    }
+
+    function mimeTypeForCreatedFile(filename: string) {
+        const lower = filename.toLowerCase()
+        if (lower.endsWith('.md') || lower.endsWith('.markdown')) return 'text/markdown'
+        if (lower.endsWith('.csv')) return 'text/csv'
+        if (lower.endsWith('.json')) return 'application/json'
+        if (lower.endsWith('.html') || lower.endsWith('.htm')) return 'text/html'
+        if (lower.endsWith('.css')) return 'text/css'
+        if (lower.endsWith('.js') || lower.endsWith('.mjs') || lower.endsWith('.cjs')) return 'text/javascript'
+        return 'text/plain'
+    }
+
+    function resetFileCreateDraft() {
+        setFileCreateOpen(false)
+        setFileNameDraft('Untitled.txt')
+    }
+
+    function hasFileExtension(filename: string) {
+        return /\.[^.\s/\\]+$/.test(filename)
+    }
+
+    async function handleCreateFile() {
+        const filename = fileNameDraft.trim()
+        if (!filename || !hasFileExtension(filename) || fileSaving) return
+
+        setFileSaving(true)
+        setError(null)
+        try {
+            const file = new File([''], filename, {
+                type: mimeTypeForCreatedFile(filename),
+                lastModified: Date.now(),
+            })
+            const [created] = await ingestFileArray([file])
+            if (created) {
+                resetFileCreateDraft()
+                await handleFilePreview(created, { startEditing: true })
+            }
+        } finally {
+            setFileSaving(false)
         }
     }
 
@@ -1276,6 +1320,13 @@ function Dashboard() {
                                     <button
                                         className="btn btn--ghost"
                                         type="button"
+                                        onClick={() => setFileCreateOpen(true)}
+                                    >
+                                        New file
+                                    </button>
+                                    <button
+                                        className="btn btn--ghost"
+                                        type="button"
                                         onClick={() => setFolderCreateOpen(true)}
                                     >
                                         New folder
@@ -1519,6 +1570,57 @@ function Dashboard() {
                         )
                     }}
                 />
+            )}
+            {fileCreateOpen && (
+                <div className="file-filter__modal is-opening" role="dialog" aria-modal="true" aria-labelledby="file-create-title">
+                    <div className="file-filter__dialog file-create">
+                        <div className="file-filter__modal-head">
+                            <div>
+                                <h2 id="file-create-title">New file</h2>
+                                <span>{folderTrail.at(-1)?.name ?? 'All files'}</span>
+                            </div>
+                            <button
+                                className="file-filter__close"
+                                type="button"
+                                onClick={resetFileCreateDraft}
+                                aria-label="Close"
+                            >
+                                x
+                            </button>
+                        </div>
+                        <div className="file-filter__modal-body file-create__body">
+                            <input
+                                className="folder-create__input"
+                                value={fileNameDraft}
+                                onChange={(event) => setFileNameDraft(event.target.value)}
+                                onKeyDown={(event) => {
+                                    if (event.key === 'Enter') void handleCreateFile()
+                                    if (event.key === 'Escape') resetFileCreateDraft()
+                                }}
+                                placeholder="File name with extension"
+                                autoFocus
+                            />
+                            <p className="file-create__hint">Use an extension like .txt, .md, .json, .html, .css or .js.</p>
+                        </div>
+                        <div className="file-filter__footer">
+                            <button
+                                className="btn btn--ghost"
+                                type="button"
+                                onClick={resetFileCreateDraft}
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                className="btn btn--solid"
+                                type="button"
+                                disabled={!fileNameDraft.trim() || !hasFileExtension(fileNameDraft.trim()) || fileSaving}
+                                onClick={() => void handleCreateFile()}
+                            >
+                                {fileSaving ? 'Creating...' : 'Create'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
             )}
             {folderCreateOpen && (
                 <div className="file-filter__modal is-opening" role="dialog" aria-modal="true" aria-labelledby="folder-create-title">
