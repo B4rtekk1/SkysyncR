@@ -290,6 +290,7 @@ function Dashboard() {
     const {
         handleDelete,
         handleRestore,
+        handlePermanentDelete,
         handleRename,
         handleShare,
         setFileSharing,
@@ -1356,6 +1357,7 @@ function Dashboard() {
                                     view={view}
                                     onDelete={view === 'all' ? handleDelete : undefined}
                                     onRestore={view === 'trash' ? handleRestore : undefined}
+                                    onPermanentDelete={view === 'trash' ? handlePermanentDelete : undefined}
                                     onDownload={view !== 'trash' ? handleDownload : undefined}
                                     onPreview={view !== 'trash' ? handleFilePreview : undefined}
                                     onRename={

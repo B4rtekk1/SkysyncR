@@ -1,5 +1,5 @@
 use base64::{Engine as _, engine::general_purpose};
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Duration, Utc};
 use serde::{Serialize, Serializer};
 use sqlx::{FromRow, PgPool};
 use uuid::Uuid;
@@ -63,6 +63,12 @@ pub struct DownloadFileRecord {
 pub struct UpdateFileContentTarget {
     pub storage_path: String,
     pub size_bytes: i64,
+}
+
+#[derive(FromRow)]
+pub struct FilePurgeTarget {
+    pub id: Uuid,
+    pub storage_path: String,
 }
 
 pub async fn list_user_files(
@@ -264,6 +270,65 @@ pub async fn restore_user_file(
     )
     .bind(file_id)
     .bind(user_id)
+    .execute(pool)
+    .await?;
+
+    Ok(result.rows_affected())
+}
+
+pub async fn get_user_file_for_permanent_delete(
+    pool: &PgPool,
+    user_id: Uuid,
+    file_id: Uuid,
+) -> Result<Option<FilePurgeTarget>, sqlx::Error> {
+    sqlx::query_as::<_, FilePurgeTarget>(
+        r#"
+        SELECT id, storage_path
+        FROM files
+        WHERE id = $1
+          AND owner_id = $2
+          AND is_deleted = TRUE
+        "#,
+    )
+    .bind(file_id)
+    .bind(user_id)
+    .fetch_optional(pool)
+    .await
+}
+
+pub async fn list_expired_deleted_files(
+    pool: &PgPool,
+    retention_days: i64,
+    limit: i64,
+) -> Result<Vec<FilePurgeTarget>, sqlx::Error> {
+    let cutoff = Utc::now() - Duration::days(retention_days);
+
+    sqlx::query_as::<_, FilePurgeTarget>(
+        r#"
+        SELECT id, storage_path
+        FROM files
+        WHERE is_deleted = TRUE
+          AND deleted_at IS NOT NULL
+          AND deleted_at <= $1
+        ORDER BY deleted_at ASC
+        LIMIT $2
+        "#,
+    )
+    .bind(cutoff)
+    .bind(limit)
+    .fetch_all(pool)
+    .await
+}
+
+pub async fn hard_delete_file_record(pool: &PgPool, file_id: Uuid) -> Result<u64, sqlx::Error> {
+    let result = sqlx::query(
+        r#"
+        DELETE FROM files
+        WHERE id = $1
+          AND is_deleted = TRUE
+        "#,
+    )
+    .bind(file_id)
     .execute(pool)
     .await?;
 

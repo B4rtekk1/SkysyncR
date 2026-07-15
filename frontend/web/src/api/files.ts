@@ -189,6 +189,13 @@ export async function restoreFile(id: string): Promise<void> {
     if (!res.ok) throw new Error(await parseErrorMessage(res))
 }
 
+export async function permanentlyDeleteFile(id: string): Promise<void> {
+    const res = await authenticatedFetch(`${API_BASE}files/${id}/permanent`, {
+        method: 'DELETE',
+    })
+    if (!res.ok) throw new Error(await parseErrorMessage(res))
+}
+
 export async function renameFile(id: string, filename: string): Promise<ApiFile> {
     const res = await authenticatedFetch(`${API_BASE}files/${id}`, {
         method: 'PATCH',

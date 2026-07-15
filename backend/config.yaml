@@ -33,6 +33,8 @@ email:
 storage:
   max_file_size_bytes: 1073741824 # 1 GB
   deafult_quota_bytes: 10737418240 # 10 GB
+  trash_retention_days: 30
+  trash_purge_interval_hours: 24
 
 logging:
   level: "info" # Options: debug, info, warn, error

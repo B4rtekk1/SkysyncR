@@ -2,6 +2,7 @@ use crate::routes::files::files_routes;
 use crate::routes::folders::folders_routes;
 use crate::routes::storage::storage_routes;
 use crate::routes::users::{auth_limited_routes, users_routes};
+use crate::services::trash::spawn_trash_purge_worker;
 use crate::state::{AppConfig, AppState};
 use axum::http::{HeaderValue, Method, header};
 use axum::routing::get;
@@ -78,6 +79,12 @@ pub async fn run_server() {
     if config.is_dev {
         println!("Running in development mode");
     }
+
+    spawn_trash_purge_worker(
+        pool.clone(),
+        config.trash_retention_days,
+        config.trash_purge_interval_hours,
+    );
 
     let auth_governor = GovernorConfigBuilder::default()
         .per_second(3)

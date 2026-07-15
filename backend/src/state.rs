@@ -15,6 +15,8 @@ pub struct AppConfig {
     pub verification_token_ttl_hours: i64,
     pub upload_dir: PathBuf,
     pub max_file_size_bytes: u64,
+    pub trash_retention_days: i64,
+    pub trash_purge_interval_hours: u64,
     pub is_dev: bool,
 }
 
@@ -44,6 +46,18 @@ impl AppConfig {
             .and_then(|v| v.parse().ok())
             .unwrap_or(1_073_741_824);
 
+        let trash_retention_days = std::env::var("TRASH_RETENTION_DAYS")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .filter(|days| *days >= 1)
+            .unwrap_or(30);
+
+        let trash_purge_interval_hours = std::env::var("TRASH_PURGE_INTERVAL_HOURS")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .filter(|hours| *hours >= 1)
+            .unwrap_or(24);
+
         let is_dev = std::env::var("APP_ENV")
             .map(|v| v == "development" || v == "dev")
             .unwrap_or(true);
@@ -55,6 +69,8 @@ impl AppConfig {
             verification_token_ttl_hours,
             upload_dir,
             max_file_size_bytes,
+            trash_retention_days,
+            trash_purge_interval_hours,
             is_dev,
         }
     }

@@ -22,6 +22,7 @@ use crate::db::files::{
     update_user_file_content, update_user_file_note, update_user_file_share,
 };
 use crate::db::storage::get_storage_quota;
+use crate::services::trash::permanently_delete_user_file;
 use crate::state::AppState;
 use crate::utils::errors::{ApiError, internal_error};
 
@@ -173,6 +174,22 @@ pub async fn restore_file(
 
     if rows == 0 {
         return Err(ApiError::BadRequest("File not found".into()));
+    }
+
+    Ok(StatusCode::NO_CONTENT)
+}
+
+pub async fn permanent_delete_file(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Path(file_id): Path<Uuid>,
+) -> Result<StatusCode, ApiError> {
+    let deleted = permanently_delete_user_file(&state.db_pool, auth.user_id, file_id)
+        .await
+        .map_err(|e| internal_error("permanently delete file", e))?;
+
+    if !deleted {
+        return Err(ApiError::BadRequest("File not found in trash".into()));
     }
 
     Ok(StatusCode::NO_CONTENT)

@@ -58,6 +58,7 @@ CREATE TABLE IF NOT EXISTS files
 );
 CREATE INDEX idx_files_owner_id ON files (owner_id);
 CREATE INDEX idx_files_folder_id ON files (folder_id);
+CREATE INDEX IF NOT EXISTS idx_files_deleted_at ON files (deleted_at) WHERE is_deleted = TRUE;
 
 CREATE TABLE IF NOT EXISTS refresh_tokens
 (

@@ -31,6 +31,7 @@ type FileCardActionsProps = {
     onNote?: (item: Item) => void
     onDelete?: (id: string) => void
     onRestore?: (id: string) => void
+    onPermanentDelete?: (id: string) => void
 }
 
 export function FileCardActions({
@@ -53,6 +54,7 @@ export function FileCardActions({
     onNote,
     onDelete,
     onRestore,
+    onPermanentDelete,
 }: FileCardActionsProps) {
     return (
         <div className="file-card__actions">
@@ -183,8 +185,23 @@ export function FileCardActions({
                         e.stopPropagation()
                         onRestore(item.id)
                     }}
+                    type="button"
                 >
                     Restore
+                </button>
+            )}
+            {view === 'trash' && onPermanentDelete && (
+                <button
+                    className="file-card__action file-card__action--trash"
+                    onClick={(e) => {
+                        e.stopPropagation()
+                        onPermanentDelete(item.id)
+                    }}
+                    aria-label={`Permanently delete ${item.filename}`}
+                    title="Delete forever"
+                    type="button"
+                >
+                    {TRASH_OPEN_ICON}
                 </button>
             )}
         </div>

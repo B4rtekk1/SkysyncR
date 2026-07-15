@@ -22,6 +22,7 @@ export function FileCard({
                       pending,
                       onDelete,
                       onRestore,
+                      onPermanentDelete,
                       onDownload,
                       onPreview,
                       onRename,
@@ -46,6 +47,7 @@ export function FileCard({
     pending: boolean
     onDelete?: (id: string) => void
     onRestore?: (id: string) => void
+    onPermanentDelete?: (id: string) => void
     onDownload?: (item: Item) => void
     onPreview?: (item: Item) => void
     onRename?: (item: Item, filename: string) => Promise<void>
@@ -82,7 +84,15 @@ export function FileCard({
     const canNote = Boolean(onNote && !isShared(item) && view !== 'trash' && !pending)
     const canDownload = Boolean(onDownload && view !== 'trash')
     const canPreview = Boolean(onPreview && ['image', 'video', 'pdf', 'text', 'code'].includes(kind) && view !== 'trash' && !pending && !isRenaming)
-    const hasAction = Boolean(canRename || canShare || canNote || canDownload || (view === 'all' && onDelete) || (view === 'trash' && onRestore) || !isRenaming)
+    const hasAction = Boolean(
+        canRename ||
+            canShare ||
+            canNote ||
+            canDownload ||
+            (view === 'all' && onDelete) ||
+            (view === 'trash' && (onRestore || onPermanentDelete)) ||
+            !isRenaming,
+    )
 
     const updateInfoPosition = useCallback(() => {
         const card = cardRef.current
@@ -283,6 +293,7 @@ export function FileCard({
                     onNote={onNote}
                     onDelete={onDelete}
                     onRestore={onRestore}
+                    onPermanentDelete={onPermanentDelete}
                 />
             )}
         </article>

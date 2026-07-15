@@ -1,5 +1,6 @@
 import { useCallback, type Dispatch, type SetStateAction } from 'react'
 import {
+    permanentlyDeleteFile,
     renameFile,
     restoreFile,
     shareFile,
@@ -55,6 +56,30 @@ export function useFileActions({
             }
         },
         [refreshQuota, setError, setItems],
+    )
+
+    const handlePermanentDelete = useCallback(
+        async (id: string) => {
+            const confirmed = window.confirm('Permanently delete this file? This cannot be undone.')
+            if (!confirmed) return
+
+            setItems((prev) => prev.filter((i) => i.id !== id))
+            setStorageItems((prev) => prev.filter((i) => i.id !== id))
+            setFavouriteIds((prev) => {
+                const next = new Set(prev)
+                next.delete(id)
+                saveFavouriteIds(next)
+                return next
+            })
+
+            try {
+                await permanentlyDeleteFile(id)
+                await refreshQuota()
+            } catch (e) {
+                setError(e instanceof Error ? e.message : 'Could not permanently delete that file.')
+            }
+        },
+        [refreshQuota, setError, setFavouriteIds, setItems, setStorageItems],
     )
 
     const handleRename = useCallback(
@@ -144,6 +169,7 @@ export function useFileActions({
     return {
         handleDelete,
         handleRestore,
+        handlePermanentDelete,
         handleRename,
         handleShare,
         setFileSharing,
