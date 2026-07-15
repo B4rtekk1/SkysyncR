@@ -59,11 +59,7 @@ fn dev_cors_layer() -> CorsLayer {
             Method::DELETE,
             Method::OPTIONS,
         ])
-        .allow_headers([
-            header::AUTHORIZATION,
-            header::CONTENT_TYPE,
-            header::HeaderName::from_static("x-device-id"),
-        ])
+        .allow_headers([header::AUTHORIZATION, header::CONTENT_TYPE])
         .expose_headers([header::CONTENT_TYPE])
         .allow_credentials(true)
 }

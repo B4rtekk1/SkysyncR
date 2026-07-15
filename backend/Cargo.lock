@@ -1379,12 +1379,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "ipnetwork"
-version = "0.21.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cf370abdafd54d13e54a620e8c3e1145f28e46cc9d704bc6d94414559df41763"
-
-[[package]]
 name = "itoa"
 version = "1.0.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2508,7 +2502,6 @@ dependencies = [
  "hashbrown 0.16.1",
  "hashlink",
  "indexmap",
- "ipnetwork",
  "log",
  "memchr",
  "percent-encoding",
@@ -2611,7 +2604,6 @@ dependencies = [
  "hex",
  "hkdf 0.13.0",
  "hmac 0.13.0",
- "ipnetwork",
  "itoa",
  "log",
  "md-5",

@@ -1,23 +1,19 @@
 use chrono::{DateTime, Utc};
 use sqlx::PgPool;
-use sqlx::types::ipnetwork::IpNetwork;
 use uuid::Uuid;
 
 use crate::crypto::refresh_token::{
     hash_refresh_token, refresh_session_expires_at, refresh_token_expires_at,
 };
-use crate::utils::device::DeviceContext;
 
 pub async fn create_refresh_token(
     pool: &PgPool,
     user_id: Uuid,
     raw_token: &str,
-    device: &DeviceContext,
 ) -> Result<DateTime<Utc>, sqlx::Error> {
     let token_hash = hash_refresh_token(raw_token);
     let session_expires_at = refresh_session_expires_at();
     let expires_at = refresh_token_expires_at(session_expires_at);
-    let ip_address: Option<IpNetwork> = device.ip_address.map(IpNetwork::from);
 
     sqlx::query!(
         r#"
@@ -25,20 +21,14 @@ pub async fn create_refresh_token(
             user_id,
             token_hash,
             expires_at,
-            session_expires_at,
-            device_id,
-            user_agent,
-            ip_address
+            session_expires_at
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7::inet)
+        VALUES ($1, $2, $3, $4)
         "#,
         user_id,
         token_hash,
         expires_at,
-        session_expires_at,
-        device.device_id,
-        device.user_agent,
-        ip_address
+        session_expires_at
     )
     .execute(pool)
     .await?;
@@ -55,14 +45,12 @@ pub struct ValidRefreshToken {
 pub enum RefreshTokenAuth {
     Valid(ValidRefreshToken),
     ReuseDetected { user_id: Uuid },
-    DeviceMismatch { user_id: Uuid },
     NotFound,
 }
 
 pub async fn authenticate_refresh_token(
     pool: &PgPool,
     raw_token: &str,
-    device: &DeviceContext,
 ) -> Result<RefreshTokenAuth, sqlx::Error> {
     let token_hash = hash_refresh_token(raw_token);
 
@@ -71,8 +59,6 @@ pub async fn authenticate_refresh_token(
         SELECT
             id,
             user_id,
-            device_id,
-            user_agent,
             revoked,
             expires_at > NOW() AS "valid_exp!: bool",
             session_expires_at AS "session_expires_at!: DateTime<Utc>",
@@ -95,13 +81,6 @@ pub async fn authenticate_refresh_token(
 
     if row.revoked {
         return Ok(RefreshTokenAuth::ReuseDetected {
-            user_id: row.user_id,
-        });
-    }
-
-    let stored_device_id = row.device_id.unwrap_or_default();
-    if !device.matches_stored(&stored_device_id, row.user_agent.as_deref()) {
-        return Ok(RefreshTokenAuth::DeviceMismatch {
             user_id: row.user_id,
         });
     }
@@ -152,7 +131,6 @@ pub async fn rotate_refresh_token(
     user_id: Uuid,
     new_raw_token: &str,
     session_expires_at: DateTime<Utc>,
-    device: &DeviceContext,
 ) -> Result<(), sqlx::Error> {
     let mut tx = pool.begin().await?;
 
@@ -169,7 +147,6 @@ pub async fn rotate_refresh_token(
 
     let token_hash = hash_refresh_token(new_raw_token);
     let expires_at: DateTime<Utc> = refresh_token_expires_at(session_expires_at);
-    let ip_address: Option<IpNetwork> = device.ip_address.map(IpNetwork::from);
 
     sqlx::query!(
         r#"
@@ -177,20 +154,14 @@ pub async fn rotate_refresh_token(
             user_id,
             token_hash,
             expires_at,
-            session_expires_at,
-            device_id,
-            user_agent,
-            ip_address
+            session_expires_at
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7::inet)
+        VALUES ($1, $2, $3, $4)
         "#,
         user_id,
         token_hash,
         expires_at,
-        session_expires_at,
-        device.device_id,
-        device.user_agent,
-        ip_address
+        session_expires_at
     )
     .execute(&mut *tx)
     .await?;

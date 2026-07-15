@@ -7,26 +7,23 @@ pub const ACCESS_TOKEN_DURATION: Duration = Duration::minutes(15);
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Claims {
     pub sub: String,
-    pub did: String,
     pub exp: usize,
     pub iat: usize,
 }
 
 pub fn generate_access_token_capped(
     user_id: &str,
-    device_id: &str,
     secret: &str,
     max_expires_at: DateTime<Utc>,
 ) -> Result<(String, i64), jsonwebtoken::errors::Error> {
     let now = Utc::now();
     let exp = (now + ACCESS_TOKEN_DURATION).min(max_expires_at);
 
-    generate_access_token_with_expiry(user_id, device_id, secret, now, exp)
+    generate_access_token_with_expiry(user_id, secret, now, exp)
 }
 
 fn generate_access_token_with_expiry(
     user_id: &str,
-    device_id: &str,
     secret: &str,
     now: DateTime<Utc>,
     exp: DateTime<Utc>,
@@ -35,7 +32,6 @@ fn generate_access_token_with_expiry(
 
     let claims = Claims {
         sub: user_id.to_owned(),
-        did: device_id.to_owned(),
         exp: exp.timestamp() as usize,
         iat: now.timestamp() as usize,
     };

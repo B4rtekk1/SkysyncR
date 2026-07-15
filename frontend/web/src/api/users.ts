@@ -1,7 +1,6 @@
 const url = import.meta.env.VITE_API_BASE ?? 'http://localhost:3000/'
 
 import { authenticatedFetch, saveTokens, type TokenPair } from './auth'
-import { withDeviceHeaders } from './device'
 import { apiFetch } from './http'
 
 export interface RegisterPayload {
@@ -89,7 +88,7 @@ export async function loginUser(
 ): Promise<LoginResponse> {
   const res = await apiFetch(`${url}users/login`, {
     method: 'POST',
-    headers: withDeviceHeaders({ 'Content-Type': 'application/json' }),
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ ...payload, remember }),
   })
 

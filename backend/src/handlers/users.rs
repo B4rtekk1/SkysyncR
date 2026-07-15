@@ -11,21 +11,19 @@ use crate::models::users::{
     RegisterResponse,
 };
 use crate::state::AppState;
-use crate::utils::device::DeviceContext;
 use crate::utils::errors::{ApiError, internal_error, map_db_error};
 use crate::utils::validation::{
     validate_display_name, validate_email, validate_password, validate_public_key,
 };
 use axum::{
     Json,
-    extract::{ConnectInfo, Query, State},
+    extract::{Query, State},
     http::{HeaderMap, HeaderValue, header},
     response::{IntoResponse, Response},
 };
 use bcrypt::{DEFAULT_COST, hash};
 use chrono::Utc;
 use serde::Deserialize;
-use std::net::SocketAddr;
 
 use crate::crypto::email::send_verification_email;
 
@@ -130,16 +128,14 @@ pub async fn current_user(
 async fn require_refresh_token(
     state: &AppState,
     raw_token: &str,
-    device: &DeviceContext,
 ) -> Result<ValidRefreshToken, ApiError> {
-    let auth = authenticate_refresh_token(&state.db_pool, raw_token, device)
+    let auth = authenticate_refresh_token(&state.db_pool, raw_token)
         .await
         .map_err(|e| internal_error("authenticate refresh token", e))?;
 
     match auth {
         RefreshTokenAuth::Valid(token) => Ok(token),
-        RefreshTokenAuth::ReuseDetected { user_id }
-        | RefreshTokenAuth::DeviceMismatch { user_id } => {
+        RefreshTokenAuth::ReuseDetected { user_id } => {
             revoke_all_user_refresh_tokens(&state.db_pool, user_id)
                 .await
                 .map_err(|e| internal_error("revoke sessions after token anomaly", e))?;
@@ -191,16 +187,14 @@ pub async fn register_user(
 async fn issue_token_pair(
     state: &AppState,
     user_id: uuid::Uuid,
-    device: &DeviceContext,
 ) -> Result<(String, String, i64, chrono::DateTime<Utc>), ApiError> {
     let refresh_token = generate_refresh_token();
-    let session_expires_at = create_refresh_token(&state.db_pool, user_id, &refresh_token, device)
+    let session_expires_at = create_refresh_token(&state.db_pool, user_id, &refresh_token)
         .await
         .map_err(|e| internal_error("create refresh token", e))?;
 
     let (access_token, expires_in) = generate_access_token_capped(
         &user_id.to_string(),
-        &device.device_id,
         &state.config.jwt_secret,
         session_expires_at,
     )
@@ -210,12 +204,9 @@ async fn issue_token_pair(
 }
 
 pub async fn login_user(
-    ConnectInfo(peer): ConnectInfo<SocketAddr>,
-    headers: HeaderMap,
     State(state): State<AppState>,
     Json(payload): Json<LoginRequest>,
 ) -> Result<Response, ApiError> {
-    let device = DeviceContext::from_headers(&headers, Some(peer.ip()))?;
     let email = payload.email.trim().to_lowercase();
     validate_email(&email).map_err(|msg| ApiError::BadRequest(msg.into()))?;
 
@@ -268,7 +259,7 @@ pub async fn login_user(
         .map_err(|e| internal_error("reset failed login", e))?;
 
     let (access_token, refresh_token, expires_in, session_expires_at) =
-        issue_token_pair(&state, user_id, &device).await?;
+        issue_token_pair(&state, user_id).await?;
 
     update_last_login(&state.db_pool, &email)
         .await
@@ -301,17 +292,14 @@ pub async fn login_user(
 }
 
 pub async fn refresh_tokens(
-    ConnectInfo(peer): ConnectInfo<SocketAddr>,
     headers: HeaderMap,
     State(state): State<AppState>,
 ) -> Result<Response, ApiError> {
     let refresh_token = refresh_token_from_cookie(&headers)?;
-    let device = DeviceContext::from_headers(&headers, Some(peer.ip()))?;
-    let stored = require_refresh_token(&state, &refresh_token, &device).await?;
+    let stored = require_refresh_token(&state, &refresh_token).await?;
 
     let (access_token, expires_in) = generate_access_token_capped(
         &stored.user_id.to_string(),
-        &device.device_id,
         &state.config.jwt_secret,
         stored.session_expires_at,
     )
@@ -325,7 +313,6 @@ pub async fn refresh_tokens(
         stored.user_id,
         &new_refresh_token,
         stored.session_expires_at,
-        &device,
     )
     .await
     .map_err(|e| internal_error("rotate refresh token", e))?;
@@ -356,14 +343,11 @@ pub async fn refresh_tokens(
 }
 
 pub async fn logout_user(
-    ConnectInfo(peer): ConnectInfo<SocketAddr>,
     headers: HeaderMap,
     State(state): State<AppState>,
 ) -> Result<Response, ApiError> {
-    let device = DeviceContext::from_headers(&headers, Some(peer.ip()))?;
-
     if let Ok(refresh_token) = refresh_token_from_cookie(&headers)
-        && let Ok(stored) = require_refresh_token(&state, &refresh_token, &device).await
+        && let Ok(stored) = require_refresh_token(&state, &refresh_token).await
     {
         revoke_refresh_token(&state.db_pool, stored.id)
             .await
@@ -384,14 +368,11 @@ pub async fn logout_user(
 }
 
 pub async fn logout_all_sessions(
-    ConnectInfo(peer): ConnectInfo<SocketAddr>,
     headers: HeaderMap,
     State(state): State<AppState>,
 ) -> Result<Response, ApiError> {
-    let device = DeviceContext::from_headers(&headers, Some(peer.ip()))?;
-
     if let Ok(refresh_token) = refresh_token_from_cookie(&headers)
-        && let Ok(stored) = require_refresh_token(&state, &refresh_token, &device).await
+        && let Ok(stored) = require_refresh_token(&state, &refresh_token).await
     {
         revoke_all_user_refresh_tokens(&state.db_pool, stored.user_id)
             .await

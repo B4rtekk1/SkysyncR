@@ -1,6 +1,5 @@
 const API_BASE = import.meta.env.VITE_API_BASE ?? 'http://localhost:3000/'
 
-import { withDeviceHeaders } from './device'
 import { apiFetch } from './http'
 import { clearActivePrivateKeys } from '../crypto/storage'
 
@@ -72,7 +71,6 @@ function persistTokens(tokens: TokenPair) {
 async function requestTokenRefresh(): Promise<string | null> {
   const res = await apiFetch(`${API_BASE}users/refresh`, {
     method: 'POST',
-    headers: withDeviceHeaders(),
   })
 
   if (!res.ok) {
@@ -189,7 +187,6 @@ export async function logout(): Promise<void> {
   try {
     await apiFetch(`${API_BASE}users/logout`, {
       method: 'POST',
-      headers: withDeviceHeaders(),
     })
   } catch {
     // best-effort
@@ -202,7 +199,7 @@ export async function authenticatedFetch(
   input: RequestInfo | URL,
   init: RequestInit = {},
 ): Promise<Response> {
-  const headers = new Headers(withDeviceHeaders())
+  const headers = new Headers()
   if (init.headers) {
     new Headers(init.headers).forEach((value, key) => {
       headers.set(key, value)

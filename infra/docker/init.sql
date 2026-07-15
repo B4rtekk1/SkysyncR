@@ -66,10 +66,7 @@ CREATE TABLE IF NOT EXISTS refresh_tokens
     expires_at timestamptz NOT NULL,
     session_expires_at timestamptz NOT NULL DEFAULT (NOW() + interval '90 days'),
     revoked    BOOLEAN     NOT NULL DEFAULT FALSE,
-    created_at timestamptz NOT NULL DEFAULT NOW(),
-    user_agent TEXT,
-    ip_address inet,
-    device_id  TEXT
+    created_at timestamptz NOT NULL DEFAULT NOW()
 );
 CREATE INDEX idx_refresh_tokens_user_id ON refresh_tokens (user_id);
 
@@ -101,7 +98,6 @@ CREATE TABLE IF NOT EXISTS audit_logs
     action        TEXT        NOT NULL,
     resource_id   UUID,
     resource_type TEXT,
-    ip_address    inet,
     created_at    timestamptz NOT NULL DEFAULT NOW()
 );
 CREATE INDEX idx_audit_logs_user_id ON audit_logs (user_id);
@@ -183,13 +179,16 @@ CREATE TABLE IF NOT EXISTS favorites
 
 -- Migrations for existing dev databases
 ALTER TABLE users ADD COLUMN IF NOT EXISTS verification_token_expires_at timestamptz;
-ALTER TABLE refresh_tokens ADD COLUMN IF NOT EXISTS device_id TEXT;
 ALTER TABLE refresh_tokens ADD COLUMN IF NOT EXISTS session_expires_at timestamptz;
 UPDATE refresh_tokens
 SET session_expires_at = COALESCE(session_expires_at, created_at + interval '90 days', NOW() + interval '90 days')
 WHERE session_expires_at IS NULL;
 ALTER TABLE refresh_tokens ALTER COLUMN session_expires_at SET DEFAULT (NOW() + interval '90 days');
 ALTER TABLE refresh_tokens ALTER COLUMN session_expires_at SET NOT NULL;
+ALTER TABLE refresh_tokens DROP COLUMN IF EXISTS user_agent;
+ALTER TABLE refresh_tokens DROP COLUMN IF EXISTS ip_address;
+ALTER TABLE refresh_tokens DROP COLUMN IF EXISTS device_id;
+ALTER TABLE audit_logs DROP COLUMN IF EXISTS ip_address;
 ALTER TABLE files ADD COLUMN IF NOT EXISTS note TEXT;
 ALTER TABLE folders ADD COLUMN IF NOT EXISTS is_public BOOLEAN NOT NULL DEFAULT FALSE;
 ALTER TABLE folders ADD COLUMN IF NOT EXISTS share_token TEXT;
