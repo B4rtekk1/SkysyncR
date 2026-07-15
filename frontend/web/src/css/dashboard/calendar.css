@@ -1,0 +1,713 @@
+.calendar-panel {
+    display: grid;
+    gap: 16px;
+}
+
+.calendar-panel__toolbar,
+.calendar-panel__controls,
+.calendar-panel__filters,
+.calendar-panel__period,
+.calendar-panel__segments,
+.calendar-panel__event-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.calendar-panel__toolbar {
+    justify-content: space-between;
+}
+
+.calendar-panel__period-picker {
+    position: relative;
+    min-width: 210px;
+}
+
+.calendar-panel__period-trigger {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 14px;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    min-height: 38px;
+    padding: 0 10px 0 12px;
+    border: 1px solid transparent;
+    border-radius: 8px;
+    background: transparent;
+    min-width: 210px;
+    color: var(--paper);
+    font-family: var(--font-display), sans-serif;
+    font-size: 1.02rem;
+    font-weight: 600;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
+}
+
+.calendar-panel__period-trigger:hover,
+.calendar-panel__period-trigger:focus-visible,
+.calendar-panel__period-trigger.is-open {
+    border-color: rgba(var(--signal-rgb), 0.36);
+    background: rgba(var(--signal-rgb), 0.08);
+    color: var(--signal);
+    outline: none;
+}
+
+.calendar-panel__period-trigger svg {
+    justify-self: end;
+    color: var(--mist);
+    transition: transform 0.16s ease, color 0.16s ease;
+}
+
+.calendar-panel__period-trigger.is-open svg {
+    color: var(--signal);
+    transform: rotate(180deg);
+}
+
+.calendar-panel__period button,
+.calendar-panel__today,
+.calendar-panel__segments button,
+.calendar-panel__event-actions button,
+.calendar-panel__submit {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 34px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--panel-2);
+    color: var(--mist);
+    font: inherit;
+    cursor: pointer;
+    transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
+}
+
+.calendar-panel__period > button {
+    width: 34px;
+    padding: 0;
+}
+
+.calendar-panel__period-menu {
+    position: absolute;
+    top: calc(100% + 8px);
+    left: 50%;
+    z-index: 26;
+    width: 268px;
+    padding: 10px;
+    border: 1px solid color-mix(in srgb, var(--line) 76%, var(--signal));
+    border-radius: 10px;
+    background: color-mix(in srgb, var(--panel) 96%, black);
+    box-shadow: 0 20px 46px -24px rgba(0, 0, 0, 0.68);
+    transform: translateX(-50%);
+    animation: dropdown-menu-in 0.2s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.calendar-panel__year-row {
+    display: grid;
+    grid-template-columns: 34px minmax(0, 1fr) 34px;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 10px;
+}
+
+.calendar-panel__year-row strong {
+    color: var(--paper);
+    font-family: var(--font-mono), monospace;
+    font-size: 0.92rem;
+    text-align: center;
+}
+
+.calendar-panel__month-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px;
+}
+
+.calendar-panel__month-grid button {
+    width: 100%;
+    min-height: 34px;
+    padding: 0 8px;
+    border: 1px solid transparent;
+    border-radius: 7px;
+    background: transparent;
+    color: var(--mist);
+    font-size: 0.82rem;
+}
+
+.calendar-panel__month-grid button:hover,
+.calendar-panel__month-grid button:focus-visible,
+.calendar-panel__month-grid button.is-selected {
+    border-color: rgba(var(--signal-rgb), 0.32);
+    background: rgba(var(--signal-rgb), 0.1);
+    color: var(--signal);
+    outline: none;
+}
+
+.calendar-panel__today,
+.calendar-panel__segments button,
+.calendar-panel__event-actions button,
+.calendar-panel__submit {
+    padding: 0 11px;
+}
+
+.calendar-panel__period button:hover,
+.calendar-panel__today:hover,
+.calendar-panel__segments button:hover,
+.calendar-panel__event-actions button:hover,
+.calendar-panel__submit:hover,
+.calendar-panel__period button:focus-visible,
+.calendar-panel__today:focus-visible,
+.calendar-panel__segments button:focus-visible,
+.calendar-panel__event-actions button:focus-visible,
+.calendar-panel__submit:focus-visible {
+    border-color: rgba(var(--signal-rgb), 0.48);
+    color: var(--signal);
+    outline: none;
+}
+
+.calendar-panel__segments {
+    gap: 3px;
+    padding: 3px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--panel-2);
+}
+
+.calendar-panel__segments button {
+    min-height: 28px;
+    border-color: transparent;
+    border-radius: 6px;
+    background: transparent;
+    font-size: 0.8rem;
+}
+
+.calendar-panel__segments button.is-active {
+    background: var(--panel);
+    color: var(--signal);
+    box-shadow: 0 0 0 1px rgba(var(--signal-rgb), 0.22);
+}
+
+.calendar-panel__filters {
+    flex-wrap: wrap;
+    padding: 12px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--panel);
+}
+
+.calendar-panel__form label {
+    display: grid;
+    gap: 5px;
+    min-width: 180px;
+    color: var(--mist);
+    font-family: var(--font-mono), monospace;
+    font-size: 0.68rem;
+    text-transform: uppercase;
+}
+
+.calendar-panel__form input,
+.calendar-panel__form textarea {
+    width: 100%;
+    min-width: 0;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--panel-2);
+    color: var(--paper);
+    font: inherit;
+    font-size: 0.82rem;
+    text-transform: none;
+}
+
+.calendar-panel__form input {
+    height: 36px;
+    padding: 0 10px;
+}
+
+.calendar-panel__form textarea {
+    padding: 9px 10px;
+    resize: vertical;
+}
+
+.calendar-panel__form input:focus,
+.calendar-panel__form textarea:focus {
+    border-color: rgba(var(--signal-rgb), 0.56);
+    box-shadow: 0 0 0 3px rgba(var(--signal-rgb), 0.12);
+    outline: none;
+}
+
+.calendar-dropdown {
+    position: relative;
+    display: grid;
+    gap: 5px;
+    min-width: 190px;
+}
+
+.calendar-dropdown__label {
+    color: var(--mist);
+    font-family: var(--font-mono), monospace;
+    font-size: 0.68rem;
+    text-transform: uppercase;
+}
+
+.calendar-dropdown__trigger {
+    display: grid;
+    grid-template-columns: 28px minmax(0, 1fr) 14px;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    min-height: 38px;
+    padding: 3px 9px 3px 7px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--panel-2);
+    color: var(--paper);
+    font: inherit;
+    cursor: pointer;
+    text-align: left;
+    box-shadow: inset 0 0 0 1px rgba(var(--signal-rgb), 0.02);
+    transition: border-color 0.16s ease, background 0.16s ease, box-shadow 0.16s ease, transform 0.16s ease;
+}
+
+.calendar-dropdown__trigger:hover,
+.calendar-dropdown__trigger.is-open {
+    border-color: rgba(var(--signal-rgb), 0.46);
+    background: color-mix(in srgb, var(--panel-2) 88%, var(--signal));
+    box-shadow: 0 10px 24px -20px rgba(var(--signal-rgb), 0.45), inset 0 0 0 1px rgba(var(--signal-rgb), 0.08);
+}
+
+.calendar-dropdown__trigger:focus-visible {
+    outline: 2px solid var(--signal);
+    outline-offset: 3px;
+}
+
+.calendar-dropdown__trigger:active {
+    transform: translateY(1px);
+}
+
+.calendar-dropdown__trigger > svg {
+    color: var(--mist);
+    transition: transform 0.16s ease, color 0.16s ease;
+}
+
+.calendar-dropdown__trigger.is-open > svg {
+    color: var(--signal);
+    transform: rotate(180deg);
+}
+
+.calendar-dropdown__icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    background: var(--panel);
+    color: var(--mist);
+    box-shadow: 0 0 0 1px var(--line);
+}
+
+.calendar-dropdown__trigger:hover .calendar-dropdown__icon,
+.calendar-dropdown__trigger.is-open .calendar-dropdown__icon {
+    color: var(--signal);
+    box-shadow: 0 0 0 1px rgba(var(--signal-rgb), 0.34);
+}
+
+.calendar-dropdown__value {
+    min-width: 0;
+    overflow: hidden;
+    color: var(--paper);
+    font-size: 0.82rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.calendar-dropdown__menu {
+    position: absolute;
+    top: calc(100% + 8px);
+    left: 0;
+    z-index: 24;
+    display: grid;
+    gap: 3px;
+    width: min(320px, max(100%, 220px));
+    max-height: 280px;
+    overflow: auto;
+    padding: 6px;
+    border: 1px solid color-mix(in srgb, var(--line) 76%, var(--signal));
+    border-radius: 10px;
+    background: color-mix(in srgb, var(--panel) 96%, black);
+    box-shadow: 0 20px 46px -24px rgba(0, 0, 0, 0.68);
+    animation: dropdown-menu-in 0.2s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.calendar-dropdown__option {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 15px;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    min-height: 34px;
+    padding: 7px 9px;
+    border: none;
+    border-radius: 7px;
+    background: transparent;
+    color: var(--mist);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+    transition: background 0.14s ease, color 0.14s ease;
+}
+
+.calendar-dropdown__option:hover,
+.calendar-dropdown__option:focus-visible {
+    background: rgba(var(--signal-rgb), 0.08);
+    color: var(--paper);
+    outline: none;
+}
+
+.calendar-dropdown__option.is-selected {
+    background: rgba(var(--signal-rgb), 0.12);
+    color: var(--signal);
+}
+
+.calendar-dropdown__option span {
+    min-width: 0;
+}
+
+.calendar-dropdown__option strong,
+.calendar-dropdown__option em {
+    display: block;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.calendar-dropdown__option strong {
+    color: inherit;
+    font-size: 0.84rem;
+    font-weight: 500;
+}
+
+.calendar-dropdown__option em {
+    margin-top: 2px;
+    color: var(--mist);
+    font-family: var(--font-mono), monospace;
+    font-size: 0.66rem;
+    font-style: normal;
+}
+
+.calendar-panel__layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(300px, 380px);
+    gap: 16px;
+    align-items: start;
+}
+
+.calendar-panel__grid {
+    display: grid;
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    gap: 6px;
+}
+
+.calendar-panel__weekday {
+    padding: 0 4px 6px;
+    color: var(--mist);
+    font-family: var(--font-mono), monospace;
+    font-size: 0.68rem;
+    text-align: center;
+    text-transform: uppercase;
+}
+
+.calendar-panel__day {
+    position: relative;
+    display: grid;
+    min-height: 96px;
+    align-content: start;
+    justify-items: start;
+    gap: 8px;
+    padding: 10px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--panel);
+    color: var(--paper);
+    cursor: pointer;
+    font: inherit;
+    text-align: left;
+    transition: border-color 0.15s ease, background 0.15s ease, transform 0.15s ease;
+}
+
+.calendar-panel__grid--week .calendar-panel__day {
+    min-height: 220px;
+}
+
+.calendar-panel__day:hover,
+.calendar-panel__day:focus-visible {
+    border-color: rgba(var(--signal-rgb), 0.44);
+    background: color-mix(in srgb, var(--panel-2) 82%, var(--signal));
+    outline: none;
+}
+
+.calendar-panel__day.is-muted {
+    color: var(--mist);
+    opacity: 0.56;
+}
+
+.calendar-panel__day.is-today {
+    border-color: rgba(var(--signal-rgb), 0.54);
+}
+
+.calendar-panel__day.is-selected {
+    border-color: var(--signal);
+    background: rgba(var(--signal-rgb), 0.1);
+    transform: translateY(-1px);
+}
+
+.calendar-panel__day-number {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    font-family: var(--font-mono), monospace;
+    font-size: 0.78rem;
+}
+
+.calendar-panel__day.is-today .calendar-panel__day-number {
+    background: var(--signal);
+    color: var(--panel);
+}
+
+.calendar-panel__badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+}
+
+.calendar-panel__day-count {
+    display: inline-flex;
+    align-items: center;
+    min-height: 22px;
+    padding: 0 8px;
+    border-radius: 999px;
+    background: rgba(var(--signal-rgb), 0.12);
+    color: var(--signal);
+    font-family: var(--font-mono), monospace;
+    font-size: 0.68rem;
+}
+
+.calendar-panel__day-count--entry {
+    background: rgba(255, 176, 76, 0.12);
+    color: var(--amber);
+}
+
+.calendar-panel__agenda {
+    display: grid;
+    gap: 14px;
+    min-width: 0;
+    padding: 14px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--panel);
+}
+
+.calendar-panel__agenda-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--line);
+}
+
+.calendar-panel__agenda-head strong {
+    min-width: 0;
+    color: var(--paper);
+    font-size: 0.95rem;
+    line-height: 1.25;
+}
+
+.calendar-panel__agenda-head span,
+.calendar-panel__empty {
+    color: var(--mist);
+    font-size: 0.82rem;
+}
+
+.calendar-panel__agenda-head span {
+    flex-shrink: 0;
+    font-family: var(--font-mono), monospace;
+}
+
+.calendar-panel__form {
+    display: grid;
+    gap: 10px;
+    padding: 12px;
+    border: 1px solid rgba(148, 163, 184, 0.12);
+    border-radius: 8px;
+    background: var(--panel-2);
+}
+
+.calendar-panel__form-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 8px;
+}
+
+.calendar-panel__form-row > label,
+.calendar-panel__form-row > .calendar-dropdown {
+    min-width: 0;
+}
+
+.calendar-panel__form-row .calendar-dropdown__trigger {
+    min-width: 0;
+}
+
+.calendar-panel__submit {
+    justify-self: end;
+    border-color: rgba(var(--signal-rgb), 0.44);
+    background: rgba(var(--signal-rgb), 0.12);
+    color: var(--signal);
+}
+
+.calendar-panel__section {
+    display: grid;
+    gap: 10px;
+}
+
+.calendar-panel__section h2 {
+    margin: 0;
+    color: var(--mist);
+    font-family: var(--font-mono), monospace;
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.calendar-panel__empty {
+    margin: 0;
+}
+
+.calendar-panel__events {
+    display: grid;
+    gap: 10px;
+}
+
+.calendar-panel__event {
+    display: grid;
+    gap: 10px;
+    min-width: 0;
+    padding: 12px;
+    border: 1px solid rgba(148, 163, 184, 0.12);
+    border-radius: 8px;
+    background: var(--panel-2);
+}
+
+.calendar-panel__event--deadline {
+    border-color: rgba(255, 176, 76, 0.26);
+    box-shadow: inset 3px 0 0 rgba(255, 176, 76, 0.62);
+}
+
+.calendar-panel__event strong {
+    display: block;
+    min-width: 0;
+    overflow: hidden;
+    color: var(--paper);
+    font-size: 0.86rem;
+    font-weight: 600;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.calendar-panel__event span,
+.calendar-panel__event em {
+    display: block;
+    margin-top: 4px;
+    color: var(--mist);
+    font-family: var(--font-mono), monospace;
+    font-size: 0.68rem;
+    font-style: normal;
+}
+
+.calendar-panel__event p {
+    margin: 8px 0 0;
+    color: var(--paper);
+    font-size: 0.8rem;
+    line-height: 1.4;
+}
+
+.calendar-panel__event-actions {
+    flex-wrap: wrap;
+}
+
+@media (max-width: 980px) {
+    .calendar-panel__layout {
+        grid-template-columns: 1fr;
+    }
+
+    .calendar-panel__grid--week .calendar-panel__day {
+        min-height: 120px;
+    }
+}
+
+@media (max-width: 680px) {
+    .calendar-panel__toolbar,
+    .calendar-panel__agenda-head,
+    .calendar-panel__controls {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .calendar-panel__period {
+        justify-content: space-between;
+        width: 100%;
+    }
+
+    .calendar-panel__period strong {
+        min-width: 0;
+    }
+
+    .calendar-panel__period-picker,
+    .calendar-panel__period-trigger {
+        min-width: 0;
+    }
+
+    .calendar-panel__period-menu {
+        left: 0;
+        width: min(268px, calc(100vw - 40px));
+        transform: none;
+    }
+
+    .calendar-panel__form label,
+    .calendar-dropdown,
+    .calendar-panel__segments,
+    .calendar-panel__today {
+        width: 100%;
+    }
+
+    .calendar-panel__segments button {
+        flex: 1;
+    }
+
+    .calendar-panel__grid {
+        gap: 4px;
+    }
+
+    .calendar-panel__day,
+    .calendar-panel__grid--week .calendar-panel__day {
+        min-height: 74px;
+        padding: 7px;
+    }
+
+    .calendar-panel__weekday {
+        font-size: 0.58rem;
+    }
+
+    .calendar-panel__day-count {
+        padding: 0 6px;
+        font-size: 0.62rem;
+    }
+
+    .calendar-panel__form-row {
+        grid-template-columns: 1fr;
+    }
+}

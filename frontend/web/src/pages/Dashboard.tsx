@@ -44,6 +44,7 @@ import { FileCard } from './dashboard/FileCard'
 import { FileFilterModal } from './dashboard/FileFilterModal'
 import { FolderCard } from './dashboard/FolderCard'
 import { FileNoteModal } from './dashboard/FileNoteModal'
+import { CalendarPanel } from './dashboard/CalendarPanel'
 import { GroupsPanel } from './dashboard/GroupsPanel'
 import { ImagePreviewModal } from './dashboard/ImagePreviewModal'
 import { ShareFileModal } from './dashboard/ShareFileModal'
@@ -408,7 +409,7 @@ function Dashboard() {
             try {
                 setLoading(true)
                 setError(null)
-                if (view === 'groups') {
+                if (view === 'groups' || view === 'calendar') {
                     setFolders([])
                     setItems([])
                     return
@@ -1075,20 +1076,18 @@ function Dashboard() {
                 >
                     <div className="shell__content-head">
                         <div>
-                            <p className="eyebrow">
-                                <span className="eyebrow__dot" /> vault unlocked
-                            </p>
                             <h1 className="shell__title">
                                 {view === 'all' && 'All files'}
                                 {view === 'favourites' && 'Favourites'}
                                 {view === 'shared' && 'Shared with me'}
                                 {view === 'groups' && 'Groups'}
+                                {view === 'calendar' && 'Calendar'}
                                 {view === 'trash' && 'Trash'}
                             </h1>
                         </div>
 
                         <div className="shell__content-actions">
-                            {view !== 'groups' && (
+                            {view !== 'groups' && view !== 'calendar' && (
                                 <div className="sort-dropdown" ref={sortMenuRef}>
                                     <button
                                         className={`sort-dropdown__trigger ${sortMenuOpen ? 'is-open' : ''}`}
@@ -1172,7 +1171,7 @@ function Dashboard() {
                                 </div>
                             )}
 
-                            {view !== 'groups' && (
+                            {view !== 'groups' && view !== 'calendar' && (
                                 <div className="sort-dropdown file-filter" ref={filterMenuRef}>
                                     <button
                                         className={`sort-dropdown__trigger file-filter__trigger ${
@@ -1237,34 +1236,36 @@ function Dashboard() {
                                 </div>
                             )}
 
-                            <div
-                                className={`view-toggle view-toggle--${layoutMode} ${
-                                    layoutSwitchTarget ? 'is-switching' : ''
-                                }`}
-                                role="group"
-                                aria-label="File layout"
-                            >
-                                <button
-                                    className={`view-toggle__button ${layoutMode === 'grid' ? 'is-active' : ''}`}
-                                    type="button"
-                                    onClick={() => changeLayoutMode('grid')}
-                                    aria-label="Grid view"
-                                    aria-pressed={layoutMode === 'grid'}
-                                    title="Grid view"
+                            {view !== 'calendar' && (
+                                <div
+                                    className={`view-toggle view-toggle--${layoutMode} ${
+                                        layoutSwitchTarget ? 'is-switching' : ''
+                                    }`}
+                                    role="group"
+                                    aria-label="File layout"
                                 >
-                                    {GRID_VIEW_ICON}
-                                </button>
-                                <button
-                                    className={`view-toggle__button ${layoutMode === 'list' ? 'is-active' : ''}`}
-                                    type="button"
-                                    onClick={() => changeLayoutMode('list')}
-                                    aria-label="List view"
-                                    aria-pressed={layoutMode === 'list'}
-                                    title="List view"
-                                >
-                                    {LIST_VIEW_ICON}
-                                </button>
-                            </div>
+                                    <button
+                                        className={`view-toggle__button ${layoutMode === 'grid' ? 'is-active' : ''}`}
+                                        type="button"
+                                        onClick={() => changeLayoutMode('grid')}
+                                        aria-label="Grid view"
+                                        aria-pressed={layoutMode === 'grid'}
+                                        title="Grid view"
+                                    >
+                                        {GRID_VIEW_ICON}
+                                    </button>
+                                    <button
+                                        className={`view-toggle__button ${layoutMode === 'list' ? 'is-active' : ''}`}
+                                        type="button"
+                                        onClick={() => changeLayoutMode('list')}
+                                        aria-label="List view"
+                                        aria-pressed={layoutMode === 'list'}
+                                        title="List view"
+                                    >
+                                        {LIST_VIEW_ICON}
+                                    </button>
+                                </div>
+                            )}
 
                             {view === 'all' && (
                                 <>
@@ -1374,6 +1375,14 @@ function Dashboard() {
                                     ? 'Adjust the search or filter to see more favourites.'
                                     : 'Tap the star on any file to pin it here for quick access.'
                             }
+                        />
+                    )}
+
+                    {!loading && view === 'calendar' && (
+                        <CalendarPanel
+                            files={storageItems}
+                            onPreview={handleFilePreview}
+                            onDownload={(item) => void handleDownload(item)}
                         />
                     )}
 

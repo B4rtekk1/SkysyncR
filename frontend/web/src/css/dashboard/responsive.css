@@ -3,16 +3,20 @@
 @media (max-width: 900px) {
     .shell {
         grid-template-columns: 1fr;
+        grid-template-rows: auto minmax(0, 1fr);
     }
 
     .shell__sidebar {
         position: sticky;
         top: 0;
         z-index: 30;
+        height: auto;
+        max-width: 100%;
         flex-direction: row;
         align-items: center;
         gap: 16px;
         overflow-x: auto;
+        overflow-y: hidden;
         border-right: none;
         border-bottom: 1px solid var(--line);
     }

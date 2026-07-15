@@ -24,9 +24,11 @@ html[data-theme='light'] {
 }
 
 .shell {
-    min-height: 100vh;
+    height: 100vh;
+    height: 100dvh;
     display: grid;
     grid-template-columns: var(--sidebar-width, 240px) 1fr;
+    overflow: hidden;
     background: var(--panel);
     transition: background 0.2s ease, grid-template-columns 0.18s ease;
 }

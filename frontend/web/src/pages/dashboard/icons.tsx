@@ -26,6 +26,13 @@ export const NAV_ICONS: Record<ViewKey, React.ReactElement> = {
             />
         </svg>
     ),
+    calendar: (
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <rect x="4.5" y="5.5" width="15" height="14" rx="2" stroke="currentColor" strokeWidth="1.4" />
+            <path d="M8 3.8v3.4M16 3.8v3.4M4.8 9.5h14.4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+            <path d="M8 13h2M12 13h2M16 13h.1M8 16h2M12 16h2" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+        </svg>
+    ),
     trash: (
         <svg width="17" height="17" viewBox="0 0 24 24" fill="none" aria-hidden="true">
             <path d="M5 7h14M9.5 7V5.2a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1V7M7 7l1 12.2a1 1 0 0 0 1 .8h6a1 1 0 0 0 1-.8L17 7" stroke="currentColor" strokeWidth="1.4" />

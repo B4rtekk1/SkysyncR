@@ -54,12 +54,6 @@ export default function VaultPanel() {
                         <span className="vault__line-value">{line.value}</span>
                     </p>
                 ))}
-                <p className="vault__line" style={{ animationDelay: '0.54s' }}>
-                    <span className="vault__line-label">session</span>
-                    <span className="vault__line-value" key={unlocked ? 'unlocked' : 'locked'}>
-            {unlocked ? 'vault unlocked' : 'waiting for credentials'}
-          </span>
-                </p>
             </div>
         </div>
     )
