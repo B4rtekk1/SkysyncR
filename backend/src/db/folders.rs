@@ -21,6 +21,7 @@ where
 pub struct FolderRecord {
     pub id: Uuid,
     pub name: String,
+    pub description: Option<String>,
     pub parent_folder_id: Option<Uuid>,
     pub is_public: bool,
     pub share_token: Option<String>,
@@ -36,6 +37,7 @@ pub struct FolderRecord {
 pub struct NewFolderRecord {
     pub owner_id: Uuid,
     pub name: String,
+    pub description: Option<String>,
     pub parent_folder_id: Option<Uuid>,
     pub encrypted_key: Vec<u8>,
 }
@@ -50,6 +52,7 @@ pub async fn list_user_folders(
         SELECT
             f.id,
             f.name,
+            f.description,
             f.parent_folder_id,
             f.is_public,
             f.share_token,
@@ -72,6 +75,7 @@ pub async fn list_user_folders(
         GROUP BY
             f.id,
             f.name,
+            f.description,
             f.parent_folder_id,
             f.is_public,
             f.share_token,
@@ -96,13 +100,15 @@ pub async fn create_folder_record(
         INSERT INTO folders (
             owner_id,
             name,
+            description,
             parent_folder_id,
             encrypted_key
         )
-        VALUES ($1, $2, $3, $4)
+        VALUES ($1, $2, $3, $4, $5)
         RETURNING
             id,
             name,
+            description,
             parent_folder_id,
             is_public,
             share_token,
@@ -116,6 +122,7 @@ pub async fn create_folder_record(
     )
     .bind(folder.owner_id)
     .bind(folder.name)
+    .bind(folder.description)
     .bind(folder.parent_folder_id)
     .bind(folder.encrypted_key)
     .fetch_one(pool)
@@ -164,6 +171,7 @@ pub async fn update_user_folder_share(
         RETURNING
             id,
             name,
+            description,
             parent_folder_id,
             is_public,
             share_token,
@@ -183,6 +191,51 @@ pub async fn update_user_folder_share(
     )
     .bind(is_public)
     .bind(share_token)
+    .bind(folder_id)
+    .bind(user_id)
+    .fetch_optional(pool)
+    .await
+}
+
+pub async fn rename_user_folder(
+    pool: &PgPool,
+    user_id: Uuid,
+    folder_id: Uuid,
+    name: String,
+    description: Option<String>,
+) -> Result<Option<FolderRecord>, sqlx::Error> {
+    sqlx::query_as::<_, FolderRecord>(
+        r#"
+        UPDATE folders
+        SET name = $1,
+            description = $2,
+            updated_at = NOW()
+        WHERE id = $3
+          AND owner_id = $4
+          AND is_deleted = FALSE
+        RETURNING
+            id,
+            name,
+            description,
+            parent_folder_id,
+            is_public,
+            share_token,
+            created_at,
+            updated_at,
+            is_deleted,
+            deleted_at,
+            (
+                SELECT COUNT(files.id)::bigint
+                FROM files
+                WHERE files.folder_id = folders.id
+                  AND files.owner_id = folders.owner_id
+                  AND files.is_deleted = FALSE
+            ) AS file_count,
+            encrypted_key
+        "#,
+    )
+    .bind(name)
+    .bind(description)
     .bind(folder_id)
     .bind(user_id)
     .fetch_optional(pool)

@@ -10,7 +10,7 @@ use uuid::Uuid;
 use crate::auth::AuthUser;
 use crate::db::folders::{
     FolderRecord, NewFolderRecord, create_folder_record, folder_belongs_to_user, list_user_folders,
-    update_user_folder_share,
+    rename_user_folder, update_user_folder_share,
 };
 use crate::state::AppState;
 use crate::utils::errors::{ApiError, internal_error};
@@ -23,6 +23,7 @@ pub struct ListFoldersQuery {
 #[derive(Deserialize)]
 pub struct CreateFolderRequest {
     pub name: String,
+    pub description: Option<String>,
     pub parent_folder_id: Option<String>,
     pub encrypted_key: String,
 }
@@ -30,6 +31,12 @@ pub struct CreateFolderRequest {
 #[derive(Deserialize)]
 pub struct ShareFolderRequest {
     pub is_public: bool,
+}
+
+#[derive(Deserialize)]
+pub struct RenameFolderRequest {
+    pub name: String,
+    pub description: Option<String>,
 }
 
 pub async fn list_folders(
@@ -53,6 +60,7 @@ pub async fn create_folder(
     Json(payload): Json<CreateFolderRequest>,
 ) -> Result<(StatusCode, Json<FolderRecord>), ApiError> {
     let name = validate_folder_name(&payload.name)?;
+    let description = validate_folder_description(payload.description.as_deref())?;
     let encrypted_key = decode_folder_key(&payload.encrypted_key)?;
     let parent_folder_id =
         parse_optional_uuid(payload.parent_folder_id.as_deref(), "parent_folder_id")?;
@@ -71,6 +79,7 @@ pub async fn create_folder(
         NewFolderRecord {
             owner_id: auth.user_id,
             name,
+            description,
             parent_folder_id,
             encrypted_key,
         },
@@ -98,6 +107,22 @@ pub async fn share_folder(
     .await
     .map_err(|e| internal_error("share folder", e))?
     .ok_or_else(|| ApiError::BadRequest("Folder not found".into()))?;
+
+    Ok(Json(folder))
+}
+
+pub async fn rename_folder(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Path(folder_id): Path<Uuid>,
+    Json(payload): Json<RenameFolderRequest>,
+) -> Result<Json<FolderRecord>, ApiError> {
+    let name = validate_folder_name(&payload.name)?;
+    let description = validate_folder_description(payload.description.as_deref())?;
+    let folder = rename_user_folder(&state.db_pool, auth.user_id, folder_id, name, description)
+        .await
+        .map_err(|e| internal_error("rename folder", e))?
+        .ok_or_else(|| ApiError::BadRequest("Folder not found".into()))?;
 
     Ok(Json(folder))
 }
@@ -143,6 +168,46 @@ fn validate_folder_name(value: &str) -> Result<String, ApiError> {
     }
 
     Ok(trimmed.to_string())
+}
+
+fn validate_folder_description(value: Option<&str>) -> Result<Option<String>, ApiError> {
+    let Some(raw) = value else {
+        return Ok(None);
+    };
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return Ok(None);
+    }
+
+    if trimmed.starts_with("aes-gcm:v1:") {
+        if trimmed.len() > 4096 {
+            return Err(ApiError::BadRequest(
+                "Folder description is too large".into(),
+            ));
+        }
+        if trimmed.chars().any(char::is_control) {
+            return Err(ApiError::BadRequest(
+                "Folder description contains invalid characters".into(),
+            ));
+        }
+        return Ok(Some(trimmed.to_string()));
+    }
+
+    if trimmed.len() > 1000 {
+        return Err(ApiError::BadRequest(
+            "Folder description is too large".into(),
+        ));
+    }
+    if trimmed
+        .chars()
+        .any(|ch| ch.is_control() && ch != '\n' && ch != '\r' && ch != '\t')
+    {
+        return Err(ApiError::BadRequest(
+            "Folder description contains invalid characters".into(),
+        ));
+    }
+
+    Ok(Some(trimmed.to_string()))
 }
 
 fn decode_folder_key(value: &str) -> Result<Vec<u8>, ApiError> {

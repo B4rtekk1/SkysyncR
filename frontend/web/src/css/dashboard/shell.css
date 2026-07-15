@@ -960,6 +960,15 @@
     font: inherit;
 }
 
+.folder-create__textarea {
+    min-height: 96px;
+    height: auto;
+    margin-top: 10px;
+    padding-top: 9px;
+    resize: vertical;
+    line-height: 1.35;
+}
+
 .folder-create__input:focus {
     border-color: rgba(var(--signal-rgb), 0.68);
     outline: none;

@@ -39,6 +39,7 @@ export interface SharedFile extends ApiFile {
 export interface ApiFolder {
     id: string
     name: string
+    description: string | null
     parent_folder_id: string | null
     encrypted_key: string | null
     is_public: boolean
@@ -113,6 +114,7 @@ export async function listFolders(parentFolderId?: string): Promise<ApiFolder[]>
 
 export async function createFolder(params: {
     name: string
+    description?: string | null
     wrappedKey: ArrayBuffer
     parentFolderId?: string | null
 }): Promise<ApiFolder> {
@@ -123,6 +125,7 @@ export async function createFolder(params: {
         },
         body: JSON.stringify({
             name: params.name,
+            description: params.description ?? null,
             encrypted_key: arrayBufferToBase64(params.wrappedKey),
             parent_folder_id: params.parentFolderId ?? null,
         }),
@@ -204,6 +207,18 @@ export async function renameFile(id: string, filename: string): Promise<ApiFile>
             'Content-Type': 'application/json',
         },
         body: JSON.stringify({ filename }),
+    })
+    if (!res.ok) throw new Error(await parseErrorMessage(res))
+    return res.json()
+}
+
+export async function renameFolder(id: string, name: string, description?: string | null): Promise<ApiFolder> {
+    const res = await authenticatedFetch(`${API_BASE}folders/${id}`, {
+        method: 'PATCH',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ name, description: description ?? null }),
     })
     if (!res.ok) throw new Error(await parseErrorMessage(res))
     return res.json()

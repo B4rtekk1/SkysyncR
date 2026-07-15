@@ -54,16 +54,27 @@ export async function decryptFolderMetadata<T extends ApiFolder>(
     folder: T,
     privateKey: CryptoKey,
 ): Promise<T> {
-    if (!isEncryptedTextEnvelope(folder.name) || !folder.encrypted_key) {
+    if ((!isEncryptedTextEnvelope(folder.name) && !isEncryptedTextEnvelope(folder.description)) || !folder.encrypted_key) {
         return folder
     }
 
     try {
         const folderKey = await unwrapFileKeyForUser(folder.encrypted_key, privateKey)
-        const name = await decryptTextEnvelope(folder.name, folderKey)
-        return { ...folder, name }
+        const [name, description] = await Promise.all([
+            decryptMaybeEncrypted(folder.name, folderKey),
+            decryptMaybeEncrypted(folder.description, folderKey),
+        ])
+        return {
+            ...folder,
+            name: name ?? folder.name,
+            description,
+        }
     } catch {
-        return { ...folder, name: 'Encrypted folder' }
+        return {
+            ...folder,
+            name: isEncryptedTextEnvelope(folder.name) ? 'Encrypted folder' : folder.name,
+            description: null,
+        }
     }
 }
 

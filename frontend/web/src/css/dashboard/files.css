@@ -340,6 +340,41 @@
     font-weight: 700;
 }
 
+.folder-card__description {
+    display: -webkit-box;
+    margin: 8px 0 0;
+    max-height: 48px;
+    overflow: hidden;
+    color: var(--mist);
+    font-size: 0.86rem;
+    line-height: 1.35;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+}
+
+.folder-card__edit {
+    display: grid;
+    gap: 8px;
+}
+
+.folder-card__description-input {
+    width: 100%;
+    min-height: 72px;
+    resize: vertical;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--panel-2);
+    color: var(--paper);
+    padding: 9px 11px;
+    font: inherit;
+    line-height: 1.35;
+}
+
+.folder-card__description-input:focus {
+    border-color: rgba(var(--signal-rgb), 0.68);
+    outline: none;
+}
+
 .file-card--can-preview:focus-visible {
     outline: 2px solid var(--signal);
     outline-offset: 3px;

@@ -25,6 +25,7 @@ CREATE TABLE IF NOT EXISTS folders
     id               UUID PRIMARY KEY     DEFAULT gen_random_uuid(),
     owner_id         UUID        NOT NULL REFERENCES users (id) ON DELETE CASCADE,
     name             TEXT        NOT NULL,
+    description      TEXT,
     parent_folder_id UUID        REFERENCES folders (id) ON DELETE SET NULL,
     encrypted_key    bytea,
     deleted_at        timestamptz,
@@ -199,3 +200,4 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS trash_retention_days INT NOT NULL DEF
 ALTER TABLE folders ADD COLUMN IF NOT EXISTS encrypted_key bytea;
 ALTER TABLE folders ADD COLUMN IF NOT EXISTS is_public BOOLEAN NOT NULL DEFAULT FALSE;
 ALTER TABLE folders ADD COLUMN IF NOT EXISTS share_token TEXT;
+ALTER TABLE folders ADD COLUMN IF NOT EXISTS description TEXT;

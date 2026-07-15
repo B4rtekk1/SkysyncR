@@ -22,6 +22,7 @@ import {
     listSharedFilesWithMe,
     getStorageQuota,
     renameFile,
+    renameFolder,
     shareFolder,
     updateFileNote,
     type ApiFile,
@@ -147,6 +148,7 @@ function Dashboard() {
     const [noteSaving, setNoteSaving] = useState(false)
     const [folderCreateOpen, setFolderCreateOpen] = useState(false)
     const [folderNameDraft, setFolderNameDraft] = useState('')
+    const [folderDescriptionDraft, setFolderDescriptionDraft] = useState('')
     const [folderSaving, setFolderSaving] = useState(false)
     const [shareItem, setShareItem] = useState<ShareableItem | null>(null)
     const [shareLoading, setShareLoading] = useState(false)
@@ -239,7 +241,9 @@ function Dashboard() {
     )
     const visibleFolders = useMemo(() => {
         if (view !== 'all') return []
-        return folders.filter((folder) => folder.name.toLowerCase().includes(normalizedQuery))
+        return folders.filter((folder) =>
+            [folder.name, folder.description ?? ''].some((value) => value.toLowerCase().includes(normalizedQuery)),
+        )
     }, [folders, normalizedQuery, view])
     const sortedItems = useMemo(() => sortFiles(filteredItems, sortKey), [filteredItems, sortKey])
     const { visibleItems, renderedItems, animatedFiles } = useAnimatedItems({
@@ -619,6 +623,7 @@ function Dashboard() {
 
     async function handleCreateFolder() {
         const name = folderNameDraft.trim()
+        const description = folderDescriptionDraft.trim()
         if (!name || folderSaving) return
 
         setFolderSaving(true)
@@ -633,17 +638,81 @@ function Dashboard() {
             const folderKey = await generateFileKey()
             const folder = await createFolder({
                 name: await encryptTextEnvelope(name, folderKey),
+                description: description ? await encryptTextEnvelope(description, folderKey) : null,
                 wrappedKey: await wrapFileKeyForUser(folderKey, publicKey),
                 parentFolderId: activeFolderId,
             })
-            const visibleFolder = { ...folder, name }
+            const visibleFolder = { ...folder, name, description: description || null }
             setFolders((current) => [...current, visibleFolder].sort((a, b) => a.name.localeCompare(b.name)))
             setFolderNameDraft('')
+            setFolderDescriptionDraft('')
             setFolderCreateOpen(false)
         } catch (e) {
             setError(e instanceof Error ? e.message : 'Nie udalo sie utworzyc folderu.')
         } finally {
             setFolderSaving(false)
+        }
+    }
+
+    async function handleRenameFolder(folder: ApiFolder, name: string, description: string | null) {
+        const previousName = folder.name
+        const previousDescription = folder.description ?? null
+        const nextName = name.trim()
+        const nextDescription = description?.trim() || null
+        if (!nextName || (nextName === previousName && nextDescription === previousDescription)) return
+
+        setError(null)
+
+        setFolders((current) =>
+            current
+                .map((item) =>
+                    item.id === folder.id ? { ...item, name: nextName, description: nextDescription, updated_at: new Date().toISOString() } : item,
+                )
+                .sort((a, b) => a.name.localeCompare(b.name)),
+        )
+        setFolderTrail((current) =>
+            current.map((item) =>
+                item.id === folder.id ? { ...item, name: nextName, description: nextDescription, updated_at: new Date().toISOString() } : item,
+            ),
+        )
+
+        try {
+            let storedName = nextName
+            let storedDescription = nextDescription
+            if (folder.encrypted_key) {
+                if (!privateKey) {
+                    throw new Error('Private key is locked. Sign in again to update encrypted folders.')
+                }
+                const folderKey = await unwrapFileKeyForUser(folder.encrypted_key, privateKey)
+                storedName = await encryptTextEnvelope(nextName, folderKey)
+                storedDescription = nextDescription ? await encryptTextEnvelope(nextDescription, folderKey) : null
+            }
+
+            const renamed = await renameFolder(folder.id, storedName, storedDescription)
+            const visibleRenamed = { ...renamed, name: nextName, description: nextDescription, encrypted_key: folder.encrypted_key }
+            setFolders((current) =>
+                current.map((item) => (item.id === folder.id ? visibleRenamed : item)).sort((a, b) => a.name.localeCompare(b.name)),
+            )
+            setFolderTrail((current) => current.map((item) => (item.id === folder.id ? visibleRenamed : item)))
+            setShareItem((current) => {
+                if (!current || 'filename' in current || current.id !== folder.id) return current
+                return visibleRenamed
+            })
+        } catch (e) {
+            setFolders((current) =>
+                current
+                    .map((item) =>
+                        item.id === folder.id ? { ...item, name: previousName, description: previousDescription, updated_at: folder.updated_at } : item,
+                    )
+                    .sort((a, b) => a.name.localeCompare(b.name)),
+            )
+            setFolderTrail((current) =>
+                current.map((item) =>
+                    item.id === folder.id ? { ...item, name: previousName, description: previousDescription, updated_at: folder.updated_at } : item,
+                ),
+            )
+            setError(e instanceof Error ? e.message : 'Could not update that folder.')
+            throw e
         }
     }
 
@@ -657,7 +726,7 @@ function Dashboard() {
         setError(null)
         try {
             const shared = await shareFolder(folder.id, isPublic)
-            const visibleShared = { ...shared, name: folder.name, encrypted_key: folder.encrypted_key }
+            const visibleShared = { ...shared, name: folder.name, description: folder.description, encrypted_key: folder.encrypted_key }
             setFolders((current) => current.map((item) => (item.id === folder.id ? visibleShared : item)))
             setShareItem(visibleShared)
             return visibleShared
@@ -1348,6 +1417,7 @@ function Dashboard() {
                                     index={i}
                                     onOpen={openFolder}
                                     onShare={handleShareFolder}
+                                    onRename={handleRenameFolder}
                                 />
                             ))}
                             {renderedItems.map((item, i) => {
@@ -1438,6 +1508,7 @@ function Dashboard() {
                                 onClick={() => {
                                     setFolderCreateOpen(false)
                                     setFolderNameDraft('')
+                                    setFolderDescriptionDraft('')
                                 }}
                                 aria-label="Close"
                             >
@@ -1451,10 +1522,29 @@ function Dashboard() {
                                 onChange={(event) => setFolderNameDraft(event.target.value)}
                                 onKeyDown={(event) => {
                                     if (event.key === 'Enter') void handleCreateFolder()
-                                    if (event.key === 'Escape') setFolderCreateOpen(false)
+                                    if (event.key === 'Escape') {
+                                        setFolderCreateOpen(false)
+                                        setFolderNameDraft('')
+                                        setFolderDescriptionDraft('')
+                                    }
                                 }}
                                 placeholder="Folder name"
                                 autoFocus
+                            />
+                            <textarea
+                                className="folder-create__input folder-create__textarea"
+                                value={folderDescriptionDraft}
+                                onChange={(event) => setFolderDescriptionDraft(event.target.value)}
+                                onKeyDown={(event) => {
+                                    if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') void handleCreateFolder()
+                                    if (event.key === 'Escape') {
+                                        setFolderCreateOpen(false)
+                                        setFolderNameDraft('')
+                                        setFolderDescriptionDraft('')
+                                    }
+                                }}
+                                placeholder="Folder description"
+                                rows={4}
                             />
                         </div>
                         <div className="file-filter__footer">
@@ -1464,6 +1554,7 @@ function Dashboard() {
                                 onClick={() => {
                                     setFolderCreateOpen(false)
                                     setFolderNameDraft('')
+                                    setFolderDescriptionDraft('')
                                 }}
                             >
                                 Cancel
