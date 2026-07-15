@@ -662,6 +662,11 @@ function Dashboard() {
         if (!nextName || (nextName === previousName && nextDescription === previousDescription)) return
 
         setError(null)
+        if (folder.encrypted_key && !privateKey) {
+            setError('Private key is locked. Sign in again to update encrypted folders.')
+            return
+        }
+        const unlockedPrivateKey = privateKey
 
         setFolders((current) =>
             current
@@ -679,11 +684,8 @@ function Dashboard() {
         try {
             let storedName = nextName
             let storedDescription = nextDescription
-            if (folder.encrypted_key) {
-                if (!privateKey) {
-                    throw new Error('Private key is locked. Sign in again to update encrypted folders.')
-                }
-                const folderKey = await unwrapFileKeyForUser(folder.encrypted_key, privateKey)
+            if (folder.encrypted_key && unlockedPrivateKey) {
+                const folderKey = await unwrapFileKeyForUser(folder.encrypted_key, unlockedPrivateKey)
                 storedName = await encryptTextEnvelope(nextName, folderKey)
                 storedDescription = nextDescription ? await encryptTextEnvelope(nextDescription, folderKey) : null
             }
@@ -712,7 +714,6 @@ function Dashboard() {
                 ),
             )
             setError(e instanceof Error ? e.message : 'Could not update that folder.')
-            throw e
         }
     }
 
