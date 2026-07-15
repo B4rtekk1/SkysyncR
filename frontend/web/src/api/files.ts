@@ -25,6 +25,7 @@ export interface ApiFile {
     share_expires_at: string | null
     share_download_limit: number | null
     share_download_count: number
+    is_favourite: boolean
     encrypted_key: string
     encryption_nonce: string
     created_at: string
@@ -265,6 +266,13 @@ export async function shareFile(
     })
     if (!res.ok) throw new Error(await parseErrorMessage(res))
     return res.json()
+}
+
+export async function setFileFavourite(id: string, isFavourite: boolean): Promise<void> {
+    const res = await authenticatedFetch(`${API_BASE}files/${id}/favorite`, {
+        method: isFavourite ? 'PUT' : 'DELETE',
+    })
+    if (!res.ok) throw new Error(await parseErrorMessage(res))
 }
 
 export async function shareFolder(id: string, isPublic: boolean): Promise<ApiFolder> {

@@ -3,8 +3,9 @@ use axum::extract::DefaultBodyLimit;
 use axum::routing::{delete, get, post, put};
 
 use crate::handlers::files::{
-    download_file, list_files, list_shared_files_with_me, permanent_delete_file, rename_file,
-    restore_file, share_file, soft_delete_file, update_file_content, update_file_note, upload_file,
+    add_file_favourite, download_file, list_files, list_shared_files_with_me,
+    permanent_delete_file, remove_file_favourite, rename_file, restore_file, share_file,
+    soft_delete_file, update_file_content, update_file_note, upload_file,
 };
 use crate::state::AppState;
 
@@ -16,6 +17,10 @@ pub fn files_routes() -> Router<AppState> {
         .route("/files/{id}/content", put(update_file_content))
         .route("/files/{id}/note", put(update_file_note))
         .route("/files/{id}/share", put(share_file))
+        .route(
+            "/files/{id}/favorite",
+            put(add_file_favourite).delete(remove_file_favourite),
+        )
         .route("/files/{id}/permanent", delete(permanent_delete_file))
         .route("/files/{id}", delete(soft_delete_file).patch(rename_file))
         .route("/files/{id}/restore", post(restore_file))

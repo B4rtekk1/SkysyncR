@@ -17,10 +17,11 @@ use uuid::Uuid;
 
 use crate::auth::AuthUser;
 use crate::db::files::{
-    FileRecord, NewFileRecord, SharedFileRecord, create_file_record, folder_belongs_to_user,
-    get_user_file_for_content_update, get_user_file_for_download, list_files_shared_with_user,
-    list_user_files, rename_user_file, restore_user_file, soft_delete_user_file,
-    update_user_file_content, update_user_file_note, update_user_file_share,
+    FileRecord, NewFileRecord, SharedFileRecord, add_user_file_favourite, create_file_record,
+    folder_belongs_to_user, get_user_file_for_content_update, get_user_file_for_download,
+    list_files_shared_with_user, list_user_files, remove_user_file_favourite, rename_user_file,
+    restore_user_file, soft_delete_user_file, update_user_file_content, update_user_file_note,
+    update_user_file_share, user_file_exists,
 };
 use crate::db::storage::get_storage_quota;
 use crate::services::trash::permanently_delete_user_file;
@@ -336,6 +337,50 @@ pub async fn update_file_note(
         .ok_or_else(|| ApiError::BadRequest("File not found".into()))?;
 
     Ok(Json(file))
+}
+
+pub async fn add_file_favourite(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Path(file_id): Path<Uuid>,
+) -> Result<StatusCode, ApiError> {
+    ensure_user_file_exists(&state, auth.user_id, file_id).await?;
+
+    add_user_file_favourite(&state.db_pool, auth.user_id, file_id)
+        .await
+        .map_err(|e| internal_error("add file favourite", e))?;
+
+    Ok(StatusCode::NO_CONTENT)
+}
+
+pub async fn remove_file_favourite(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Path(file_id): Path<Uuid>,
+) -> Result<StatusCode, ApiError> {
+    ensure_user_file_exists(&state, auth.user_id, file_id).await?;
+
+    remove_user_file_favourite(&state.db_pool, auth.user_id, file_id)
+        .await
+        .map_err(|e| internal_error("remove file favourite", e))?;
+
+    Ok(StatusCode::NO_CONTENT)
+}
+
+async fn ensure_user_file_exists(
+    state: &AppState,
+    user_id: Uuid,
+    file_id: Uuid,
+) -> Result<(), ApiError> {
+    let exists = user_file_exists(&state.db_pool, user_id, file_id)
+        .await
+        .map_err(|e| internal_error("check favourite file", e))?;
+
+    if exists {
+        Ok(())
+    } else {
+        Err(ApiError::BadRequest("File not found".into()))
+    }
 }
 
 pub async fn download_file(

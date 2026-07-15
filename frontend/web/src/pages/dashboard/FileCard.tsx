@@ -55,7 +55,7 @@ export function FileCard({
     onNote?: (item: Item) => void
     view: ViewKey
     isFavourite?: boolean
-    onToggleFavourite?: (id: string) => void
+    onToggleFavourite?: (id: string) => void | Promise<void>
     draggable?: boolean
     isDragging?: boolean
     isDropTarget?: boolean
@@ -224,7 +224,7 @@ export function FileCard({
                     onClick={(e) => {
                         e.stopPropagation()
                         setFavouriteTouched(true)
-                        onToggleFavourite?.(item.id)
+                        void onToggleFavourite?.(item.id)
                     }}
                     aria-label={isFavourite ? 'Remove from favourites' : 'Add to favourites'}
                     aria-pressed={isFavourite}

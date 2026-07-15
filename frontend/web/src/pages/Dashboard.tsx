@@ -280,6 +280,7 @@ function Dashboard() {
             if (privateKey) void migratePlaintextFileMetadata(fileData, privateKey)
             setQuota(quotaData)
             setStorageItems(applyLocalFileMetadata(visibleFileData))
+            setFavouriteIds(new Set(fileData.filter((file) => file.is_favourite).map((file) => file.id)))
         } catch {
             setQuota(null)
         }
@@ -308,6 +309,7 @@ function Dashboard() {
         setShareItem,
         setShareLoading,
         setFavouriteIds,
+        favouriteIds,
         refreshQuota,
         privateKey,
     })
@@ -449,6 +451,7 @@ function Dashboard() {
                     setFolders(visibleFolderData)
                     if (view === 'all' || view === 'favourites') {
                         setStorageItems(withLocalMetadata as ApiFile[])
+                        setFavouriteIds(new Set(fileData.filter((file) => file.is_favourite).map((file) => file.id)))
                     }
                 }
             } catch (e) {

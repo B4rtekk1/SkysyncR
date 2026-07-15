@@ -26,6 +26,7 @@ pub struct FileRecord {
     pub share_expires_at: Option<DateTime<Utc>>,
     pub share_download_limit: Option<i32>,
     pub share_download_count: i32,
+    pub is_favourite: bool,
     #[serde(serialize_with = "serialize_bytes_base64")]
     pub encrypted_key: Vec<u8>,
     #[serde(serialize_with = "serialize_bytes_base64")]
@@ -96,6 +97,12 @@ pub async fn list_user_files(
             share_expires_at,
             share_download_limit,
             share_download_count,
+            EXISTS (
+                SELECT 1
+                FROM favorites fav
+                WHERE fav.user_id = $1
+                  AND fav.file_id = files.id
+            ) AS is_favourite,
             encrypted_key,
             encryption_nonce,
             created_at,
@@ -147,6 +154,7 @@ pub async fn create_file_record(
             share_expires_at,
             share_download_limit,
             share_download_count,
+            FALSE AS is_favourite,
             encrypted_key,
             encryption_nonce,
             created_at,
@@ -371,6 +379,12 @@ pub async fn rename_user_file(
             share_expires_at,
             share_download_limit,
             share_download_count,
+            EXISTS (
+                SELECT 1
+                FROM favorites fav
+                WHERE fav.user_id = $3
+                  AND fav.file_id = files.id
+            ) AS is_favourite,
             encrypted_key,
             encryption_nonce,
             created_at,
@@ -419,6 +433,12 @@ pub async fn update_user_file_content(
             share_expires_at,
             share_download_limit,
             share_download_count,
+            EXISTS (
+                SELECT 1
+                FROM favorites fav
+                WHERE fav.user_id = $6
+                  AND fav.file_id = files.id
+            ) AS is_favourite,
             encrypted_key,
             encryption_nonce,
             created_at,
@@ -471,6 +491,12 @@ pub async fn update_user_file_share(
             share_expires_at,
             share_download_limit,
             share_download_count,
+            EXISTS (
+                SELECT 1
+                FROM favorites fav
+                WHERE fav.user_id = $6
+                  AND fav.file_id = files.id
+            ) AS is_favourite,
             encrypted_key,
             encryption_nonce,
             created_at,
@@ -516,6 +542,12 @@ pub async fn update_user_file_note(
             share_expires_at,
             share_download_limit,
             share_download_count,
+            EXISTS (
+                SELECT 1
+                FROM favorites fav
+                WHERE fav.user_id = $3
+                  AND fav.file_id = files.id
+            ) AS is_favourite,
             encrypted_key,
             encryption_nonce,
             created_at,
@@ -528,4 +560,66 @@ pub async fn update_user_file_note(
     .bind(user_id)
     .fetch_optional(pool)
     .await
+}
+
+pub async fn user_file_exists(
+    pool: &PgPool,
+    user_id: Uuid,
+    file_id: Uuid,
+) -> Result<bool, sqlx::Error> {
+    sqlx::query_scalar::<_, bool>(
+        r#"
+        SELECT EXISTS (
+            SELECT 1
+            FROM files
+            WHERE id = $1
+              AND owner_id = $2
+              AND is_deleted = FALSE
+        )
+        "#,
+    )
+    .bind(file_id)
+    .bind(user_id)
+    .fetch_one(pool)
+    .await
+}
+
+pub async fn add_user_file_favourite(
+    pool: &PgPool,
+    user_id: Uuid,
+    file_id: Uuid,
+) -> Result<(), sqlx::Error> {
+    sqlx::query(
+        r#"
+        INSERT INTO favorites (user_id, file_id)
+        VALUES ($1, $2)
+        ON CONFLICT (user_id, file_id) DO NOTHING
+        "#,
+    )
+    .bind(user_id)
+    .bind(file_id)
+    .execute(pool)
+    .await?;
+
+    Ok(())
+}
+
+pub async fn remove_user_file_favourite(
+    pool: &PgPool,
+    user_id: Uuid,
+    file_id: Uuid,
+) -> Result<(), sqlx::Error> {
+    sqlx::query(
+        r#"
+        DELETE FROM favorites
+        WHERE user_id = $1
+          AND file_id = $2
+        "#,
+    )
+    .bind(user_id)
+    .bind(file_id)
+    .execute(pool)
+    .await?;
+
+    Ok(())
 }

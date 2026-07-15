@@ -3,12 +3,12 @@ import {
     permanentlyDeleteFile,
     renameFile,
     restoreFile,
+    setFileFavourite,
     shareFile,
     softDeleteFile,
     type ApiFile,
 } from '../../../api/files'
 import { encryptTextEnvelope, unwrapFileKeyForUser } from '../../../crypto/fileEncryption'
-import { saveFavouriteIds } from '../storage'
 import type { Item, ShareableItem } from '../types'
 
 type UseFileActionsOptions = {
@@ -18,6 +18,7 @@ type UseFileActionsOptions = {
     setShareItem: Dispatch<SetStateAction<ShareableItem | null>>
     setShareLoading: Dispatch<SetStateAction<boolean>>
     setFavouriteIds: Dispatch<SetStateAction<Set<string>>>
+    favouriteIds: Set<string>
     refreshQuota: () => Promise<void>
     privateKey: CryptoKey | null
 }
@@ -29,6 +30,7 @@ export function useFileActions({
     setShareItem,
     setShareLoading,
     setFavouriteIds,
+    favouriteIds,
     refreshQuota,
     privateKey,
 }: UseFileActionsOptions) {
@@ -68,7 +70,6 @@ export function useFileActions({
             setFavouriteIds((prev) => {
                 const next = new Set(prev)
                 next.delete(id)
-                saveFavouriteIds(next)
                 return next
             })
 
@@ -151,19 +152,47 @@ export function useFileActions({
     )
 
     const toggleFavourite = useCallback(
-        (id: string) => {
+        async (id: string) => {
+            const nextIsFavourite = !favouriteIds.has(id)
             setFavouriteIds((prev) => {
                 const next = new Set(prev)
-                if (next.has(id)) {
-                    next.delete(id)
-                } else {
+                if (nextIsFavourite) {
                     next.add(id)
+                } else {
+                    next.delete(id)
                 }
-                saveFavouriteIds(next)
                 return next
             })
+
+            setItems((prev) =>
+                prev.map((item) => (item.id === id ? { ...item, is_favourite: nextIsFavourite } : item)),
+            )
+            setStorageItems((prev) =>
+                prev.map((item) => (item.id === id ? { ...item, is_favourite: nextIsFavourite } : item)),
+            )
+
+            try {
+                await setFileFavourite(id, nextIsFavourite)
+            } catch (e) {
+                setFavouriteIds((prev) => {
+                    const next = new Set(prev)
+                    if (nextIsFavourite) {
+                        next.delete(id)
+                    } else {
+                        next.add(id)
+                    }
+                    return next
+                })
+                setItems((prev) =>
+                    prev.map((item) => (item.id === id ? { ...item, is_favourite: !nextIsFavourite } : item)),
+                )
+                setStorageItems((prev) =>
+                    prev.map((item) => (item.id === id ? { ...item, is_favourite: !nextIsFavourite } : item)),
+                )
+                setError(e instanceof Error ? e.message : 'Could not update favourite.')
+            }
         },
-        [setFavouriteIds],
+        [favouriteIds, setError, setFavouriteIds, setItems, setStorageItems],
     )
 
     return {
