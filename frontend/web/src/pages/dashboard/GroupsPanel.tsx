@@ -133,8 +133,10 @@ export function GroupsPanel({
                                 onRemoveInvite,
                                 onUpdateGroup,
                                 onDeleteGroup,
+                                error,
                             }: {
     groups: Group[]
+    error?: string | null
     activeGroupId: string | null
     createOpen: boolean
     inviteOpen: boolean
@@ -300,6 +302,11 @@ export function GroupsPanel({
         return (
             <>
                 <section className="groups-panel" aria-label={`${activeGroup.name} group`}>
+                    {error && (
+                        <p className="shell__error" role="alert">
+                            {error}
+                        </p>
+                    )}
                     <div className="groups-panel__head groups-panel__head--detail">
                         <div className="groups-hero">
                             <button className="groups-panel__back" type="button" onClick={onBackToGroups}>
@@ -381,7 +388,7 @@ export function GroupsPanel({
                         <div className="groups-danger">
                             <div>
                                 <strong>Delete group</strong>
-                                <span>Removes the group and all pending invitations from this device.</span>
+                                <span>Removes the group and all pending invitations.</span>
                             </div>
                             {deleteConfirmOpen ? (
                                 <div className="groups-danger__actions">
@@ -518,6 +525,11 @@ export function GroupsPanel({
     return (
         <>
             <section className="groups-panel groups-panel--listing-view" aria-label="Groups">
+                {error && (
+                    <p className="shell__error" role="alert">
+                        {error}
+                    </p>
+                )}
                 <div className="groups-panel__head groups-panel__head--listing">
                     <div>
                         <h2 className="groups-panel__title">Your groups</h2>

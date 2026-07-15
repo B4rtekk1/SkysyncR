@@ -111,12 +111,14 @@ CREATE INDEX idx_audit_logs_user_id ON audit_logs (user_id);
 
 CREATE TABLE IF NOT EXISTS groups
 (
-    id         UUID PRIMARY KEY     DEFAULT gen_random_uuid(),
-    name       TEXT        NOT NULL,
-    owner_id   UUID        NOT NULL REFERENCES users (id) ON DELETE CASCADE,
-    created_at timestamptz NOT NULL DEFAULT NOW(),
-    updated_at timestamptz NOT NULL DEFAULT NOW()
+    id           UUID PRIMARY KEY     DEFAULT gen_random_uuid(),
+    name         TEXT        NOT NULL,
+    default_role TEXT        NOT NULL DEFAULT 'viewer',
+    owner_id     UUID        NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+    created_at   timestamptz NOT NULL DEFAULT NOW(),
+    updated_at   timestamptz NOT NULL DEFAULT NOW()
 );
+CREATE INDEX IF NOT EXISTS idx_groups_owner_id ON groups (owner_id);
 
 CREATE TABLE IF NOT EXISTS group_members
 (
@@ -135,11 +137,13 @@ CREATE TABLE IF NOT EXISTS group_invitations
     group_id           UUID        NOT NULL REFERENCES groups (id) ON DELETE CASCADE,
     invited_email      TEXT        NOT NULL,
     invited_by_user_id UUID        NOT NULL REFERENCES users (id),
+    role               TEXT        NOT NULL DEFAULT 'viewer',
     token              TEXT        NOT NULL UNIQUE,
     status             TEXT        NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'accepted', 'declined', 'expired')),
     expires_at         timestamptz NOT NULL,
     created_at         timestamptz NOT NULL DEFAULT NOW()
 );
+CREATE INDEX IF NOT EXISTS idx_group_invitations_group_id ON group_invitations (group_id);
 
 CREATE TABLE IF NOT EXISTS tags
 (
@@ -221,6 +225,10 @@ ALTER TABLE folders ADD COLUMN IF NOT EXISTS encrypted_key bytea;
 ALTER TABLE folders ADD COLUMN IF NOT EXISTS is_public BOOLEAN NOT NULL DEFAULT FALSE;
 ALTER TABLE folders ADD COLUMN IF NOT EXISTS share_token TEXT;
 ALTER TABLE folders ADD COLUMN IF NOT EXISTS description TEXT;
+ALTER TABLE groups ADD COLUMN IF NOT EXISTS default_role TEXT NOT NULL DEFAULT 'viewer';
+ALTER TABLE group_invitations ADD COLUMN IF NOT EXISTS role TEXT NOT NULL DEFAULT 'viewer';
+CREATE INDEX IF NOT EXISTS idx_groups_owner_id ON groups (owner_id);
+CREATE INDEX IF NOT EXISTS idx_group_invitations_group_id ON group_invitations (group_id);
 CREATE TABLE IF NOT EXISTS calendar_entries
 (
     id         UUID PRIMARY KEY     DEFAULT gen_random_uuid(),

@@ -1,6 +1,7 @@
 use crate::routes::calendar::calendar_routes;
 use crate::routes::files::files_routes;
 use crate::routes::folders::folders_routes;
+use crate::routes::groups::groups_routes;
 use crate::routes::storage::storage_routes;
 use crate::routes::users::{auth_limited_routes, users_routes};
 use crate::services::trash::spawn_trash_purge_worker;
@@ -93,6 +94,9 @@ pub async fn run_server() {
     crate::db::calendar::ensure_calendar_entries_table(&pool)
         .await
         .expect("Failed to ensure calendar_entries table");
+    crate::db::groups::ensure_groups_tables(&pool)
+        .await
+        .expect("Failed to ensure groups tables");
 
     if config.is_dev {
         println!("Running in development mode");
@@ -125,6 +129,7 @@ pub async fn run_server() {
         .merge(storage_routes())
         .merge(files_routes())
         .merge(folders_routes())
+        .merge(groups_routes())
         .merge(calendar_routes())
         .with_state(state)
         .layer(security_header_layer(

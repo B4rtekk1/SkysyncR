@@ -206,6 +206,7 @@ function Dashboard() {
         updateGroup,
         deleteGroup,
         removeGroupInvite,
+        groupError,
     } = useDashboardGroups()
     function handleFileUpdated(updated: ApiFile) {
         const previousSize = storageItems.find((item) => item.id === updated.id)?.size_bytes ?? updated.size_bytes
@@ -1341,6 +1342,7 @@ function Dashboard() {
                     {!loading && view === 'groups' && (
                         <GroupsPanel
                             groups={groups}
+                            error={groupError}
                             activeGroupId={activeGroupId}
                             createOpen={groupCreateOpen}
                             inviteOpen={groupInviteOpen}
