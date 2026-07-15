@@ -12,7 +12,8 @@ import { Link, useNavigate } from 'react-router-dom'
 import '../App.css'
 import '../css/Dashbord.css'
 import ThemeToggle from '../components/ThemeToggle'
-import SettingsModal, { loadUserSettings } from './Settings'
+import SettingsModal from './Settings'
+import { loadUserSettings } from './settingsPreferences'
 import {
     listFiles,
     listFolders,

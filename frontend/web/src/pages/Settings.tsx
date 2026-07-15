@@ -13,36 +13,17 @@ import {
     saveActiveView,
     saveLayoutMode,
 } from './dashboard/storage'
-import type { LayoutMode, ViewKey } from './dashboard/types'
+import type { ViewKey } from './dashboard/types'
+import {
+    clearLegacyProfileStorage,
+    DEFAULT_SETTINGS,
+    loadUserSettings,
+    userSettingsStorageKey,
+    type SettingsState,
+} from './settingsPreferences'
 
-type SettingsState = {
-    displayName: string
-    avatarUrl: string
-    defaultView: ViewKey
-    layoutMode: LayoutMode
-    uploadProtection: boolean
-    compactMetadata: boolean
-    deviceLock: boolean
-    syncOnMetered: boolean
-    trashRetentionDays: number
-}
-
-const SETTINGS_STORAGE_KEY = 'settings_preferences'
-export const AVATAR_STORAGE_KEY = 'avatar_url'
 const SETTINGS_ANIMATION_MS = 220
 const MAX_AVATAR_BYTES = 2 * 1024 * 1024
-
-const DEFAULT_SETTINGS: SettingsState = {
-    displayName: '',
-    avatarUrl: '',
-    defaultView: 'all',
-    layoutMode: 'grid',
-    uploadProtection: true,
-    compactMetadata: true,
-    deviceLock: false,
-    syncOnMetered: false,
-    trashRetentionDays: 30,
-}
 
 const viewOptions: ViewKey[] = ['all', 'favourites', 'shared', 'groups', 'trash']
 const themeOptions: Array<{ value: ThemePreference; label: string }> = [
@@ -57,37 +38,7 @@ type SettingsModalProps = {
     onSave?: (profile: { displayName: string; avatarUrl: string; trashRetentionDays: number }) => void
 }
 
-function userSettingsStorageKey(userId: string): string {
-    return `${SETTINGS_STORAGE_KEY}:${userId}`
-}
-
-export function loadUserSettings(user: CurrentUserResponse | null): SettingsState {
-    try {
-        const raw = user ? localStorage.getItem(userSettingsStorageKey(user.id)) : null
-        const saved = raw ? (JSON.parse(raw) as Partial<SettingsState>) : {}
-        return {
-            ...DEFAULT_SETTINGS,
-            ...saved,
-            displayName: saved.displayName || user?.display_name || '',
-            avatarUrl: saved.avatarUrl || '',
-            trashRetentionDays: user?.trash_retention_days ?? saved.trashRetentionDays ?? DEFAULT_SETTINGS.trashRetentionDays,
-        }
-    } catch {
-        return {
-            ...DEFAULT_SETTINGS,
-            displayName: user?.display_name || '',
-        }
-    }
-}
-
-function clearLegacyProfileStorage() {
-    localStorage.removeItem(SETTINGS_STORAGE_KEY)
-    localStorage.removeItem(AVATAR_STORAGE_KEY)
-    localStorage.removeItem('display_name')
-    sessionStorage.removeItem('display_name')
-}
-
-function SettingsModal({ currentUser, onClose, onSave }: SettingsModalProps) {
+function SettingsModalContent({ currentUser, onClose, onSave }: SettingsModalProps) {
     const [settings, setSettings] = useState<SettingsState>(() => loadUserSettings(currentUser))
     const [saved, setSaved] = useState(false)
     const [closing, setClosing] = useState(false)
@@ -107,10 +58,6 @@ function SettingsModal({ currentUser, onClose, onSave }: SettingsModalProps) {
             return true
         })
     }, [onClose])
-
-    useEffect(() => {
-        setSettings(loadUserSettings(currentUser))
-    }, [currentUser])
 
     useEffect(() => {
         function closeOnEscape(e: KeyboardEvent) {
@@ -443,6 +390,10 @@ function SettingsModal({ currentUser, onClose, onSave }: SettingsModalProps) {
             </section>
         </div>
     )
+}
+
+function SettingsModal(props: SettingsModalProps) {
+    return <SettingsModalContent key={props.currentUser?.id ?? 'anonymous'} {...props} />
 }
 
 export default SettingsModal
