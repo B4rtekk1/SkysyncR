@@ -8,6 +8,7 @@ import {
     isShared,
 } from './fileCardUtils'
 import type { Item, ViewKey } from './types'
+import type { ApiFolder } from '../../api/files'
 
 export type InfoPopoverPosition = {
     left: number
@@ -15,30 +16,44 @@ export type InfoPopoverPosition = {
 }
 
 type FileInfoPopoverProps = {
-    item: Item
-    view: ViewKey
-    typeLabel: string
+    item: Item | ApiFolder
+    view?: ViewKey
+    typeLabel?: string
     position: InfoPopoverPosition
     onClose: () => void
 }
 
 export function FileInfoPopover({ item, view, typeLabel, position, onClose }: FileInfoPopoverProps) {
-    const infoRows = [
-        ['Name', item.filename],
-        ['Exact size', formatExactBytes(item.size_bytes)],
-        ['Type', typeLabel],
-        ['MIME type', item.mime_type || 'Unknown'],
-        ['Created', formatDateTime(item.created_at)],
-        ['Modified', formatDateTime(item.updated_at)],
-        ...(item.deleted_at ? [['Deleted', formatDateTime(item.deleted_at)]] : []),
-        ['Permissions', formatPermission(item)],
-        ['Source', formatSource(item, view)],
-        ['Folder', item.folder_id || 'Root'],
-        ['Note', item.note ? item.note : 'No note attached'],
-        ['Sharing', item.is_public ? 'Public link enabled' : 'Not public'],
-        ...(isShared(item) ? [['Shared by', item.shared_by_user_name || item.shared_by_user_id]] : []),
-        ['File ID', item.id],
-    ]
+    const isFolder = !('filename' in item)
+    const title = isFolder ? item.name : item.filename
+    const infoRows = isFolder
+        ? [
+              ['Name', item.name],
+              ['Description', item.description || 'No description set'],
+              ['Files', item.file_count === 1 ? '1 file' : `${item.file_count} files`],
+              ['Created', formatDateTime(item.created_at)],
+              ['Modified', formatDateTime(item.updated_at)],
+              ...(item.deleted_at ? [['Deleted', formatDateTime(item.deleted_at)]] : []),
+              ['Parent folder', item.parent_folder_id || 'Root'],
+              ['Sharing', item.is_public ? 'Public link enabled' : 'Not public'],
+              ['Folder ID', item.id],
+          ]
+        : [
+              ['Name', item.filename],
+              ['Exact size', formatExactBytes(item.size_bytes)],
+              ['Type', typeLabel ?? 'Unknown'],
+              ['MIME type', item.mime_type || 'Unknown'],
+              ['Created', formatDateTime(item.created_at)],
+              ['Modified', formatDateTime(item.updated_at)],
+              ...(item.deleted_at ? [['Deleted', formatDateTime(item.deleted_at)]] : []),
+              ['Permissions', formatPermission(item)],
+              ['Source', formatSource(item, view ?? 'all')],
+              ['Folder', item.folder_id || 'Root'],
+              ['Note', item.note ? item.note : 'No note attached'],
+              ['Sharing', item.is_public ? 'Public link enabled' : 'Not public'],
+              ...(isShared(item) ? [['Shared by', item.shared_by_user_name || item.shared_by_user_id]] : []),
+              ['File ID', item.id],
+          ]
 
     return createPortal(
         <div
@@ -54,11 +69,11 @@ export function FileInfoPopover({ item, view, typeLabel, position, onClose }: Fi
                 className="file-card__info-popover"
                 style={{ left: position.left, top: position.top }}
                 role="dialog"
-                aria-label={`Details for ${item.filename}`}
+                aria-label={`Details for ${title}`}
                 onClick={(e) => e.stopPropagation()}
             >
                 <div className="file-card__info-head">
-                    <span>File details</span>
+                    <span>{isFolder ? 'Folder details' : 'File details'}</span>
                     <button
                         type="button"
                         onClick={(e) => {

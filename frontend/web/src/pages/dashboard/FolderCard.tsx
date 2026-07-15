@@ -1,8 +1,9 @@
-import { useRef, useState, type CSSProperties } from 'react'
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react'
 import type { ApiFolder } from '../../api/files'
 import { formatRelative } from './fileUtils'
-import { CANCEL_ICON, CHECK_ICON, RENAME_ICON, SHARE_ICON } from './icons'
+import { CANCEL_ICON, CHECK_ICON, INFO_ICON, RENAME_ICON, SHARE_ICON } from './icons'
 import { FileRenameInput } from './FileRenameInput'
+import { FileInfoPopover, type InfoPopoverPosition } from './FileInfoPopover'
 
 export function FolderCard({
     folder,
@@ -22,7 +23,59 @@ export function FolderCard({
     const [renameDraft, setRenameDraft] = useState(folder.name)
     const [descriptionDraft, setDescriptionDraft] = useState(folder.description ?? '')
     const [renameSaving, setRenameSaving] = useState(false)
+    const [isInfoOpen, setIsInfoOpen] = useState(false)
+    const [infoPosition, setInfoPosition] = useState<InfoPopoverPosition>({ left: 14, top: 14 })
     const renameInputRef = useRef<HTMLInputElement>(null)
+    const cardRef = useRef<HTMLElement>(null)
+
+    const updateInfoPosition = useCallback(() => {
+        const card = cardRef.current
+        if (!card) return
+
+        const rect = card.getBoundingClientRect()
+        const gap = 12
+        const edge = 14
+        const width = Math.min(360, window.innerWidth - edge * 2)
+        const right = rect.right + gap
+        const left = rect.left - width - gap
+        const fitsRight = right + width <= window.innerWidth - edge
+        const fitsLeft = left >= edge
+        const nextLeft = fitsRight
+            ? right
+            : fitsLeft
+              ? left
+              : Math.min(Math.max(rect.left, edge), window.innerWidth - width - edge)
+        const rawTop = fitsRight || fitsLeft ? rect.top : rect.bottom + gap
+        const maxTop = Math.max(edge, window.innerHeight - edge - 240)
+
+        setInfoPosition({
+            left: nextLeft,
+            top: Math.min(Math.max(rawTop, edge), maxTop),
+        })
+    }, [])
+
+    useEffect(() => {
+        if (!isInfoOpen) return
+
+        const handleKeyDown = (event: KeyboardEvent) => {
+            if (event.key === 'Escape') setIsInfoOpen(false)
+        }
+
+        window.addEventListener('keydown', handleKeyDown)
+        return () => window.removeEventListener('keydown', handleKeyDown)
+    }, [isInfoOpen])
+
+    useEffect(() => {
+        if (!isInfoOpen) return
+
+        updateInfoPosition()
+        window.addEventListener('resize', updateInfoPosition)
+        window.addEventListener('scroll', updateInfoPosition, true)
+        return () => {
+            window.removeEventListener('resize', updateInfoPosition)
+            window.removeEventListener('scroll', updateInfoPosition, true)
+        }
+    }, [isInfoOpen, updateInfoPosition])
 
     const cancelRename = () => {
         setRenameDraft(folder.name)
@@ -64,6 +117,7 @@ export function FolderCard({
 
     return (
         <article
+            ref={cardRef}
             className="file-card folder-card file-card--can-preview"
             style={{ '--file-index': index } as CSSProperties}
             role="button"
@@ -118,22 +172,15 @@ export function FolderCard({
                         />
                     </div>
                 ) : (
-                    <>
-                        <p className="file-card__name" title={folder.name}>
-                            {folder.name}
-                        </p>
-                        {folder.description && (
-                            <p className="folder-card__description" title={folder.description}>
-                                {folder.description}
-                            </p>
-                        )}
-                    </>
+                    <p className="file-card__name" title={folder.name}>
+                        {folder.name}
+                    </p>
                 )}
             </div>
             <p className="file-card__meta">
                 {fileCountLabel} · Updated {formatRelative(folder.updated_at)}
             </p>
-            {(onRename || onShare) && (
+            {(onRename || onShare || !isRenaming) && (
                 <div className="file-card__actions">
                     {isRenaming && (
                         <>
@@ -193,6 +240,31 @@ export function FolderCard({
                         >
                             {SHARE_ICON}
                         </button>
+                    )}
+                    {!isRenaming && (
+                        <div className="file-card__info-wrap">
+                            <button
+                                className={`file-card__action file-card__action--info ${isInfoOpen ? 'is-active' : ''}`}
+                                type="button"
+                                onClick={(event) => {
+                                    event.stopPropagation()
+                                    if (!isInfoOpen) updateInfoPosition()
+                                    setIsInfoOpen((current) => !current)
+                                }}
+                                aria-label={`Show details for ${folder.name}`}
+                                aria-expanded={isInfoOpen}
+                                title="Info"
+                            >
+                                {INFO_ICON}
+                            </button>
+                            {isInfoOpen && (
+                                <FileInfoPopover
+                                    item={folder}
+                                    position={infoPosition}
+                                    onClose={() => setIsInfoOpen(false)}
+                                />
+                            )}
+                        </div>
                     )}
                 </div>
             )}
