@@ -555,11 +555,13 @@ function Dashboard() {
     async function handleSaveNote(item: Item, note: string) {
         setNoteSaving(true)
         setError(null)
-        try {
-            if (!privateKey) {
-                throw new Error('Private key is locked. Sign in again to save encrypted notes.')
-            }
+        if (!privateKey) {
+            setError('Private key is locked. Sign in again to save encrypted notes.')
+            setNoteSaving(false)
+            return
+        }
 
+        try {
             const fileKey = await unwrapFileKeyForUser(item.encrypted_key, privateKey)
             const encryptedNote = note.trim() ? await encryptTextEnvelope(note, fileKey) : ''
             const updated = await updateFileNote(item.id, encryptedNote)
@@ -620,11 +622,13 @@ function Dashboard() {
 
         setFolderSaving(true)
         setError(null)
-        try {
-            if (!publicKey) {
-                throw new Error('Encryption key unavailable. Sign in again before creating folders.')
-            }
+        if (!publicKey) {
+            setError('Encryption key unavailable. Sign in again before creating folders.')
+            setFolderSaving(false)
+            return
+        }
 
+        try {
             const folderKey = await generateFileKey()
             const folder = await createFolder({
                 name: await encryptTextEnvelope(name, folderKey),
