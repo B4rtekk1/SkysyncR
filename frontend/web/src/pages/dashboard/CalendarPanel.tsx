@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react'
+import { useEffect, useMemo, useState, type ReactNode, type SubmitEvent } from 'react'
 import type { ApiFile } from '../../api/files'
 import {
     createCalendarEntry,
@@ -271,10 +271,11 @@ export function CalendarPanel({ files, onPreview, onDownload }: CalendarPanelPro
 
     const filteredFiles = useMemo(() => {
         return files.filter((file) => {
-            if (kindFilter !== 'all' && kindFromFile(file.filename, file.mime_type) !== kindFilter) return false
-            if (sourceFilter === 'root' && file.folder_id !== null) return false
-            if (sourceFilter === 'folders' && file.folder_id === null) return false
-            return true
+            return (
+                (kindFilter === 'all' || kindFromFile(file.filename, file.mime_type) === kindFilter) &&
+                (sourceFilter !== 'root' || file.folder_id === null) &&
+                (sourceFilter !== 'folders' || file.folder_id !== null)
+            )
         })
     }, [files, kindFilter, sourceFilter])
 
@@ -452,7 +453,7 @@ export function CalendarPanel({ files, onPreview, onDownload }: CalendarPanelPro
         if (viewMode === 'week') setVisibleDate(day.date)
     }
 
-    async function handleCreateEntry(event: FormEvent<HTMLFormElement>) {
+    async function handleCreateEntry(event: SubmitEvent<HTMLFormElement>) {
         event.preventDefault()
         const title = entryTitle.trim() || (linkedFile ? linkedFile.filename : '')
         if (!title) return
