@@ -4,7 +4,7 @@ use crate::routes::storage::storage_routes;
 use crate::routes::users::{auth_limited_routes, users_routes};
 use crate::services::trash::spawn_trash_purge_worker;
 use crate::state::{AppConfig, AppState};
-use axum::http::{HeaderValue, Method, header};
+use axum::http::{HeaderName, HeaderValue, Method, header};
 use axum::routing::get;
 use axum::{Json, Router};
 use serde::{Deserialize, Serialize};
@@ -33,7 +33,20 @@ async fn hello() -> Json<Message> {
     })
 }
 
-fn dev_cors_layer() -> CorsLayer {
+const CONTENT_SECURITY_POLICY: &str = concat!(
+    "default-src 'none'; ",
+    "base-uri 'none'; ",
+    "form-action 'none'; ",
+    "frame-ancestors 'none'; ",
+    "object-src 'none'; ",
+    "script-src 'self'; ",
+    "style-src 'self'; ",
+    "img-src 'self' data:; ",
+    "font-src 'self'; ",
+    "connect-src 'self'"
+);
+
+fn cors_layer() -> CorsLayer {
     let origins: Vec<HeaderValue> = std::env::var("CORS_ORIGINS")
         .unwrap_or_else(|_| "http://localhost:5173".to_string())
         .split(',')
@@ -61,15 +74,15 @@ fn dev_cors_layer() -> CorsLayer {
             Method::OPTIONS,
         ])
         .allow_headers([header::AUTHORIZATION, header::CONTENT_TYPE])
-        .expose_headers([header::CONTENT_TYPE])
+        .expose_headers([header::CONTENT_TYPE, header::CONTENT_DISPOSITION])
         .allow_credentials(true)
 }
 
-fn security_headers_layer() -> SetResponseHeaderLayer<HeaderValue> {
-    SetResponseHeaderLayer::overriding(
-        axum::http::header::X_CONTENT_TYPE_OPTIONS,
-        HeaderValue::from_static("nosniff"),
-    )
+fn security_header_layer(
+    header_name: HeaderName,
+    value: &'static str,
+) -> SetResponseHeaderLayer<HeaderValue> {
+    SetResponseHeaderLayer::overriding(header_name, HeaderValue::from_static(value))
 }
 
 pub async fn run_server() {
@@ -108,8 +121,32 @@ pub async fn run_server() {
         .merge(files_routes())
         .merge(folders_routes())
         .with_state(state)
-        .layer(security_headers_layer())
-        .layer(dev_cors_layer());
+        .layer(security_header_layer(
+            header::X_CONTENT_TYPE_OPTIONS,
+            "nosniff",
+        ))
+        .layer(security_header_layer(
+            HeaderName::from_static("content-security-policy"),
+            CONTENT_SECURITY_POLICY,
+        ))
+        .layer(security_header_layer(
+            HeaderName::from_static("referrer-policy"),
+            "strict-origin-when-cross-origin",
+        ))
+        .layer(security_header_layer(
+            HeaderName::from_static("permissions-policy"),
+            "camera=(), microphone=(), geolocation=(), payment=(), usb=(), fullscreen=(self)",
+        ))
+        .layer(cors_layer());
+
+    let app = if config.is_dev {
+        app
+    } else {
+        app.layer(security_header_layer(
+            HeaderName::from_static("strict-transport-security"),
+            "max-age=31536000; includeSubDomains",
+        ))
+    };
 
     let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
     println!("listening on http://0.0.0.0:3000 (dev)");
