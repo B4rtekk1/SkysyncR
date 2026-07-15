@@ -1,5 +1,5 @@
-import { getValidAccessToken } from './auth'
-import { getCurrentUser, type CurrentUserResponse } from './users'
+import { getAccessToken, getValidAccessToken } from './auth'
+import { getCurrentUser, getCurrentUserWithAccessToken, type CurrentUserResponse } from './users'
 import { loadActivePrivateKey } from '../crypto/storage'
 
 export type UnlockedVaultSession = {
@@ -7,11 +7,18 @@ export type UnlockedVaultSession = {
   privateKey: CryptoKey
 }
 
-export async function getUnlockedVaultSession(): Promise<UnlockedVaultSession | null> {
-  const token = await getValidAccessToken()
+type GetUnlockedVaultSessionOptions = {
+  allowRefresh?: boolean
+}
+
+export async function getUnlockedVaultSession(
+  options: GetUnlockedVaultSessionOptions = {},
+): Promise<UnlockedVaultSession | null> {
+  const allowRefresh = options.allowRefresh ?? true
+  const token = allowRefresh ? await getValidAccessToken() : getAccessToken()
   if (!token) return null
 
-  const user = await getCurrentUser()
+  const user = allowRefresh ? await getCurrentUser() : await getCurrentUserWithAccessToken(token)
   const privateKey = await loadActivePrivateKey(user.id)
 
   if (!privateKey) return null

@@ -122,3 +122,18 @@ export async function getCurrentUser(): Promise<CurrentUserResponse> {
 
   return res.json()
 }
+
+export async function getCurrentUserWithAccessToken(accessToken: string): Promise<CurrentUserResponse> {
+  const res = await apiFetch(`${url}users/me`, {
+    method: 'GET',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+  })
+
+  if (!res.ok) {
+    await throwApiError(res, 'Could not load user profile')
+  }
+
+  return res.json()
+}

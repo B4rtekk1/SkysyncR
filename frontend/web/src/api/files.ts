@@ -39,6 +39,7 @@ export interface ApiFolder {
     id: string
     name: string
     parent_folder_id: string | null
+    encrypted_key: string | null
     is_public: boolean
     share_token: string | null
     created_at: string
@@ -111,6 +112,7 @@ export async function listFolders(parentFolderId?: string): Promise<ApiFolder[]>
 
 export async function createFolder(params: {
     name: string
+    wrappedKey: ArrayBuffer
     parentFolderId?: string | null
 }): Promise<ApiFolder> {
     const res = await authenticatedFetch(`${API_BASE}folders`, {
@@ -120,6 +122,7 @@ export async function createFolder(params: {
         },
         body: JSON.stringify({
             name: params.name,
+            encrypted_key: arrayBufferToBase64(params.wrappedKey),
             parent_folder_id: params.parentFolderId ?? null,
         }),
     });
@@ -151,7 +154,7 @@ export async function getStorageQuota(): Promise<StorageQuota> {
 export async function uploadFile(params: {
     encryptedFile: Blob
     storedFilename: string
-    originalMimeType: string | null
+    storedMimeType: string | null
     folderId?: string
     wrappedKey: ArrayBuffer
     encryptionNonce: ArrayBuffer
@@ -159,7 +162,7 @@ export async function uploadFile(params: {
     const form = new FormData()
     form.append('file', params.encryptedFile, 'encrypted.bin')
     form.append('filename', params.storedFilename)
-    if (params.originalMimeType) form.append('mime_type', params.originalMimeType)
+    if (params.storedMimeType) form.append('mime_type', params.storedMimeType)
     if (params.folderId) form.append('folder_id', params.folderId)
     form.append('encrypted_key', arrayBufferToBase64(params.wrappedKey))
     form.append('encryption_nonce', arrayBufferToBase64(params.encryptionNonce))

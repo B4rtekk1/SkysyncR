@@ -1,7 +1,21 @@
+use base64::{Engine as _, engine::general_purpose};
 use chrono::{DateTime, Utc};
-use serde::Serialize;
+use serde::{Serialize, Serializer};
 use sqlx::{FromRow, PgPool};
 use uuid::Uuid;
+
+fn serialize_optional_bytes_base64<S>(
+    bytes: &Option<Vec<u8>>,
+    serializer: S,
+) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+{
+    match bytes {
+        Some(bytes) => serializer.serialize_some(&general_purpose::STANDARD.encode(bytes)),
+        None => serializer.serialize_none(),
+    }
+}
 
 #[derive(FromRow, Serialize)]
 pub struct FolderRecord {
@@ -15,12 +29,15 @@ pub struct FolderRecord {
     pub is_deleted: bool,
     pub deleted_at: Option<DateTime<Utc>>,
     pub file_count: i64,
+    #[serde(serialize_with = "serialize_optional_bytes_base64")]
+    pub encrypted_key: Option<Vec<u8>>,
 }
 
 pub struct NewFolderRecord {
     pub owner_id: Uuid,
     pub name: String,
     pub parent_folder_id: Option<Uuid>,
+    pub encrypted_key: Vec<u8>,
 }
 
 pub async fn list_user_folders(
@@ -40,7 +57,8 @@ pub async fn list_user_folders(
             f.updated_at,
             FALSE AS is_deleted,
             NULL::timestamptz AS deleted_at,
-            COUNT(files.id)::bigint AS file_count
+            COUNT(files.id)::bigint AS file_count,
+            f.encrypted_key
         FROM folders f
         LEFT JOIN files
           ON files.folder_id = f.id
@@ -58,7 +76,8 @@ pub async fn list_user_folders(
             f.is_public,
             f.share_token,
             f.created_at,
-            f.updated_at
+            f.updated_at,
+            f.encrypted_key
         ORDER BY f.name
         "#,
     )
@@ -77,9 +96,10 @@ pub async fn create_folder_record(
         INSERT INTO folders (
             owner_id,
             name,
-            parent_folder_id
+            parent_folder_id,
+            encrypted_key
         )
-        VALUES ($1, $2, $3)
+        VALUES ($1, $2, $3, $4)
         RETURNING
             id,
             name,
@@ -90,12 +110,14 @@ pub async fn create_folder_record(
             updated_at,
             FALSE AS is_deleted,
             NULL::timestamptz AS deleted_at,
-            0::bigint AS file_count
+            0::bigint AS file_count,
+            encrypted_key
         "#,
     )
     .bind(folder.owner_id)
     .bind(folder.name)
     .bind(folder.parent_folder_id)
+    .bind(folder.encrypted_key)
     .fetch_one(pool)
     .await
 }
@@ -155,7 +177,8 @@ pub async fn update_user_folder_share(
                 WHERE files.folder_id = folders.id
                   AND files.owner_id = folders.owner_id
                   AND files.is_deleted = FALSE
-            ) AS file_count
+            ) AS file_count,
+            encrypted_key
         "#,
     )
     .bind(is_public)

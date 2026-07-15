@@ -33,7 +33,7 @@ function LoginForm() {
   useEffect(() => {
     let active = true
 
-    getUnlockedVaultSession()
+    getUnlockedVaultSession({ allowRefresh: false })
       .then((session) => {
         if (active && session) {
           navigate('/dashboard', { replace: true })

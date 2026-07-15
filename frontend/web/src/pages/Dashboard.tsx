@@ -30,7 +30,13 @@ import {
 import { logout } from '../api/auth'
 import { getUnlockedVaultSession } from '../api/session'
 import type { CurrentUserResponse } from '../api/users'
-import { encryptTextEnvelope, isEncryptedTextEnvelope, unwrapFileKeyForUser } from '../crypto/fileEncryption'
+import {
+    encryptTextEnvelope,
+    generateFileKey,
+    isEncryptedTextEnvelope,
+    unwrapFileKeyForUser,
+    wrapFileKeyForUser,
+} from '../crypto/fileEncryption'
 import { EmptyPane } from './dashboard/EmptyPane'
 import { FileCard } from './dashboard/FileCard'
 import { FileFilterModal } from './dashboard/FileFilterModal'
@@ -85,7 +91,7 @@ import { useLayoutModeSwitch } from './dashboard/hooks/useLayoutModeSwitch'
 import { useNavOrdering } from './dashboard/hooks/useNavOrdering'
 import { useSidebarState } from './dashboard/hooks/useSidebarState'
 import { useStorageSummary } from './dashboard/hooks/useStorageSummary'
-import { decryptFilesMetadata } from './dashboard/encryptedMetadata'
+import { decryptFilesMetadata, decryptFoldersMetadata } from './dashboard/encryptedMetadata'
 import type { FileFilters, FileSortKey, FileTypeFilterKey, FileVisibilityFilterKey, Item, NavIndicator, ShareableItem, ViewKey } from './dashboard/types'
 
 async function migratePlaintextFileMetadata(files: ApiFile[], privateKey: CryptoKey) {
@@ -426,11 +432,14 @@ function Dashboard() {
                 }
 
                 if (active) {
-                    const visibleFileData = await decryptFilesMetadata(fileData, privateKey)
+                    const [visibleFileData, visibleFolderData] = await Promise.all([
+                        decryptFilesMetadata(fileData, privateKey),
+                        decryptFoldersMetadata(folderData, privateKey),
+                    ])
                     if (view !== 'shared') void migratePlaintextFileMetadata(fileData, privateKey)
                     const withLocalMetadata = applyLocalFileMetadata(visibleFileData)
                     setItems(applySavedOrder(withLocalMetadata, view))
-                    setFolders(folderData)
+                    setFolders(visibleFolderData)
                     if (view === 'all' || view === 'favourites') {
                         setStorageItems(withLocalMetadata as ApiFile[])
                     }
@@ -611,11 +620,18 @@ function Dashboard() {
         setFolderSaving(true)
         setError(null)
         try {
+            if (!publicKey) {
+                throw new Error('Encryption key unavailable. Sign in again before creating folders.')
+            }
+
+            const folderKey = await generateFileKey()
             const folder = await createFolder({
-                name,
+                name: await encryptTextEnvelope(name, folderKey),
+                wrappedKey: await wrapFileKeyForUser(folderKey, publicKey),
                 parentFolderId: activeFolderId,
             })
-            setFolders((current) => [...current, folder].sort((a, b) => a.name.localeCompare(b.name)))
+            const visibleFolder = { ...folder, name }
+            setFolders((current) => [...current, visibleFolder].sort((a, b) => a.name.localeCompare(b.name)))
             setFolderNameDraft('')
             setFolderCreateOpen(false)
         } catch (e) {
@@ -635,9 +651,10 @@ function Dashboard() {
         setError(null)
         try {
             const shared = await shareFolder(folder.id, isPublic)
-            setFolders((current) => current.map((item) => (item.id === folder.id ? shared : item)))
-            setShareItem(shared)
-            return shared
+            const visibleShared = { ...shared, name: folder.name, encrypted_key: folder.encrypted_key }
+            setFolders((current) => current.map((item) => (item.id === folder.id ? visibleShared : item)))
+            setShareItem(visibleShared)
+            return visibleShared
         } catch (e) {
             setError(e instanceof Error ? e.message : 'Could not update sharing for that folder.')
             throw e

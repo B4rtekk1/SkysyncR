@@ -3,6 +3,7 @@ use axum::{
     extract::{Path, Query, State},
     http::StatusCode,
 };
+use base64::{Engine as _, engine::general_purpose};
 use serde::Deserialize;
 use uuid::Uuid;
 
@@ -23,6 +24,7 @@ pub struct ListFoldersQuery {
 pub struct CreateFolderRequest {
     pub name: String,
     pub parent_folder_id: Option<String>,
+    pub encrypted_key: String,
 }
 
 #[derive(Deserialize)]
@@ -51,6 +53,7 @@ pub async fn create_folder(
     Json(payload): Json<CreateFolderRequest>,
 ) -> Result<(StatusCode, Json<FolderRecord>), ApiError> {
     let name = validate_folder_name(&payload.name)?;
+    let encrypted_key = decode_folder_key(&payload.encrypted_key)?;
     let parent_folder_id =
         parse_optional_uuid(payload.parent_folder_id.as_deref(), "parent_folder_id")?;
 
@@ -69,6 +72,7 @@ pub async fn create_folder(
             owner_id: auth.user_id,
             name,
             parent_folder_id,
+            encrypted_key,
         },
     )
     .await
@@ -113,6 +117,19 @@ fn validate_folder_name(value: &str) -> Result<String, ApiError> {
     if trimmed.is_empty() {
         return Err(ApiError::BadRequest("Missing folder name".into()));
     }
+
+    if trimmed.starts_with("aes-gcm:v1:") {
+        if trimmed.len() > 4096 {
+            return Err(ApiError::BadRequest("Folder name is too large".into()));
+        }
+        if trimmed.chars().any(char::is_control) {
+            return Err(ApiError::BadRequest(
+                "Folder name contains invalid characters".into(),
+            ));
+        }
+        return Ok(trimmed.to_string());
+    }
+
     if trimmed.len() > 255 {
         return Err(ApiError::BadRequest("Folder name is too large".into()));
     }
@@ -126,4 +143,16 @@ fn validate_folder_name(value: &str) -> Result<String, ApiError> {
     }
 
     Ok(trimmed.to_string())
+}
+
+fn decode_folder_key(value: &str) -> Result<Vec<u8>, ApiError> {
+    let decoded = general_purpose::STANDARD
+        .decode(value.trim())
+        .map_err(|_| ApiError::BadRequest("Invalid encrypted_key".into()))?;
+    if decoded.len() < 128 {
+        return Err(ApiError::BadRequest(
+            "encrypted_key must be wrapped locally".into(),
+        ));
+    }
+    Ok(decoded)
 }

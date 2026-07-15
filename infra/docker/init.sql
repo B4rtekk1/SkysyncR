@@ -25,6 +25,7 @@ CREATE TABLE IF NOT EXISTS folders
     owner_id         UUID        NOT NULL REFERENCES users (id) ON DELETE CASCADE,
     name             TEXT        NOT NULL,
     parent_folder_id UUID        REFERENCES folders (id) ON DELETE SET NULL,
+    encrypted_key    bytea,
     deleted_at        timestamptz,
     is_deleted       BOOLEAN     NOT NULL DEFAULT FALSE,
     is_public        BOOLEAN     NOT NULL DEFAULT FALSE,
@@ -190,5 +191,6 @@ ALTER TABLE refresh_tokens DROP COLUMN IF EXISTS ip_address;
 ALTER TABLE refresh_tokens DROP COLUMN IF EXISTS device_id;
 ALTER TABLE audit_logs DROP COLUMN IF EXISTS ip_address;
 ALTER TABLE files ADD COLUMN IF NOT EXISTS note TEXT;
+ALTER TABLE folders ADD COLUMN IF NOT EXISTS encrypted_key bytea;
 ALTER TABLE folders ADD COLUMN IF NOT EXISTS is_public BOOLEAN NOT NULL DEFAULT FALSE;
 ALTER TABLE folders ADD COLUMN IF NOT EXISTS share_token TEXT;

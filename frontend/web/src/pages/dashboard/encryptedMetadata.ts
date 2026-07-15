@@ -1,4 +1,4 @@
-import type { ApiFile, SharedFile } from '../../api/files'
+import type { ApiFile, ApiFolder, SharedFile } from '../../api/files'
 import {
     decryptTextEnvelope,
     encryptTextEnvelope,
@@ -48,4 +48,25 @@ export async function decryptFileMetadata<T extends ApiFile | SharedFile>(
 
 export async function decryptFilesMetadata<T extends Item>(items: T[], privateKey: CryptoKey): Promise<T[]> {
     return Promise.all(items.map((item) => decryptFileMetadata(item, privateKey)))
+}
+
+export async function decryptFolderMetadata<T extends ApiFolder>(
+    folder: T,
+    privateKey: CryptoKey,
+): Promise<T> {
+    if (!isEncryptedTextEnvelope(folder.name) || !folder.encrypted_key) {
+        return folder
+    }
+
+    try {
+        const folderKey = await unwrapFileKeyForUser(folder.encrypted_key, privateKey)
+        const name = await decryptTextEnvelope(folder.name, folderKey)
+        return { ...folder, name }
+    } catch {
+        return { ...folder, name: 'Encrypted folder' }
+    }
+}
+
+export async function decryptFoldersMetadata<T extends ApiFolder>(folders: T[], privateKey: CryptoKey): Promise<T[]> {
+    return Promise.all(folders.map((folder) => decryptFolderMetadata(folder, privateKey)))
 }
