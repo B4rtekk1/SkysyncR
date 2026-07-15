@@ -67,6 +67,7 @@ const REMINDER_OPTIONS = [
     { value: '15m', label: '15 min before' },
     { value: '1h', label: '1 hour before' },
     { value: '1d', label: '1 day before' },
+    { value: '1w', label: '1 week before' },
 ]
 const MONTH_LABELS = Array.from({ length: 12 }, (_, month) =>
     new Intl.DateTimeFormat(undefined, { month: 'short' }).format(new Date(2026, month, 1)),

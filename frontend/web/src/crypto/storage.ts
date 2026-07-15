@@ -16,7 +16,6 @@ function openDb(): Promise<IDBDatabase> {
   })
 }
 
-/** Zapisuje zaszyfrowany klucz prywatny lokalnie w przeglądarce. */
 export async function storeEncryptedPrivateKey(
   userId: string,
   data: EncryptedPrivateKey,
@@ -30,7 +29,6 @@ export async function storeEncryptedPrivateKey(
   })
 }
 
-/** Odczytuje zaszyfrowany klucz prywatny (np. przy logowaniu). */
 export async function loadEncryptedPrivateKey(
   userId: string,
 ): Promise<EncryptedPrivateKey | undefined> {

@@ -1,5 +1,3 @@
-// Wszystko tu dzieje się W PRZEGLĄDARCE. Klucz prywatny nigdy
-// nie jest wysyłany na serwer - tylko klucz publiczny.
 
 function bufferToBase64(buffer: ArrayBuffer | Uint8Array): string {
   return btoa(String.fromCharCode(...new Uint8Array(buffer)))
@@ -12,7 +10,6 @@ function base64ToBuffer(base64: string): Uint8Array {
   return bytes
 }
 
-/** Generuje nową parę kluczy RSA-OAEP (2048 bit). */
 export async function generateKeyPair(): Promise<CryptoKeyPair> {
   return crypto.subtle.generateKey(
     {
@@ -26,13 +23,11 @@ export async function generateKeyPair(): Promise<CryptoKeyPair> {
   )
 }
 
-/** Eksportuje klucz publiczny jako base64 (SPKI) - to wysyłamy na serwer. */
 export async function exportPublicKey(key: CryptoKey): Promise<string> {
   const exported = await crypto.subtle.exportKey('spki', key)
   return bufferToBase64(exported)
 }
 
-/** Wyprowadza klucz AES z hasła użytkownika (PBKDF2). */
 async function deriveWrappingKey(
   password: string,
   salt: Uint8Array,
@@ -60,11 +55,6 @@ export interface EncryptedPrivateKey {
   iv: string
 }
 
-/**
- * Szyfruje klucz prywatny hasłem użytkownika, zanim trafi do
- * lokalnego storage przeglądarki (IndexedDB). Bez hasła nikt
- * (włącznie z nami) nie odszyfruje tego klucza.
- */
 export async function encryptPrivateKey(
   privateKey: CryptoKey,
   password: string,
@@ -87,7 +77,6 @@ export async function encryptPrivateKey(
   }
 }
 
-/** Odszyfrowuje klucz prywatny hasłem (np. przy logowaniu na nowym urządzeniu/sesji). */
 export async function decryptPrivateKey(
   encrypted: EncryptedPrivateKey,
   password: string,

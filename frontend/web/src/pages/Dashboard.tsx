@@ -590,7 +590,7 @@ function Dashboard() {
             )
             setNoteItem(null)
         } catch (e) {
-            setError(e instanceof Error ? e.message : 'Nie udalo sie zapisac notatki.')
+            setError(e instanceof Error ? e.message : 'Could not save the note.')
             throw e
         } finally {
             setNoteSaving(false)
@@ -652,7 +652,7 @@ function Dashboard() {
             setFolderDescriptionDraft('')
             setFolderCreateOpen(false)
         } catch (e) {
-            setError(e instanceof Error ? e.message : 'Nie udalo sie utworzyc folderu.')
+            setError(e instanceof Error ? e.message : 'Could not create the folder.')
         } finally {
             setFolderSaving(false)
         }
