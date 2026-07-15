@@ -23,6 +23,7 @@ pub struct FileRecord {
     pub is_deleted: bool,
     pub is_public: bool,
     pub share_token: Option<String>,
+    pub share_expires_at: Option<DateTime<Utc>>,
     #[serde(serialize_with = "serialize_bytes_base64")]
     pub encrypted_key: Vec<u8>,
     #[serde(serialize_with = "serialize_bytes_base64")]
@@ -90,6 +91,7 @@ pub async fn list_user_files(
             is_deleted,
             is_public,
             share_token,
+            share_expires_at,
             encrypted_key,
             encryption_nonce,
             created_at,
@@ -138,6 +140,7 @@ pub async fn create_file_record(
             is_deleted,
             is_public,
             share_token,
+            share_expires_at,
             encrypted_key,
             encryption_nonce,
             created_at,
@@ -359,6 +362,7 @@ pub async fn rename_user_file(
             is_deleted,
             is_public,
             share_token,
+            share_expires_at,
             encrypted_key,
             encryption_nonce,
             created_at,
@@ -404,6 +408,7 @@ pub async fn update_user_file_content(
             is_deleted,
             is_public,
             share_token,
+            share_expires_at,
             encrypted_key,
             encryption_nonce,
             created_at,
@@ -427,15 +432,17 @@ pub async fn update_user_file_share(
     file_id: Uuid,
     is_public: bool,
     share_token: Option<String>,
+    share_expires_at: Option<DateTime<Utc>>,
 ) -> Result<Option<FileRecord>, sqlx::Error> {
     sqlx::query_as::<_, FileRecord>(
         r#"
         UPDATE files
         SET is_public = $1,
             share_token = $2,
+            share_expires_at = $3,
             updated_at = NOW()
-        WHERE id = $3
-          AND owner_id = $4
+        WHERE id = $4
+          AND owner_id = $5
           AND is_deleted = FALSE
         RETURNING
             id,
@@ -448,6 +455,7 @@ pub async fn update_user_file_share(
             is_deleted,
             is_public,
             share_token,
+            share_expires_at,
             encrypted_key,
             encryption_nonce,
             created_at,
@@ -457,6 +465,7 @@ pub async fn update_user_file_share(
     )
     .bind(is_public)
     .bind(share_token)
+    .bind(share_expires_at)
     .bind(file_id)
     .bind(user_id)
     .fetch_optional(pool)
@@ -488,6 +497,7 @@ pub async fn update_user_file_note(
             is_deleted,
             is_public,
             share_token,
+            share_expires_at,
             encrypted_key,
             encryption_nonce,
             created_at,

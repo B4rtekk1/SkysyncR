@@ -9,7 +9,7 @@ type ShareFileModalProps = {
     shareUrl: string | null
     loading: boolean
     onClose: () => void
-    onEnableShare: () => Promise<void>
+    onEnableShare: (expiresInSeconds?: number | null) => Promise<void>
     onDisableShare: () => Promise<void>
 }
 
@@ -19,6 +19,14 @@ type SharePerson = {
 }
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+const DEFAULT_SHARE_DURATION_SECONDS = 60 * 60 * 24 * 7
+const SHARE_DURATION_OPTIONS = [
+    { label: '1 hour', description: 'Temporary access', value: 60 * 60 },
+    { label: '1 day', description: 'Expires tomorrow', value: 60 * 60 * 24 },
+    { label: '7 days', description: 'Default access', value: DEFAULT_SHARE_DURATION_SECONDS },
+    { label: '30 days', description: 'Longer project access', value: 60 * 60 * 24 * 30 },
+    { label: 'No expiry', description: 'Manual stop only', value: null },
+]
 const PERMISSION_OPTIONS: Array<{
     value: SharePerson['permission']
     label: string
@@ -98,6 +106,75 @@ function PermissionDropdown({
     )
 }
 
+function ShareDurationDropdown({
+    disabled,
+    onChange,
+    value,
+}: {
+    disabled: boolean
+    onChange: (duration: number | null) => void
+    value: number | null
+}) {
+    const [open, setOpen] = useState(false)
+    const rootRef = useRef<HTMLDivElement>(null)
+    const selected = SHARE_DURATION_OPTIONS.find((option) => option.value === value) ?? SHARE_DURATION_OPTIONS[2]
+
+    function handleBlur(e: FocusEvent<HTMLDivElement>) {
+        const nextTarget = e.relatedTarget
+        if (!nextTarget || !e.currentTarget.contains(nextTarget as Node)) {
+            setOpen(false)
+        }
+    }
+
+    return (
+        <div
+            className={`share-permission share-duration ${open ? 'is-open' : ''}`}
+            ref={rootRef}
+            onBlur={handleBlur}
+        >
+            <button
+                className="share-permission__trigger"
+                type="button"
+                onClick={() => setOpen((current) => !current)}
+                disabled={disabled}
+                aria-label="Link duration"
+                aria-haspopup="listbox"
+                aria-expanded={open}
+            >
+                <span>
+                    <strong>{selected.label}</strong>
+                    <small>{selected.description}</small>
+                </span>
+                <span className="share-permission__chevron" aria-hidden="true">
+                    v
+                </span>
+            </button>
+            {open && (
+                <div className="share-permission__menu" role="listbox" aria-label="Link duration">
+                    {SHARE_DURATION_OPTIONS.map((option) => (
+                        <button
+                            key={option.label}
+                            className={`share-permission__option ${option.value === value ? 'is-selected' : ''}`}
+                            type="button"
+                            role="option"
+                            aria-selected={option.value === value}
+                            onClick={() => {
+                                onChange(option.value)
+                                setOpen(false)
+                            }}
+                        >
+                            <span>
+                                <strong>{option.label}</strong>
+                                <small>{option.description}</small>
+                            </span>
+                        </button>
+                    ))}
+                </div>
+            )}
+        </div>
+    )
+}
+
 export function ShareFileModal({
     item,
     itemKind,
@@ -110,11 +187,20 @@ export function ShareFileModal({
     const [people, setPeople] = useState<SharePerson[]>([])
     const [emailDraft, setEmailDraft] = useState('')
     const [permissionDraft, setPermissionDraft] = useState<SharePerson['permission']>('read')
+    const [shareDuration, setShareDuration] = useState<number | null>(DEFAULT_SHARE_DURATION_SECONDS)
     const [copied, setCopied] = useState(false)
     const [error, setError] = useState<string | null>(null)
     const requestedShareRef = useRef<string | null>(null)
     const qr = useMemo(() => (shareUrl ? createQrPath(shareUrl) : null), [shareUrl])
     const title = 'filename' in item ? item.filename : item.name
+    const linkInputValue = shareUrl ?? (item.is_public || loading ? 'Generating link...' : 'Link is inactive')
+    const selectedExpiresAt = shareDuration === null ? null : new Date(Date.now() + shareDuration * 1000)
+    const expiryLabel = selectedExpiresAt
+        ? `Expires ${selectedExpiresAt.toLocaleString([], {
+              dateStyle: 'medium',
+              timeStyle: 'short',
+          })}`
+        : 'No expiry'
 
     useEffect(() => {
         function closeOnEscape(e: globalThis.KeyboardEvent) {
@@ -126,14 +212,19 @@ export function ShareFileModal({
     }, [onClose])
 
     useEffect(() => {
+        if (item.is_public && item.share_token) {
+            requestedShareRef.current = item.id
+            return
+        }
+
         if (!item.is_public || !item.share_token) {
             if (requestedShareRef.current === item.id) return
             requestedShareRef.current = item.id
-            void onEnableShare().catch((e) => {
+            void onEnableShare(shareDuration).catch((e) => {
                 setError(e instanceof Error ? e.message : 'Could not generate share link.')
             })
         }
-    }, [item.id, item.is_public, item.share_token, onEnableShare])
+    }, [item.id, item.is_public, item.share_token, onEnableShare, shareDuration])
 
     async function copyShareUrl() {
         if (!shareUrl) return
@@ -212,8 +303,19 @@ export function ShareFileModal({
                             <span>Anyone with this link</span>
                             <strong>{itemKind === 'folder' ? 'View folder' : 'View only'}</strong>
                         </div>
+                        {itemKind === 'file' && (
+                            <div className="share-modal__expiry">
+                                <span>Link duration</span>
+                                <ShareDurationDropdown
+                                    disabled={loading}
+                                    value={shareDuration}
+                                    onChange={setShareDuration}
+                                />
+                                <span>{expiryLabel}</span>
+                            </div>
+                        )}
                         <div className="share-modal__link-row">
-                            <input value={shareUrl ?? 'Generating link...'} readOnly aria-label="Share link" />
+                            <input value={linkInputValue} readOnly aria-label="Share link" />
                             <button
                                 className="file-card__action file-card__action--download"
                                 type="button"
@@ -226,8 +328,13 @@ export function ShareFileModal({
                             </button>
                         </div>
                         <div className="share-modal__actions">
-                            <button className="btn btn--outline" type="button" onClick={() => void onEnableShare()} disabled={loading}>
-                                Regenerate link
+                            <button
+                                className="btn btn--outline"
+                                type="button"
+                                onClick={() => void onEnableShare(itemKind === 'file' ? shareDuration : undefined)}
+                                disabled={loading}
+                            >
+                                {item.is_public ? 'Update link' : 'Create link'}
                             </button>
                             <button className="btn btn--outline" type="button" onClick={() => void onDisableShare()} disabled={loading}>
                                 Stop sharing
@@ -245,8 +352,10 @@ export function ShareFileModal({
                                     <rect className="share-modal__qr-bg" x="0" y="0" width="100%" height="100%" rx="5" />
                                     <path className="share-modal__qr-modules" d={qr.path} />
                                 </svg>
-                            ) : (
+                            ) : item.is_public || loading ? (
                                 <span className="spinner" />
+                            ) : (
+                                <span className="share-modal__qr-empty">No active link</span>
                             )}
                         </div>
                     </section>

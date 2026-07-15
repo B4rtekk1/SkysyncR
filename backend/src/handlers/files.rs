@@ -8,6 +8,7 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use base64::{Engine as _, engine::general_purpose};
+use chrono::{Duration, Utc};
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
 use std::path::PathBuf;
@@ -41,6 +42,7 @@ pub struct RenameFileRequest {
 #[derive(Deserialize)]
 pub struct ShareFileRequest {
     pub is_public: bool,
+    pub expires_in_seconds: Option<i64>,
 }
 
 #[derive(Deserialize)]
@@ -261,18 +263,41 @@ pub async fn share_file(
     Json(payload): Json<ShareFileRequest>,
 ) -> Result<Json<FileRecord>, ApiError> {
     let share_token = payload.is_public.then(|| Uuid::new_v4().to_string());
+    let share_expires_at = if payload.is_public {
+        payload
+            .expires_in_seconds
+            .map(validate_share_duration)
+            .transpose()?
+            .map(|duration| Utc::now() + duration)
+    } else {
+        None
+    };
     let file = update_user_file_share(
         &state.db_pool,
         auth.user_id,
         file_id,
         payload.is_public,
         share_token,
+        share_expires_at,
     )
     .await
     .map_err(|e| internal_error("share file", e))?
     .ok_or_else(|| ApiError::BadRequest("File not found".into()))?;
 
     Ok(Json(file))
+}
+
+fn validate_share_duration(seconds: i64) -> Result<Duration, ApiError> {
+    const MIN_SHARE_SECONDS: i64 = 60;
+    const MAX_SHARE_SECONDS: i64 = 60 * 60 * 24 * 365;
+
+    if !(MIN_SHARE_SECONDS..=MAX_SHARE_SECONDS).contains(&seconds) {
+        return Err(ApiError::BadRequest(
+            "Share duration must be between 1 minute and 365 days".into(),
+        ));
+    }
+
+    Ok(Duration::seconds(seconds))
 }
 
 pub async fn update_file_note(

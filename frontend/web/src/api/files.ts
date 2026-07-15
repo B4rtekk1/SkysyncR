@@ -22,6 +22,7 @@ export interface ApiFile {
     is_deleted: boolean
     is_public: boolean
     share_token: string | null
+    share_expires_at: string | null
     encrypted_key: string
     encryption_nonce: string
     created_at: string
@@ -228,13 +229,13 @@ export async function updateFileContent(params: {
     return res.json()
 }
 
-export async function shareFile(id: string, isPublic: boolean): Promise<ApiFile> {
+export async function shareFile(id: string, isPublic: boolean, expiresInSeconds?: number | null): Promise<ApiFile> {
     const res = await authenticatedFetch(`${API_BASE}files/${id}/share`, {
         method: 'PUT',
         headers: {
             'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ is_public: isPublic }),
+        body: JSON.stringify({ is_public: isPublic, expires_in_seconds: expiresInSeconds ?? null }),
     })
     if (!res.ok) throw new Error(await parseErrorMessage(res))
     return res.json()
