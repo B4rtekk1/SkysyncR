@@ -9,7 +9,7 @@ type ShareFileModalProps = {
     shareUrl: string | null
     loading: boolean
     onClose: () => void
-    onEnableShare: (expiresInSeconds?: number | null) => Promise<void>
+    onEnableShare: (expiresInSeconds?: number | null, downloadLimit?: number | null) => Promise<void>
     onDisableShare: () => Promise<void>
 }
 
@@ -188,11 +188,15 @@ export function ShareFileModal({
     const [emailDraft, setEmailDraft] = useState('')
     const [permissionDraft, setPermissionDraft] = useState<SharePerson['permission']>('read')
     const [shareDuration, setShareDuration] = useState<number | null>(DEFAULT_SHARE_DURATION_SECONDS)
+    const [downloadLimitDraft, setDownloadLimitDraft] = useState(() =>
+        'filename' in item && item.share_download_limit ? String(item.share_download_limit) : '',
+    )
     const [copied, setCopied] = useState(false)
     const [error, setError] = useState<string | null>(null)
     const requestedShareRef = useRef<string | null>(null)
     const qr = useMemo(() => (shareUrl ? createQrPath(shareUrl) : null), [shareUrl])
-    const title = 'filename' in item ? item.filename : item.name
+    const isFileShare = 'filename' in item
+    const title = isFileShare ? item.filename : item.name
     const linkInputValue = shareUrl ?? (item.is_public || loading ? 'Generating link...' : 'Link is inactive')
     const selectedExpiresAt = shareDuration === null ? null : new Date(Date.now() + shareDuration * 1000)
     const expiryLabel = selectedExpiresAt
@@ -201,6 +205,17 @@ export function ShareFileModal({
               timeStyle: 'short',
           })}`
         : 'No expiry'
+    const downloadLimit = downloadLimitDraft.trim() ? Number(downloadLimitDraft) : null
+    const hasInvalidDownloadLimit =
+        itemKind === 'file' &&
+        downloadLimitDraft.trim() !== '' &&
+        (downloadLimit === null || !Number.isInteger(downloadLimit) || downloadLimit < 1 || downloadLimit > 1000000)
+    const downloadLimitLabel =
+        isFileShare
+            ? downloadLimit
+                ? `${item.share_download_count ?? 0} / ${downloadLimit} downloads`
+                : `${item.share_download_count ?? 0} downloads, no limit`
+            : null
 
     useEffect(() => {
         function closeOnEscape(e: globalThis.KeyboardEvent) {
@@ -220,11 +235,11 @@ export function ShareFileModal({
         if (!item.is_public || !item.share_token) {
             if (requestedShareRef.current === item.id) return
             requestedShareRef.current = item.id
-            void onEnableShare(shareDuration).catch((e) => {
+            void onEnableShare(shareDuration, hasInvalidDownloadLimit ? null : downloadLimit).catch((e) => {
                 setError(e instanceof Error ? e.message : 'Could not generate share link.')
             })
         }
-    }, [item.id, item.is_public, item.share_token, onEnableShare, shareDuration])
+    }, [downloadLimit, hasInvalidDownloadLimit, item.id, item.is_public, item.share_token, onEnableShare, shareDuration])
 
     async function copyShareUrl() {
         if (!shareUrl) return
@@ -304,15 +319,34 @@ export function ShareFileModal({
                             <strong>{itemKind === 'folder' ? 'View folder' : 'View only'}</strong>
                         </div>
                         {itemKind === 'file' && (
-                            <div className="share-modal__expiry">
-                                <span>Link duration</span>
-                                <ShareDurationDropdown
-                                    disabled={loading}
-                                    value={shareDuration}
-                                    onChange={setShareDuration}
-                                />
-                                <span>{expiryLabel}</span>
-                            </div>
+                            <>
+                                <div className="share-modal__expiry">
+                                    <span>Link duration</span>
+                                    <ShareDurationDropdown
+                                        disabled={loading}
+                                        value={shareDuration}
+                                        onChange={setShareDuration}
+                                    />
+                                    <span>{expiryLabel}</span>
+                                </div>
+                                <div className="share-modal__expiry">
+                                    <span>Download limit</span>
+                                    <input
+                                        className="share-modal__number-input"
+                                        type="number"
+                                        min="1"
+                                        max="1000000"
+                                        step="1"
+                                        inputMode="numeric"
+                                        value={downloadLimitDraft}
+                                        onChange={(event) => setDownloadLimitDraft(event.target.value)}
+                                        placeholder="No limit"
+                                        disabled={loading}
+                                        aria-label="Download limit"
+                                    />
+                                    <span>{downloadLimitLabel}</span>
+                                </div>
+                            </>
                         )}
                         <div className="share-modal__link-row">
                             <input value={linkInputValue} readOnly aria-label="Share link" />
@@ -331,8 +365,8 @@ export function ShareFileModal({
                             <button
                                 className="btn btn--outline"
                                 type="button"
-                                onClick={() => void onEnableShare(itemKind === 'file' ? shareDuration : undefined)}
-                                disabled={loading}
+                                onClick={() => void onEnableShare(itemKind === 'file' ? shareDuration : undefined, itemKind === 'file' ? downloadLimit : undefined)}
+                                disabled={loading || hasInvalidDownloadLimit}
                             >
                                 {item.is_public ? 'Update link' : 'Create link'}
                             </button>

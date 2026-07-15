@@ -43,6 +43,7 @@ pub struct RenameFileRequest {
 pub struct ShareFileRequest {
     pub is_public: bool,
     pub expires_in_seconds: Option<i64>,
+    pub download_limit: Option<i32>,
 }
 
 #[derive(Deserialize)]
@@ -272,6 +273,14 @@ pub async fn share_file(
     } else {
         None
     };
+    let share_download_limit = if payload.is_public {
+        payload
+            .download_limit
+            .map(validate_share_download_limit)
+            .transpose()?
+    } else {
+        None
+    };
     let file = update_user_file_share(
         &state.db_pool,
         auth.user_id,
@@ -279,6 +288,7 @@ pub async fn share_file(
         payload.is_public,
         share_token,
         share_expires_at,
+        share_download_limit,
     )
     .await
     .map_err(|e| internal_error("share file", e))?
@@ -298,6 +308,19 @@ fn validate_share_duration(seconds: i64) -> Result<Duration, ApiError> {
     }
 
     Ok(Duration::seconds(seconds))
+}
+
+fn validate_share_download_limit(limit: i32) -> Result<i32, ApiError> {
+    const MIN_DOWNLOAD_LIMIT: i32 = 1;
+    const MAX_DOWNLOAD_LIMIT: i32 = 1_000_000;
+
+    if !(MIN_DOWNLOAD_LIMIT..=MAX_DOWNLOAD_LIMIT).contains(&limit) {
+        return Err(ApiError::BadRequest(
+            "Download limit must be between 1 and 1000000".into(),
+        ));
+    }
+
+    Ok(limit)
 }
 
 pub async fn update_file_note(

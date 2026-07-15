@@ -24,6 +24,8 @@ pub struct FileRecord {
     pub is_public: bool,
     pub share_token: Option<String>,
     pub share_expires_at: Option<DateTime<Utc>>,
+    pub share_download_limit: Option<i32>,
+    pub share_download_count: i32,
     #[serde(serialize_with = "serialize_bytes_base64")]
     pub encrypted_key: Vec<u8>,
     #[serde(serialize_with = "serialize_bytes_base64")]
@@ -92,6 +94,8 @@ pub async fn list_user_files(
             is_public,
             share_token,
             share_expires_at,
+            share_download_limit,
+            share_download_count,
             encrypted_key,
             encryption_nonce,
             created_at,
@@ -141,6 +145,8 @@ pub async fn create_file_record(
             is_public,
             share_token,
             share_expires_at,
+            share_download_limit,
+            share_download_count,
             encrypted_key,
             encryption_nonce,
             created_at,
@@ -363,6 +369,8 @@ pub async fn rename_user_file(
             is_public,
             share_token,
             share_expires_at,
+            share_download_limit,
+            share_download_count,
             encrypted_key,
             encryption_nonce,
             created_at,
@@ -409,6 +417,8 @@ pub async fn update_user_file_content(
             is_public,
             share_token,
             share_expires_at,
+            share_download_limit,
+            share_download_count,
             encrypted_key,
             encryption_nonce,
             created_at,
@@ -433,6 +443,7 @@ pub async fn update_user_file_share(
     is_public: bool,
     share_token: Option<String>,
     share_expires_at: Option<DateTime<Utc>>,
+    share_download_limit: Option<i32>,
 ) -> Result<Option<FileRecord>, sqlx::Error> {
     sqlx::query_as::<_, FileRecord>(
         r#"
@@ -440,9 +451,11 @@ pub async fn update_user_file_share(
         SET is_public = $1,
             share_token = $2,
             share_expires_at = $3,
+            share_download_limit = $4,
+            share_download_count = 0,
             updated_at = NOW()
-        WHERE id = $4
-          AND owner_id = $5
+        WHERE id = $5
+          AND owner_id = $6
           AND is_deleted = FALSE
         RETURNING
             id,
@@ -456,6 +469,8 @@ pub async fn update_user_file_share(
             is_public,
             share_token,
             share_expires_at,
+            share_download_limit,
+            share_download_count,
             encrypted_key,
             encryption_nonce,
             created_at,
@@ -466,6 +481,7 @@ pub async fn update_user_file_share(
     .bind(is_public)
     .bind(share_token)
     .bind(share_expires_at)
+    .bind(share_download_limit)
     .bind(file_id)
     .bind(user_id)
     .fetch_optional(pool)
@@ -498,6 +514,8 @@ pub async fn update_user_file_note(
             is_public,
             share_token,
             share_expires_at,
+            share_download_limit,
+            share_download_count,
             encrypted_key,
             encryption_nonce,
             created_at,

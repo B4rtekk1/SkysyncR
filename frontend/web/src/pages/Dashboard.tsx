@@ -1591,9 +1591,9 @@ function Dashboard() {
                     }
                     loading={shareLoading}
                     onClose={() => setShareItem(null)}
-                    onEnableShare={async (expiresInSeconds) => {
+                    onEnableShare={async (expiresInSeconds, downloadLimit) => {
                         if ('filename' in shareItem) {
-                            await setFileSharing(shareItem, true, expiresInSeconds)
+                            await setFileSharing(shareItem, true, expiresInSeconds, downloadLimit)
                         } else {
                             await setFolderSharing(shareItem, true)
                         }

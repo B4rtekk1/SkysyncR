@@ -54,6 +54,8 @@ export function useFileUpload({
                     is_public: false,
                     share_token: null,
                     share_expires_at: null,
+                    share_download_limit: null,
+                    share_download_count: 0,
                     encrypted_key: '',
                     encryption_nonce: '',
                     created_at: now,

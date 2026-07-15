@@ -55,6 +55,8 @@ CREATE TABLE IF NOT EXISTS files
     is_public        BOOLEAN     NOT NULL DEFAULT FALSE,
     share_token      TEXT,
     share_expires_at timestamptz,
+    share_download_limit INT,
+    share_download_count INT         NOT NULL DEFAULT 0,
     created_at       timestamptz NOT NULL DEFAULT NOW(),
     updated_at       timestamptz NOT NULL DEFAULT NOW(),
     deleted_at       timestamptz
@@ -196,6 +198,8 @@ ALTER TABLE refresh_tokens DROP COLUMN IF EXISTS device_id;
 ALTER TABLE audit_logs DROP COLUMN IF EXISTS ip_address;
 ALTER TABLE files ADD COLUMN IF NOT EXISTS note TEXT;
 ALTER TABLE files ADD COLUMN IF NOT EXISTS share_expires_at timestamptz;
+ALTER TABLE files ADD COLUMN IF NOT EXISTS share_download_limit INT;
+ALTER TABLE files ADD COLUMN IF NOT EXISTS share_download_count INT NOT NULL DEFAULT 0;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS trash_retention_days INT NOT NULL DEFAULT 30;
 ALTER TABLE folders ADD COLUMN IF NOT EXISTS encrypted_key bytea;
 ALTER TABLE folders ADD COLUMN IF NOT EXISTS is_public BOOLEAN NOT NULL DEFAULT FALSE;

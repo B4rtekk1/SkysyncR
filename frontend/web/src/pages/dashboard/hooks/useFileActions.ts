@@ -130,11 +130,11 @@ export function useFileActions({
     )
 
     const setFileSharing = useCallback(
-        async (item: Item, isPublic: boolean, expiresInSeconds?: number | null) => {
+        async (item: Item, isPublic: boolean, expiresInSeconds?: number | null, downloadLimit?: number | null) => {
             setShareLoading(true)
             setError(null)
             try {
-                const shared = await shareFile(item.id, isPublic, expiresInSeconds)
+                const shared = await shareFile(item.id, isPublic, expiresInSeconds, downloadLimit)
                 const visibleShared = { ...shared, filename: item.filename, mime_type: item.mime_type, note: item.note }
                 setItems((prev) => prev.map((current) => (current.id === item.id ? visibleShared : current)))
                 setStorageItems((prev) => prev.map((current) => (current.id === item.id ? visibleShared : current)))
