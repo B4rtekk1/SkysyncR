@@ -302,9 +302,12 @@ pub async fn register_user(
     .await
     .map_err(|e| map_db_error("create user", e))?;
 
-    if let Err(e) = send_verification_email(&email, &token).await {
-        eprintln!("Failed to send verification email: {e}");
-    }
+    let verification_email = email.clone();
+    tokio::spawn(async move {
+        if let Err(e) = send_verification_email(&verification_email, &token).await {
+            eprintln!("Failed to send verification email: {e}");
+        }
+    });
 
     Ok(Json(RegisterResponse {
         id: user_id.to_string(),
