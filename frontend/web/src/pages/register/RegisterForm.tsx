@@ -1,5 +1,5 @@
 import { type SubmitEvent, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { registerUser } from '../../api/users'
 import { generateKeyPair, exportPublicKey, encryptPrivateKey } from '../../crypto/keys'
 import { storeActivePrivateKey, storeEncryptedPrivateKey } from '../../crypto/storage'
@@ -8,6 +8,7 @@ import PasswordRequirements from './PasswordRequirements'
 import { getPasswordRequirements, suggestNameFromEmail } from './passwordRules'
 
 function RegisterForm() {
+  const navigate = useNavigate()
   const [email, setEmail] = useState('')
   const [name, setName] = useState('')
   const [password, setPassword] = useState('')
@@ -62,7 +63,11 @@ function RegisterForm() {
       await storeEncryptedPrivateKey(userId, encryptedPrivateKey)
       await storeActivePrivateKey(userId, keyPair.privateKey)
 
-      window.location.href = '/login'
+      navigate('/', {
+        state: {
+          verificationPromptEmail: email.trim().toLowerCase(),
+        },
+      })
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong.')
     } finally {

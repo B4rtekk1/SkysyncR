@@ -306,6 +306,60 @@ html[data-theme='light'] {
   margin: 0 8px;
 }
 
+.register-popup {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(6, 10, 18, 0.72);
+  backdrop-filter: blur(10px);
+}
+
+.register-popup__dialog {
+  width: min(420px, 100%);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel);
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.34);
+  padding: 28px;
+  text-align: center;
+  animation: register-popup-in 0.2s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.register-popup__dialog h2 {
+  margin: 0 0 10px;
+  color: var(--paper);
+  font-family: var(--font-display), sans-serif;
+  font-size: 1.35rem;
+  font-weight: 600;
+}
+
+.register-popup__dialog p {
+  margin: 0;
+  color: var(--mist);
+  font-size: 0.92rem;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+
+.register-popup__action {
+  width: 100%;
+  margin-top: 22px;
+}
+
+@keyframes register-popup-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.98);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
 
 @media (max-width: 880px) {
   .hero {

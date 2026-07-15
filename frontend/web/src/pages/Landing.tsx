@@ -1,14 +1,21 @@
 import { useEffect, useRef, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import '../App.css'
 import TransferLog from '../components/TransferLog'
 import ThemeToggle from '../components/ThemeToggle'
 
+interface LandingLocationState {
+  verificationPromptEmail?: string
+}
+
 function Landing() {
+  const location = useLocation()
+  const navigate = useNavigate()
   const [loaded, setLoaded] = useState(false)
   const [navSolid, setNavSolid] = useState(false)
   const featuresRef = useRef<HTMLDivElement>(null)
   const [featuresVisible, setFeaturesVisible] = useState(false)
+  const [verificationPromptEmail, setVerificationPromptEmail] = useState<string | null>(null)
 
   useEffect(() => {
     const t = setTimeout(() => setLoaded(true), 40)
@@ -19,6 +26,14 @@ function Landing() {
       window.removeEventListener('scroll', onScroll)
     }
   }, [])
+
+  useEffect(() => {
+    const state = location.state as LandingLocationState | null
+    if (!state?.verificationPromptEmail) return
+
+    setVerificationPromptEmail(state.verificationPromptEmail)
+    navigate(location.pathname, { replace: true, state: null })
+  }, [location.pathname, location.state, navigate])
 
   useEffect(() => {
     const node = featuresRef.current
@@ -113,6 +128,30 @@ function Landing() {
           <span className="footer__sep">·</span>
           <span>Encrypted locally, always.</span>
         </footer>
+
+        {verificationPromptEmail && (
+            <div className="register-popup" role="presentation">
+              <div
+                  className="register-popup__dialog"
+                  role="dialog"
+                  aria-modal="true"
+                  aria-labelledby="register-popup-title"
+                  aria-describedby="register-popup-description"
+              >
+                <h2 id="register-popup-title">Verify your account</h2>
+                <p id="register-popup-description">
+                  We sent a verification link to {verificationPromptEmail}. Open it before signing in.
+                </p>
+                <button
+                    type="button"
+                    className="btn btn--solid btn--lg register-popup__action"
+                    onClick={() => navigate('/login')}
+                >
+                  Go to login
+                </button>
+              </div>
+            </div>
+        )}
       </div>
   )
 }
