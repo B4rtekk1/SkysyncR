@@ -27,6 +27,7 @@ export function FolderCard({
     const [infoPosition, setInfoPosition] = useState<InfoPopoverPosition>({ left: 14, top: 14 })
     const renameInputRef = useRef<HTMLInputElement>(null)
     const cardRef = useRef<HTMLElement>(null)
+    const infoPositionFrameRef = useRef<number | null>(null)
 
     const updateInfoPosition = useCallback(() => {
         const card = cardRef.current
@@ -54,6 +55,15 @@ export function FolderCard({
         })
     }, [])
 
+    const scheduleInfoPositionUpdate = useCallback(() => {
+        if (infoPositionFrameRef.current !== null) return
+
+        infoPositionFrameRef.current = window.requestAnimationFrame(() => {
+            infoPositionFrameRef.current = null
+            updateInfoPosition()
+        })
+    }, [updateInfoPosition])
+
     useEffect(() => {
         if (!isInfoOpen) return
 
@@ -68,14 +78,18 @@ export function FolderCard({
     useEffect(() => {
         if (!isInfoOpen) return
 
-        updateInfoPosition()
-        window.addEventListener('resize', updateInfoPosition)
-        window.addEventListener('scroll', updateInfoPosition, true)
+        scheduleInfoPositionUpdate()
+        window.addEventListener('resize', scheduleInfoPositionUpdate)
+        window.addEventListener('scroll', scheduleInfoPositionUpdate, true)
         return () => {
-            window.removeEventListener('resize', updateInfoPosition)
-            window.removeEventListener('scroll', updateInfoPosition, true)
+            window.removeEventListener('resize', scheduleInfoPositionUpdate)
+            window.removeEventListener('scroll', scheduleInfoPositionUpdate, true)
+            if (infoPositionFrameRef.current !== null) {
+                window.cancelAnimationFrame(infoPositionFrameRef.current)
+                infoPositionFrameRef.current = null
+            }
         }
-    }, [isInfoOpen, updateInfoPosition])
+    }, [isInfoOpen, scheduleInfoPositionUpdate])
 
     const cancelRename = () => {
         setRenameDraft(folder.name)
@@ -248,7 +262,7 @@ export function FolderCard({
                                 type="button"
                                 onClick={(event) => {
                                     event.stopPropagation()
-                                    if (!isInfoOpen) updateInfoPosition()
+                                    if (!isInfoOpen) scheduleInfoPositionUpdate()
                                     setIsInfoOpen((current) => !current)
                                 }}
                                 aria-label={`Show details for ${folder.name}`}

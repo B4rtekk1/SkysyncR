@@ -349,6 +349,55 @@ html[data-theme='light'] {
   margin-top: 22px;
 }
 
+.not-found-page {
+  background:
+    linear-gradient(135deg, rgba(var(--signal-rgb), 0.1), transparent 36%),
+    var(--panel);
+}
+
+.not-found {
+  flex: 1;
+  width: min(720px, 100%);
+  margin: 0 auto;
+  padding: 96px 32px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: flex-start;
+}
+
+.not-found__code {
+  margin: 0 0 18px;
+  font-family: var(--font-mono), monospace;
+  font-size: 0.82rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  color: var(--signal);
+}
+
+.not-found__title {
+  margin: 0 0 18px;
+  font-family: var(--font-display), sans-serif;
+  font-size: clamp(2.2rem, 6vw, 4.6rem);
+  font-weight: 600;
+  line-height: 1;
+  color: var(--paper);
+}
+
+.not-found__copy {
+  max-width: 460px;
+  margin: 0 0 34px;
+  color: var(--mist);
+  font-size: 1rem;
+  line-height: 1.6;
+}
+
+.not-found__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
 @keyframes register-popup-in {
   from {
     opacity: 0;
@@ -398,6 +447,15 @@ html[data-theme='light'] {
   .btn--lg {
     width: 100%;
     text-align: center;
+  }
+
+  .not-found {
+    padding: 72px 20px;
+  }
+
+  .not-found__actions {
+    width: 100%;
+    flex-direction: column;
   }
 
   .log {

@@ -78,6 +78,7 @@ export function FileCard({
     const [renameSaving, setRenameSaving] = useState(false)
     const renameInputRef = useRef<HTMLInputElement>(null)
     const cardRef = useRef<HTMLElement>(null)
+    const infoPositionFrameRef = useRef<number | null>(null)
     const canToggleFavourite = Boolean(onToggleFavourite && !isShared(item))
     const canRename = Boolean(onRename && !isShared(item) && view !== 'trash' && !pending)
     const canShare = Boolean(onShare && !isShared(item) && view !== 'trash' && !pending)
@@ -120,6 +121,15 @@ export function FileCard({
         })
     }, [])
 
+    const scheduleInfoPositionUpdate = useCallback(() => {
+        if (infoPositionFrameRef.current !== null) return
+
+        infoPositionFrameRef.current = window.requestAnimationFrame(() => {
+            infoPositionFrameRef.current = null
+            updateInfoPosition()
+        })
+    }, [updateInfoPosition])
+
     useEffect(() => {
         if (!isInfoOpen) return
 
@@ -134,14 +144,18 @@ export function FileCard({
     useEffect(() => {
         if (!isInfoOpen) return
 
-        updateInfoPosition()
-        window.addEventListener('resize', updateInfoPosition)
-        window.addEventListener('scroll', updateInfoPosition, true)
+        scheduleInfoPositionUpdate()
+        window.addEventListener('resize', scheduleInfoPositionUpdate)
+        window.addEventListener('scroll', scheduleInfoPositionUpdate, true)
         return () => {
-            window.removeEventListener('resize', updateInfoPosition)
-            window.removeEventListener('scroll', updateInfoPosition, true)
+            window.removeEventListener('resize', scheduleInfoPositionUpdate)
+            window.removeEventListener('scroll', scheduleInfoPositionUpdate, true)
+            if (infoPositionFrameRef.current !== null) {
+                window.cancelAnimationFrame(infoPositionFrameRef.current)
+                infoPositionFrameRef.current = null
+            }
         }
-    }, [isInfoOpen, updateInfoPosition])
+    }, [isInfoOpen, scheduleInfoPositionUpdate])
 
     const handlePreviewKeyDown = (e: ReactKeyboardEvent<HTMLElement>) => {
         if (!canPreview) return
@@ -285,7 +299,7 @@ export function FileCard({
                         selectFilenameWithoutExtension(item.filename)
                     }}
                     onToggleInfo={() => {
-                        if (!isInfoOpen) updateInfoPosition()
+                        if (!isInfoOpen) scheduleInfoPositionUpdate()
                         setIsInfoOpen((current) => !current)
                     }}
                     onDownload={onDownload}
@@ -299,4 +313,3 @@ export function FileCard({
         </article>
     )
 }
-

@@ -5,6 +5,7 @@ import Login from './pages/Login'
 import Register from './pages/Register'
 import VerifyEmail from "./pages/VerifyUser";
 import Dashboard from './pages/Dashboard'
+import NotFound from './pages/NotFound'
 import {getUnlockedVaultSession} from './api/session'
 
 function LandingRoute() {
@@ -39,6 +40,7 @@ function App() {
             <Route path="/register" element={<Register/>}/>
             <Route path="/verify" element={<VerifyEmail/>}/>
             <Route path="/dashboard" element={<Dashboard/>}/>
+            <Route path="*" element={<NotFound/>}/>
         </Routes>
     )
 }

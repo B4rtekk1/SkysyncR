@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { NavIndicator, ViewKey } from '../types'
 
 export function useNavIndicator(
@@ -17,31 +17,57 @@ export function useNavIndicator(
         visible: false,
     })
     const [navIndicatorPulling, setNavIndicatorPulling] = useState(false)
+    const frameRef = useRef<number | null>(null)
 
-    useLayoutEffect(() => {
-        function updateNavIndicator() {
-            const nav = navListRef.current
-            const activeItem = navItemRefs.current[view]
-            if (!nav || !activeItem || sidebarHidden) {
-                setNavIndicator((prev) => ({ ...prev, visible: false }))
-                return
-            }
-
-            const navRect = nav.getBoundingClientRect()
-            const itemRect = activeItem.getBoundingClientRect()
-            setNavIndicator({
-                x: itemRect.left - navRect.left,
-                y: itemRect.top - navRect.top,
-                width: itemRect.width,
-                height: itemRect.height,
-                visible: true,
-            })
+    const updateNavIndicator = useCallback(() => {
+        const nav = navListRef.current
+        const activeItem = navItemRefs.current[view]
+        if (!nav || !activeItem || sidebarHidden) {
+            setNavIndicator((prev) => (prev.visible ? { ...prev, visible: false } : prev))
+            return
         }
 
-        updateNavIndicator()
-        window.addEventListener('resize', updateNavIndicator)
-        return () => window.removeEventListener('resize', updateNavIndicator)
-    }, [view, navOrder, sidebarWidth, sidebarHidden])
+        const navRect = nav.getBoundingClientRect()
+        const itemRect = activeItem.getBoundingClientRect()
+        const nextIndicator = {
+            x: itemRect.left - navRect.left,
+            y: itemRect.top - navRect.top,
+            width: itemRect.width,
+            height: itemRect.height,
+            visible: true,
+        }
+
+        setNavIndicator((prev) =>
+            prev.x === nextIndicator.x &&
+            prev.y === nextIndicator.y &&
+            prev.width === nextIndicator.width &&
+            prev.height === nextIndicator.height &&
+            prev.visible === nextIndicator.visible
+                ? prev
+                : nextIndicator,
+        )
+    }, [sidebarHidden, view])
+
+    const scheduleNavIndicatorUpdate = useCallback(() => {
+        if (frameRef.current !== null) return
+
+        frameRef.current = requestAnimationFrame(() => {
+            frameRef.current = null
+            updateNavIndicator()
+        })
+    }, [updateNavIndicator])
+
+    useEffect(() => {
+        scheduleNavIndicatorUpdate()
+        window.addEventListener('resize', scheduleNavIndicatorUpdate)
+        return () => {
+            window.removeEventListener('resize', scheduleNavIndicatorUpdate)
+            if (frameRef.current !== null) {
+                cancelAnimationFrame(frameRef.current)
+                frameRef.current = null
+            }
+        }
+    }, [navOrder, scheduleNavIndicatorUpdate, sidebarWidth])
 
     useEffect(() => {
         let pullFrame: number | undefined
