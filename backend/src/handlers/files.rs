@@ -873,9 +873,9 @@ fn replace_file_atomically_blocking(source: &FsPath, target: &FsPath) -> std::io
 
     unsafe extern "system" {
         fn MoveFileExW(
-            lpExistingFileName: *const u16,
-            lpNewFileName: *const u16,
-            dwFlags: u32,
+            lp_existing_file_name: *const u16,
+            lp_new_file_name: *const u16,
+            dw_flags: u32,
         ) -> i32;
     }
 
