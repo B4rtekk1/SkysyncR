@@ -47,8 +47,13 @@ async fn inspect_storage(pool: &PgPool, upload_dir: &Path) {
         .collect();
 
     for (id, storage_path) in &records {
-        if fs::metadata(storage_path).await.is_err() {
-            tracing::warn!(file_id = %id, "storage consistency record references missing binary");
+        if let Err(err) = fs::metadata(storage_path).await {
+            tracing::warn!(
+                file_id = %id,
+                storage_path = %storage_path,
+                error = %err,
+                "storage consistency record references missing binary"
+            );
         }
     }
 
@@ -62,7 +67,7 @@ async fn inspect_storage(pool: &PgPool, upload_dir: &Path) {
 
     for path in disk_paths {
         if !known_paths.contains(&path) {
-            tracing::warn!("storage consistency binary has no file record");
+            log_orphaned_binary(upload_dir, &path).await;
         }
     }
 }
@@ -103,4 +108,26 @@ async fn list_disk_binaries(upload_dir: &Path) -> std::io::Result<Vec<PathBuf>> 
     }
 
     Ok(result)
+}
+
+async fn log_orphaned_binary(upload_dir: &Path, path: &Path) {
+    let relative_path = path
+        .strip_prefix(upload_dir)
+        .map(|path| path.display().to_string())
+        .ok();
+    let owner_id = path
+        .parent()
+        .and_then(|path| path.file_name())
+        .and_then(|value| value.to_str());
+    let file_id = path.file_stem().and_then(|value| value.to_str());
+    let file_size_bytes = fs::metadata(path).await.ok().map(|metadata| metadata.len());
+
+    tracing::warn!(
+        storage_path = %path.display(),
+        relative_path,
+        owner_id,
+        file_id,
+        file_size_bytes,
+        "storage consistency binary has no file record"
+    );
 }

@@ -26,9 +26,12 @@ struct Message {
 pub async fn connect() -> PgPool {
     let database_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set");
 
-    PgPool::connect(&database_url)
+    tracing::info!("connecting to database");
+    let pool = PgPool::connect(&database_url)
         .await
-        .expect("Failed to connect to the database")
+        .expect("Failed to connect to the database");
+    tracing::info!("connected to database");
+    pool
 }
 
 async fn hello() -> Json<Message> {
@@ -90,8 +93,20 @@ fn security_header_layer(
 }
 
 pub async fn run_server() {
+    tracing::info!("starting server");
     let pool = connect().await;
     let config = AppConfig::from_env();
+
+    tracing::info!(
+        is_dev = config.is_dev,
+        upload_dir = %config.upload_dir.display(),
+        max_file_size_bytes = config.max_file_size_bytes,
+        max_concurrent_file_transfers = config.max_concurrent_file_transfers,
+        file_transfer_timeout_seconds = config.file_transfer_timeout_seconds,
+        trash_retention_days = config.trash_retention_days,
+        trash_purge_interval_hours = config.trash_purge_interval_hours,
+        "loaded application config"
+    );
 
     crate::db::calendar::ensure_calendar_entries_table(&pool)
         .await
@@ -105,6 +120,7 @@ pub async fn run_server() {
     crate::db::users::ensure_user_settings_columns(&pool)
         .await
         .expect("Failed to ensure user settings columns");
+    tracing::info!("database schema checks completed");
 
     if config.is_dev {
         tracing::info!("running in development mode");
