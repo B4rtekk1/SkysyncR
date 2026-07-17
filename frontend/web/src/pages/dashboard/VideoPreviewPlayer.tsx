@@ -79,7 +79,7 @@ function buildWaveform(audioBuffer: AudioBuffer, bars = WAVEFORM_BARS) {
         for (let channel = 0; channel < audioBuffer.numberOfChannels; channel += 1) {
             const data = audioBuffer.getChannelData(channel)
             for (let i = start; i < end; i += 1) {
-                sum += data[i] ** 2
+                sum += (data[i] ?? 0) ** 2
                 count += 1
             }
         }
@@ -157,7 +157,7 @@ export function VideoPreviewPlayer({ item, url }: { item: Item; url: string }) {
         const progress = totalDuration > 0 ? Math.min(Math.max(time / totalDuration, 0), 1) : 0
 
         for (let i = 0; i < bars; i += 1) {
-            const barHeight = Math.max(3 * dpr, levels[i] * height)
+            const barHeight = Math.max(3 * dpr, (levels[i] ?? 0) * height)
             const x = i * (barWidth + gap)
             const y = height - barHeight
             const isPlayed = i / bars <= progress

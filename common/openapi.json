@@ -1,0 +1,1853 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "SkysyncR API",
+    "version": "1.0.0"
+  },
+  "servers": [
+    {
+      "url": "http://localhost:3000/"
+    }
+  ],
+  "paths": {
+    "/users/register": {
+      "post": {
+        "operationId": "registerUser",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegisterRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Registered user id",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegisterResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/users/login": {
+      "post": {
+        "operationId": "loginUser",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Access token pair",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenPair"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/users/refresh": {
+      "post": {
+        "operationId": "refreshTokens",
+        "responses": {
+          "200": {
+            "description": "Refreshed access token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenPair"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/users/me": {
+      "get": {
+        "operationId": "getCurrentUser",
+        "responses": {
+          "200": {
+            "description": "Current public user profile",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CurrentUser"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/users/settings": {
+      "patch": {
+        "operationId": "updateUserSettings",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UserSettingsRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated settings",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserSettings"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/users/verify": {
+      "post": {
+        "operationId": "verifyUser",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VerifyUserRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Email verified"
+          }
+        }
+      }
+    },
+    "/users/logout": {
+      "post": {
+        "operationId": "logoutUser",
+        "responses": {
+          "200": {
+            "description": "Logged out"
+          }
+        }
+      }
+    },
+    "/files": {
+      "get": {
+        "operationId": "listFiles",
+        "parameters": [
+          {
+            "name": "folder_id",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "trashed",
+            "in": "query",
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Files",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/File"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "uploadFile",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/FileUploadRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Uploaded file",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/File"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/files/shared-with-me": {
+      "get": {
+        "operationId": "listSharedFilesWithMe",
+        "responses": {
+          "200": {
+            "description": "Shared files",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SharedFile"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/files/{fileId}": {
+      "patch": {
+        "operationId": "renameFile",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/FileId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RenameFileRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Renamed file",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/File"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "softDeleteFile",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/FileId"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Deleted"
+          }
+        }
+      }
+    },
+    "/files/{fileId}/restore": {
+      "post": {
+        "operationId": "restoreFile",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/FileId"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Restored"
+          }
+        }
+      }
+    },
+    "/files/{fileId}/permanent": {
+      "delete": {
+        "operationId": "permanentlyDeleteFile",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/FileId"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Permanently deleted"
+          }
+        }
+      }
+    },
+    "/files/{fileId}/content": {
+      "put": {
+        "operationId": "updateFileContent",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/FileId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/FileContentUpdateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated file",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/File"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/files/{fileId}/share": {
+      "put": {
+        "operationId": "shareFile",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/FileId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ShareFileRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated share settings",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/File"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/files/{fileId}/favorite": {
+      "put": {
+        "operationId": "addFileFavourite",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/FileId"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Added"
+          }
+        }
+      },
+      "delete": {
+        "operationId": "removeFileFavourite",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/FileId"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Removed"
+          }
+        }
+      }
+    },
+    "/files/{fileId}/note": {
+      "put": {
+        "operationId": "updateFileNote",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/FileId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateFileNoteRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated note",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/File"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/files/{fileId}/shares/recipient": {
+      "get": {
+        "operationId": "getFileShareRecipient",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/FileId"
+          },
+          {
+            "name": "email",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "email"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Recipient profile",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShareRecipient"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/files/{fileId}/shares": {
+      "get": {
+        "operationId": "listFileShares",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/FileId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "File shares",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/FileShare"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "createFileShare",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/FileId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateFileShareRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created share",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FileShare"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/files/{fileId}/shares/{shareId}": {
+      "delete": {
+        "operationId": "deleteFileShare",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/FileId"
+          },
+          {
+            "$ref": "#/components/parameters/ShareId"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Deleted"
+          }
+        }
+      }
+    },
+    "/folders": {
+      "get": {
+        "operationId": "listFolders",
+        "parameters": [
+          {
+            "name": "parent_folder_id",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Folders",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Folder"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "createFolder",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateFolderRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created folder",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Folder"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/folders/{folderId}": {
+      "patch": {
+        "operationId": "renameFolder",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/FolderId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RenameFolderRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Renamed folder",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Folder"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/folders/{folderId}/share": {
+      "put": {
+        "operationId": "shareFolder",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/FolderId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ShareFolderRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated folder share",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Folder"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/groups": {
+      "get": {
+        "operationId": "listGroups",
+        "responses": {
+          "200": {
+            "description": "Groups",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Group"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "createGroup",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GroupRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created group",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Group"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/groups/{groupId}": {
+      "patch": {
+        "operationId": "updateGroup",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/GroupId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GroupRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated group",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Group"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "deleteGroup",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/GroupId"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Deleted"
+          }
+        }
+      }
+    },
+    "/groups/{groupId}/invites": {
+      "post": {
+        "operationId": "createGroupInvite",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/GroupId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GroupInviteRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created invite",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GroupInvite"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/groups/{groupId}/invites/{inviteId}": {
+      "delete": {
+        "operationId": "deleteGroupInvite",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/GroupId"
+          },
+          {
+            "$ref": "#/components/parameters/InviteId"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Deleted"
+          }
+        }
+      }
+    },
+    "/groups/{groupId}/recipients": {
+      "get": {
+        "operationId": "listGroupShareRecipients",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/GroupId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Group share recipients",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/GroupShareRecipient"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/calendar-entries": {
+      "get": {
+        "operationId": "listCalendarEntries",
+        "responses": {
+          "200": {
+            "description": "Calendar entries",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/CalendarEntry"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "createCalendarEntry",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CalendarEntryRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created entry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarEntry"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/calendar-entries/{entryId}": {
+      "delete": {
+        "operationId": "deleteCalendarEntry",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/EntryId"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Deleted"
+          }
+        }
+      }
+    },
+    "/storage/quota": {
+      "get": {
+        "operationId": "getStorageQuota",
+        "responses": {
+          "200": {
+            "description": "Storage quota",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StorageQuota"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "parameters": {
+      "FileId": {
+        "name": "fileId",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "FolderId": {
+        "name": "folderId",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "GroupId": {
+        "name": "groupId",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "InviteId": {
+        "name": "inviteId",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "ShareId": {
+        "name": "shareId",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "EntryId": {
+        "name": "entryId",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "format": "uuid"
+        }
+      }
+    },
+    "schemas": {
+      "ApiError": {
+        "type": "object",
+        "properties": {
+          "message": {
+            "type": "string"
+          },
+          "error": {
+            "type": "string"
+          }
+        }
+      },
+      "RegisterRequest": {
+        "type": "object",
+        "required": [
+          "email",
+          "display_name",
+          "password",
+          "public_key"
+        ],
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email"
+          },
+          "display_name": {
+            "type": "string"
+          },
+          "password": {
+            "type": "string",
+            "format": "password"
+          },
+          "public_key": {
+            "type": "string"
+          }
+        }
+      },
+      "LoginRequest": {
+        "type": "object",
+        "required": [
+          "email",
+          "password"
+        ],
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email"
+          },
+          "password": {
+            "type": "string",
+            "format": "password"
+          },
+          "remember": {
+            "type": "boolean"
+          }
+        }
+      },
+      "RegisterResponse": {
+        "type": "object",
+        "required": [
+          "id"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      },
+      "TokenPair": {
+        "type": "object",
+        "required": [
+          "access_token",
+          "expires_in"
+        ],
+        "properties": {
+          "access_token": {
+            "type": "string"
+          },
+          "expires_in": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "CurrentUser": {
+        "type": "object",
+        "required": [
+          "id",
+          "email",
+          "display_name",
+          "avatar_url",
+          "public_key",
+          "default_view",
+          "layout_mode",
+          "upload_protection",
+          "compact_metadata",
+          "device_lock",
+          "sync_on_metered",
+          "trash_retention_days"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "email": {
+            "type": "string",
+            "format": "email"
+          },
+          "display_name": {
+            "type": "string",
+            "nullable": true
+          },
+          "avatar_url": {
+            "type": "string",
+            "nullable": true
+          },
+          "public_key": {
+            "type": "string",
+            "nullable": true
+          },
+          "default_view": {
+            "type": "string"
+          },
+          "layout_mode": {
+            "type": "string"
+          },
+          "upload_protection": {
+            "type": "boolean"
+          },
+          "compact_metadata": {
+            "type": "boolean"
+          },
+          "device_lock": {
+            "type": "boolean"
+          },
+          "sync_on_metered": {
+            "type": "boolean"
+          },
+          "trash_retention_days": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "UserSettingsRequest": {
+        "type": "object",
+        "properties": {
+          "display_name": {
+            "type": "string",
+            "nullable": true
+          },
+          "avatar_url": {
+            "type": "string",
+            "nullable": true
+          },
+          "default_view": {
+            "type": "string"
+          },
+          "layout_mode": {
+            "type": "string"
+          },
+          "upload_protection": {
+            "type": "boolean"
+          },
+          "compact_metadata": {
+            "type": "boolean"
+          },
+          "device_lock": {
+            "type": "boolean"
+          },
+          "sync_on_metered": {
+            "type": "boolean"
+          },
+          "trash_retention_days": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "UserSettings": {
+        "type": "object",
+        "required": [
+          "display_name",
+          "avatar_url",
+          "default_view",
+          "layout_mode",
+          "upload_protection",
+          "compact_metadata",
+          "device_lock",
+          "sync_on_metered",
+          "trash_retention_days"
+        ],
+        "properties": {
+          "display_name": {
+            "type": "string",
+            "nullable": true
+          },
+          "avatar_url": {
+            "type": "string",
+            "nullable": true
+          },
+          "default_view": {
+            "type": "string"
+          },
+          "layout_mode": {
+            "type": "string"
+          },
+          "upload_protection": {
+            "type": "boolean"
+          },
+          "compact_metadata": {
+            "type": "boolean"
+          },
+          "device_lock": {
+            "type": "boolean"
+          },
+          "sync_on_metered": {
+            "type": "boolean"
+          },
+          "trash_retention_days": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "VerifyUserRequest": {
+        "type": "object",
+        "required": [
+          "token"
+        ],
+        "properties": {
+          "token": {
+            "type": "string"
+          }
+        }
+      },
+      "FileSharePermission": {
+        "type": "string",
+        "enum": [
+          "read",
+          "download",
+          "write"
+        ]
+      },
+      "GroupRole": {
+        "type": "string",
+        "enum": [
+          "viewer",
+          "editor",
+          "admin"
+        ]
+      },
+      "CalendarEntryKind": {
+        "type": "string",
+        "enum": [
+          "event",
+          "deadline"
+        ]
+      },
+      "File": {
+        "type": "object",
+        "required": [
+          "id",
+          "filename",
+          "storage_path",
+          "mime_type",
+          "size_bytes",
+          "folder_id",
+          "note",
+          "is_deleted",
+          "is_public",
+          "share_token",
+          "share_expires_at",
+          "share_download_limit",
+          "share_download_count",
+          "is_favourite",
+          "encrypted_key",
+          "encryption_nonce",
+          "created_at",
+          "updated_at",
+          "deleted_at"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "filename": {
+            "type": "string"
+          },
+          "storage_path": {
+            "type": "string"
+          },
+          "mime_type": {
+            "type": "string",
+            "nullable": true
+          },
+          "size_bytes": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "folder_id": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "note": {
+            "type": "string",
+            "nullable": true
+          },
+          "is_deleted": {
+            "type": "boolean"
+          },
+          "is_public": {
+            "type": "boolean"
+          },
+          "share_token": {
+            "type": "string",
+            "nullable": true
+          },
+          "share_expires_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "share_download_limit": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "share_download_count": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "is_favourite": {
+            "type": "boolean"
+          },
+          "encrypted_key": {
+            "type": "string",
+            "format": "byte"
+          },
+          "encryption_nonce": {
+            "type": "string",
+            "format": "byte"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "deleted_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          }
+        }
+      },
+      "SharedFile": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/File"
+          },
+          {
+            "type": "object",
+            "required": [
+              "permissions",
+              "shared_by_user_id",
+              "shared_by_user_name"
+            ],
+            "properties": {
+              "permissions": {
+                "$ref": "#/components/schemas/FileSharePermission"
+              },
+              "shared_by_user_id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "shared_by_user_name": {
+                "type": "string",
+                "nullable": true
+              }
+            }
+          }
+        ]
+      },
+      "ShareRecipient": {
+        "type": "object",
+        "required": [
+          "email",
+          "public_key"
+        ],
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email"
+          },
+          "public_key": {
+            "type": "string"
+          }
+        }
+      },
+      "FileShare": {
+        "type": "object",
+        "required": [
+          "id",
+          "email",
+          "display_name",
+          "permission",
+          "created_at"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "email": {
+            "type": "string",
+            "format": "email"
+          },
+          "display_name": {
+            "type": "string",
+            "nullable": true
+          },
+          "permission": {
+            "$ref": "#/components/schemas/FileSharePermission"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "Folder": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "description",
+          "parent_folder_id",
+          "encrypted_key",
+          "is_public",
+          "share_token",
+          "created_at",
+          "updated_at",
+          "is_deleted",
+          "deleted_at",
+          "file_count"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "parent_folder_id": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "encrypted_key": {
+            "type": "string",
+            "format": "byte",
+            "nullable": true
+          },
+          "is_public": {
+            "type": "boolean"
+          },
+          "share_token": {
+            "type": "string",
+            "nullable": true
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "is_deleted": {
+            "type": "boolean"
+          },
+          "deleted_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "file_count": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "StorageQuota": {
+        "type": "object",
+        "required": [
+          "total_bytes",
+          "used_bytes"
+        ],
+        "properties": {
+          "total_bytes": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "used_bytes": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "GroupInvite": {
+        "type": "object",
+        "required": [
+          "id",
+          "email",
+          "role",
+          "createdAt"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "email": {
+            "type": "string",
+            "format": "email"
+          },
+          "role": {
+            "$ref": "#/components/schemas/GroupRole"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "Group": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "defaultRole",
+          "createdAt",
+          "invites"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "defaultRole": {
+            "$ref": "#/components/schemas/GroupRole"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "invites": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GroupInvite"
+            }
+          }
+        }
+      },
+      "GroupShareRecipient": {
+        "type": "object",
+        "required": [
+          "email",
+          "public_key",
+          "role"
+        ],
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email"
+          },
+          "public_key": {
+            "type": "string"
+          },
+          "role": {
+            "$ref": "#/components/schemas/GroupRole"
+          }
+        }
+      },
+      "CalendarEntry": {
+        "type": "object",
+        "required": [
+          "id",
+          "kind",
+          "date",
+          "time",
+          "title",
+          "note",
+          "reminder",
+          "file_id",
+          "created_at",
+          "updated_at"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/CalendarEntryKind"
+          },
+          "date": {
+            "type": "string"
+          },
+          "time": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "note": {
+            "type": "string"
+          },
+          "reminder": {
+            "type": "string"
+          },
+          "file_id": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "CalendarEntryRequest": {
+        "type": "object",
+        "required": [
+          "kind",
+          "date",
+          "time",
+          "title",
+          "note",
+          "reminder",
+          "file_id"
+        ],
+        "properties": {
+          "kind": {
+            "$ref": "#/components/schemas/CalendarEntryKind"
+          },
+          "date": {
+            "type": "string"
+          },
+          "time": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "note": {
+            "type": "string"
+          },
+          "reminder": {
+            "type": "string"
+          },
+          "file_id": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          }
+        }
+      },
+      "RenameFileRequest": {
+        "type": "object",
+        "required": [
+          "filename"
+        ],
+        "properties": {
+          "filename": {
+            "type": "string"
+          }
+        }
+      },
+      "ShareFileRequest": {
+        "type": "object",
+        "required": [
+          "is_public"
+        ],
+        "properties": {
+          "is_public": {
+            "type": "boolean"
+          },
+          "expires_in_seconds": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "download_limit": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          }
+        }
+      },
+      "UpdateFileNoteRequest": {
+        "type": "object",
+        "required": [
+          "note"
+        ],
+        "properties": {
+          "note": {
+            "type": "string"
+          }
+        }
+      },
+      "CreateFileShareRequest": {
+        "type": "object",
+        "required": [
+          "email",
+          "permission",
+          "encrypted_key"
+        ],
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email"
+          },
+          "permission": {
+            "$ref": "#/components/schemas/FileSharePermission"
+          },
+          "encrypted_key": {
+            "type": "string",
+            "format": "byte"
+          }
+        }
+      },
+      "CreateFolderRequest": {
+        "type": "object",
+        "required": [
+          "name",
+          "encrypted_key"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "parent_folder_id": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "encrypted_key": {
+            "type": "string",
+            "format": "byte"
+          }
+        }
+      },
+      "RenameFolderRequest": {
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "ShareFolderRequest": {
+        "type": "object",
+        "required": [
+          "is_public"
+        ],
+        "properties": {
+          "is_public": {
+            "type": "boolean"
+          }
+        }
+      },
+      "GroupRequest": {
+        "type": "object",
+        "required": [
+          "name",
+          "default_role"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "default_role": {
+            "$ref": "#/components/schemas/GroupRole"
+          }
+        }
+      },
+      "GroupInviteRequest": {
+        "type": "object",
+        "required": [
+          "email",
+          "role"
+        ],
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email"
+          },
+          "role": {
+            "$ref": "#/components/schemas/GroupRole"
+          }
+        }
+      },
+      "FileUploadRequest": {
+        "type": "object",
+        "required": [
+          "filename",
+          "encrypted_key",
+          "encryption_nonce",
+          "file"
+        ],
+        "properties": {
+          "filename": {
+            "type": "string"
+          },
+          "mime_type": {
+            "type": "string"
+          },
+          "folder_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "encrypted_key": {
+            "type": "string",
+            "format": "byte"
+          },
+          "encryption_nonce": {
+            "type": "string",
+            "format": "byte"
+          },
+          "file": {
+            "type": "string",
+            "format": "binary"
+          }
+        }
+      },
+      "FileContentUpdateRequest": {
+        "type": "object",
+        "required": [
+          "encrypted_key",
+          "encryption_nonce",
+          "file"
+        ],
+        "properties": {
+          "encrypted_key": {
+            "type": "string",
+            "format": "byte"
+          },
+          "encryption_nonce": {
+            "type": "string",
+            "format": "byte"
+          },
+          "file": {
+            "type": "string",
+            "format": "binary"
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,63 +1,33 @@
 const url = import.meta.env.VITE_API_BASE ?? 'http://localhost:3000/'
 
-import { authenticatedFetch, saveTokens, type TokenPair } from './auth'
+import { authenticatedFetch, saveTokens } from './auth'
 import { apiFetch } from './http'
+import type {
+  CurrentUser as CurrentUserResponse,
+  LoginRequest as LoginPayload,
+  RegisterRequest as RegisterPayload,
+  RegisterResponse,
+  TokenPair as LoginResponse,
+  UserSettings as UserSettingsResponse,
+  UserSettingsRequest as UserSettingsPayload,
+} from './generated'
+import {
+  currentUser,
+  parseApiErrorBody,
+  readJson,
+  registerResponse,
+  tokenPair,
+  userSettings,
+} from './validators'
 
-export interface RegisterPayload {
-  email: string
-  display_name: string
-  password: string
-  public_key: string
-}
-
-export interface LoginPayload {
-  email: string
-  password: string
-}
-
-export interface RegisterResponse {
-  id: string
-}
-
-export type LoginResponse = TokenPair
-
-export interface CurrentUserResponse {
-  id: string
-  email: string
-  display_name: string | null
-  avatar_url: string | null
-  public_key: string | null
-  default_view: string
-  layout_mode: string
-  upload_protection: boolean
-  compact_metadata: boolean
-  device_lock: boolean
-  sync_on_metered: boolean
-  trash_retention_days: number
-}
-
-export type UserSettingsPayload = {
-  display_name: string
-  avatar_url: string
-  default_view: string
-  layout_mode: string
-  upload_protection: boolean
-  compact_metadata: boolean
-  device_lock: boolean
-  sync_on_metered: boolean
-  trash_retention_days: number
-}
-
-export type UserSettingsResponse = {
-  display_name: string | null
-  avatar_url: string | null
-  default_view: string
-  layout_mode: string
-  upload_protection: boolean
-  compact_metadata: boolean
-  device_lock: boolean
-  sync_on_metered: boolean
-  trash_retention_days: number
+export type {
+  CurrentUserResponse,
+  LoginPayload,
+  LoginResponse,
+  RegisterPayload,
+  RegisterResponse,
+  UserSettingsPayload,
+  UserSettingsResponse,
 }
 
 export class ApiRequestError extends Error {
@@ -77,13 +47,8 @@ async function readErrorMessage(res: Response, fallback: string): Promise<string
 
   if (contentType.includes('application/json')) {
     try {
-      const body = (await res.json()) as { message?: unknown; error?: unknown }
-      if (typeof body.message === 'string' && body.message.trim()) {
-        return body.message
-      }
-      if (typeof body.error === 'string' && body.error.trim()) {
-        return body.error
-      }
+      const body: unknown = await res.json()
+      return parseApiErrorBody(body) ?? fallback
     } catch {
       return fallback
     }
@@ -111,7 +76,7 @@ export async function registerUser(
     await throwApiError(res, 'Registration failed')
   }
 
-  return res.json()
+  return readJson(res, registerResponse, 'RegisterResponse')
 }
 
 export async function loginUser(
@@ -128,7 +93,7 @@ export async function loginUser(
     await throwApiError(res, 'Login failed')
   }
 
-  const tokens: LoginResponse = await res.json()
+  const tokens = await readJson(res, tokenPair, 'LoginResponse')
   saveTokens(tokens)
   return tokens
 }
@@ -154,7 +119,7 @@ export async function getCurrentUser(): Promise<CurrentUserResponse> {
     await throwApiError(res, 'Could not load user profile')
   }
 
-  return res.json()
+  return readJson(res, currentUser, 'CurrentUserResponse')
 }
 
 export async function getCurrentUserWithAccessToken(accessToken: string): Promise<CurrentUserResponse> {
@@ -169,7 +134,7 @@ export async function getCurrentUserWithAccessToken(accessToken: string): Promis
     await throwApiError(res, 'Could not load user profile')
   }
 
-  return res.json()
+  return readJson(res, currentUser, 'CurrentUserResponse')
 }
 
 export async function updateUserSettings(payload: UserSettingsPayload): Promise<UserSettingsResponse> {
@@ -183,5 +148,5 @@ export async function updateUserSettings(payload: UserSettingsPayload): Promise<
     await throwApiError(res, 'Could not save settings')
   }
 
-  return res.json()
+  return readJson(res, userSettings, 'UserSettingsResponse')
 }

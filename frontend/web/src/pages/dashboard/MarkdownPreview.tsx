@@ -60,7 +60,7 @@ type MarkdownListItem = {
 function parseListItem(text: string): MarkdownListItem {
     const task = /^\[([ xX])]\s+(.+)$/.exec(text)
     if (!task) return { text, checked: null }
-    return { text: task[2], checked: task[1].toLowerCase() === 'x' }
+    return { text: task[2] ?? '', checked: (task[1] ?? '').toLowerCase() === 'x' }
 }
 
 function splitTableRow(line: string) {
@@ -94,10 +94,11 @@ function getDivBlockAlign(line: string): MarkdownAlign | undefined | null {
     const match = /^\s*<div\b([^>]*)>\s*$/i.exec(line)
     if (!match) return null
 
-    const quoted = /\balign\s*=\s*(['"])(left|center|right)\1/i.exec(match[1])
-    if (quoted) return parseAlign(quoted[2]) ?? undefined
+    const attrs = match[1] ?? ''
+    const quoted = /\balign\s*=\s*(['"])(left|center|right)\1/i.exec(attrs)
+    if (quoted) return parseAlign(quoted[2] ?? null) ?? undefined
 
-    const unquoted = /\balign\s*=\s*(left|center|right)(?=\s|$)/i.exec(match[1])
+    const unquoted = /\balign\s*=\s*(left|center|right)(?=\s|$)/i.exec(attrs)
     return parseAlign(unquoted?.[1] ?? null)
 }
 
@@ -129,6 +130,11 @@ function parseMarkdown(text: string): MarkdownBlock[] {
     let html: string[] | null = null
     let container: { align?: MarkdownAlign; lines: string[] } | null = null
 
+    function pushContainer(current: { align?: MarkdownAlign; lines: string[] }) {
+        const block = { type: 'container' as const, blocks: parseMarkdown(current.lines.join('\n')) }
+        blocks.push(current.align ? { ...block, align: current.align } : block)
+    }
+
     function flushParagraph() {
         if (paragraph.length) {
             blocks.push({ type: 'paragraph', lines: paragraph })
@@ -157,10 +163,10 @@ function parseMarkdown(text: string): MarkdownBlock[] {
     }
 
     for (let i = 0; i < lines.length; i += 1) {
-        const line = lines[i]
+        const line = lines[i] ?? ''
         if (container) {
             if (isDivBlockEnd(line)) {
-                blocks.push({ type: 'container', align: container.align, blocks: parseMarkdown(container.lines.join('\n')) })
+                pushContainer(container)
                 container = null
             } else {
                 container.lines.push(line)
@@ -193,14 +199,14 @@ function parseMarkdown(text: string): MarkdownBlock[] {
             continue
         }
 
-        if (line.includes('|') && i + 1 < lines.length && isTableDivider(lines[i + 1])) {
+        if (line.includes('|') && i + 1 < lines.length && isTableDivider(lines[i + 1] ?? '')) {
             flushFlow()
             const headers = splitTableRow(line)
             const rows: string[][] = []
             i += 2
 
-            while (i < lines.length && lines[i].trim() && lines[i].includes('|')) {
-                rows.push(splitTableRow(lines[i]))
+            while (i < lines.length && (lines[i] ?? '').trim() && (lines[i] ?? '').includes('|')) {
+                rows.push(splitTableRow(lines[i] ?? ''))
                 i += 1
             }
 
@@ -227,14 +233,14 @@ function parseMarkdown(text: string): MarkdownBlock[] {
         const divAlign = getDivBlockAlign(line)
         if (divAlign !== null) {
             flushFlow()
-            container = { align: divAlign, lines: [] }
+            container = divAlign ? { align: divAlign, lines: [] } : { lines: [] }
             continue
         }
 
         const heading = /^(#{1,6})\s+(.+)$/.exec(line)
         if (heading) {
             flushFlow()
-            blocks.push({ type: 'heading', level: heading[1].length, text: heading[2] })
+            blocks.push({ type: 'heading', level: (heading[1] ?? '').length, text: heading[2] ?? '' })
             continue
         }
 
@@ -260,7 +266,7 @@ function parseMarkdown(text: string): MarkdownBlock[] {
         if (quoteLine) {
             flushParagraph()
             flushList()
-            quote.push(quoteLine[1])
+            quote.push(quoteLine[1] ?? '')
             continue
         }
 
@@ -271,7 +277,7 @@ function parseMarkdown(text: string): MarkdownBlock[] {
 
     if (code) blocks.push({ type: 'code', code: code.join('\n') })
     if (html) blocks.push({ type: 'html', html: html.join('\n') })
-    if (container) blocks.push({ type: 'container', align: container.align, blocks: parseMarkdown(container.lines.join('\n')) })
+    if (container) pushContainer(container)
     flushFlow()
     return blocks
 }
@@ -361,17 +367,18 @@ function renderInline(text: string): ReactNode[] {
         } else {
             const image = /^!\[([^\]]*)]\((https?:\/\/[^) ]+)\)$/.exec(token)
             if (image) {
-                nodes.push(<img key={index} src={image[2]} alt={image[1]} loading="lazy" decoding="async" />)
+                nodes.push(<img key={index} src={image[2] ?? ''} alt={image[1] ?? ''} loading="lazy" decoding="async" />)
                 lastIndex = index + token.length
                 continue
             }
 
             const link = /^\[([^\]]+)\]\(([^)]+)\)$/.exec(token)
             if (link) {
-                const isAnchor = link[2].startsWith('#')
+                const href = link[2] ?? ''
+                const isAnchor = href.startsWith('#')
                 nodes.push(
-                    <a key={index} href={link[2]} target={isAnchor ? undefined : '_blank'} rel={isAnchor ? undefined : 'noreferrer'}>
-                        {renderInline(link[1])}
+                    <a key={index} href={href} target={isAnchor ? undefined : '_blank'} rel={isAnchor ? undefined : 'noreferrer'}>
+                        {renderInline(link[1] ?? '')}
                     </a>,
                 )
             } else {

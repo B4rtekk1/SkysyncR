@@ -23,7 +23,7 @@ const FILES: { name: string; size: string }[] = [
 let rowId = 0
 
 function nextRow(): LogRow {
-  const file = FILES[Math.floor(Math.random() * FILES.length)]
+  const file = FILES[Math.floor(Math.random() * FILES.length)] ?? FILES[0]!
   rowId += 1
   return { id: rowId, name: file.name, size: file.size, status: 'queued' }
 }

@@ -42,6 +42,7 @@ function Landing() {
     if (!node) return
     const obs = new IntersectionObserver(
         ([entry]) => {
+          if (!entry) return
           if (entry.isIntersecting) setFeaturesVisible(true)
         },
         { threshold: 0.2 },

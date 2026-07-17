@@ -40,7 +40,7 @@ export type FilePreviewState = {
     url: string | null
     text: string | null
     loading: boolean
-    startEditing?: boolean
+    startEditing?: boolean | undefined
 }
 export type GroupInviteRole = 'viewer' | 'editor' | 'admin'
 
@@ -66,5 +66,4 @@ export type NavIndicator = {
     height: number
     visible: boolean
 }
-
 

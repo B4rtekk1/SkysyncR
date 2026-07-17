@@ -21,14 +21,14 @@ function initGf() {
         if (value & 0x100) value ^= 0x11d
     }
     for (let i = 255; i < 512; i += 1) {
-        EXP[i] = EXP[i - 255]
+        EXP[i] = EXP[i - 255] ?? 0
     }
     gfReady = true
 }
 
 function gfMul(a: number, b: number) {
     if (a === 0 || b === 0) return 0
-    return EXP[LOG[a] + LOG[b]]
+    return EXP[(LOG[a] ?? 0) + (LOG[b] ?? 0)] ?? 0
 }
 
 function reedSolomonGenerator(degree: number) {
@@ -38,8 +38,8 @@ function reedSolomonGenerator(degree: number) {
     for (let i = 0; i < degree; i += 1) {
         const next = new Array(poly.length + 1).fill(0)
         for (let j = 0; j < poly.length; j += 1) {
-            next[j] ^= gfMul(poly[j], EXP[i])
-            next[j + 1] ^= poly[j]
+            next[j] ^= gfMul(poly[j] ?? 0, EXP[i] ?? 0)
+            next[j + 1] ^= poly[j] ?? 0
         }
         poly = next
     }
@@ -55,7 +55,7 @@ function reedSolomonRemainder(data: number[]) {
         const factor = byte ^ result.shift()!
         result.push(0)
         for (let i = 0; i < EC_CODEWORDS; i += 1) {
-            result[i] ^= gfMul(generator[i], factor)
+            result[i] = (result[i] ?? 0) ^ gfMul(generator[i] ?? 0, factor)
         }
     }
 
@@ -99,7 +99,10 @@ function createMatrix(): Matrix {
 }
 
 function setModule(matrix: Matrix, x: number, y: number, dark: boolean) {
-    if (x >= 0 && y >= 0 && x < SIZE && y < SIZE) matrix[y][x] = dark
+    if (x >= 0 && y >= 0 && x < SIZE && y < SIZE) {
+        const row = matrix[y]
+        if (row) row[x] = dark
+    }
 }
 
 function drawFinder(matrix: Matrix, x: number, y: number) {
@@ -172,9 +175,10 @@ function drawData(matrix: Matrix, codewords: number[]) {
             const y = upward ? SIZE - 1 - vertical : vertical
             for (let offset = 0; offset < 2; offset += 1) {
                 const x = right - offset
-                if (matrix[y][x] !== null) continue
+                const row = matrix[y]
+                if (!row || row[x] !== null) continue
 
-                matrix[y][x] = Boolean(bits[bitIndex] ?? 0) !== mask(x, y)
+                row[x] = Boolean(bits[bitIndex] ?? 0) !== mask(x, y)
                 bitIndex += 1
             }
         }
@@ -231,8 +235,10 @@ function drawFormat(matrix: Matrix) {
 
     for (let i = 0; i < 15; i += 1) {
         const dark = Boolean((bits >>> i) & 1)
-        setModule(matrix, first[i][0], first[i][1], dark)
-        setModule(matrix, second[i][0], second[i][1], dark)
+        const firstPoint = first[i]
+        const secondPoint = second[i]
+        if (firstPoint) setModule(matrix, firstPoint[0] ?? 0, firstPoint[1] ?? 0, dark)
+        if (secondPoint) setModule(matrix, secondPoint[0] ?? 0, secondPoint[1] ?? 0, dark)
     }
 }
 

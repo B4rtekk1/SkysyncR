@@ -1,33 +1,27 @@
 import { authenticatedFetch } from './auth'
 import type { Group, GroupInvite, GroupInviteRole } from '../pages/dashboard/types'
+import type {
+    Group as ApiGroup,
+    GroupInvite as ApiGroupInvite,
+    GroupShareRecipient,
+} from './generated'
+import {
+    group,
+    groupInvite,
+    groups,
+    groupShareRecipients,
+    parseApiErrorBody,
+    readJson,
+} from './validators'
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? 'http://localhost:3000/'
 
-type ApiGroupInvite = {
-    id: string
-    email: string
-    role: GroupInviteRole
-    createdAt: string
-}
-
-type ApiGroup = {
-    id: string
-    name: string
-    defaultRole: GroupInviteRole
-    createdAt: string
-    invites: ApiGroupInvite[]
-}
-
-export type GroupShareRecipient = {
-    email: string
-    public_key: string
-    role: GroupInviteRole
-}
+export type { GroupShareRecipient }
 
 async function parseErrorMessage(response: Response): Promise<string> {
     try {
-        const data = await response.json()
-        return data.message || 'An error occurred'
+        const data: unknown = await response.json()
+        return parseApiErrorBody(data) ?? 'An error occurred'
     } catch {
         return 'An error occurred'
     }
@@ -37,7 +31,7 @@ function toGroupInvite(invite: ApiGroupInvite): GroupInvite {
     return {
         id: invite.id,
         email: invite.email,
-        role: invite.role,
+        role: invite.role as GroupInviteRole,
         createdAt: invite.createdAt,
     }
 }
@@ -46,7 +40,7 @@ function toGroup(group: ApiGroup): Group {
     return {
         id: group.id,
         name: group.name,
-        defaultRole: group.defaultRole,
+        defaultRole: group.defaultRole as GroupInviteRole,
         createdAt: group.createdAt,
         invites: group.invites.map(toGroupInvite),
     }
@@ -57,8 +51,8 @@ export async function listGroups(): Promise<Group[]> {
         method: 'GET',
     })
     if (!res.ok) throw new Error(await parseErrorMessage(res))
-    const groups = (await res.json()) as ApiGroup[]
-    return groups.map(toGroup)
+    const apiGroups = await readJson(res, groups, 'Group[]')
+    return apiGroups.map(toGroup)
 }
 
 export async function createGroup(name: string, defaultRole: GroupInviteRole): Promise<Group> {
@@ -70,7 +64,7 @@ export async function createGroup(name: string, defaultRole: GroupInviteRole): P
         body: JSON.stringify({ name, default_role: defaultRole }),
     })
     if (!res.ok) throw new Error(await parseErrorMessage(res))
-    return toGroup((await res.json()) as ApiGroup)
+    return toGroup(await readJson(res, group, 'Group'))
 }
 
 export async function updateGroup(
@@ -86,7 +80,7 @@ export async function updateGroup(
         body: JSON.stringify({ name, default_role: defaultRole }),
     })
     if (!res.ok) throw new Error(await parseErrorMessage(res))
-    return toGroup((await res.json()) as ApiGroup)
+    return toGroup(await readJson(res, group, 'Group'))
 }
 
 export async function deleteGroup(groupId: string): Promise<void> {
@@ -109,7 +103,7 @@ export async function createGroupInvite(
         body: JSON.stringify({ email, role }),
     })
     if (!res.ok) throw new Error(await parseErrorMessage(res))
-    return toGroupInvite((await res.json()) as ApiGroupInvite)
+    return toGroupInvite(await readJson(res, groupInvite, 'GroupInvite'))
 }
 
 export async function deleteGroupInvite(groupId: string, inviteId: string): Promise<void> {
@@ -124,5 +118,5 @@ export async function listGroupShareRecipients(groupId: string): Promise<GroupSh
         method: 'GET',
     })
     if (!res.ok) throw new Error(await parseErrorMessage(res))
-    return res.json()
+    return readJson(res, groupShareRecipients, 'GroupShareRecipient[]')
 }

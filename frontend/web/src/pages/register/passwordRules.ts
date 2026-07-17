@@ -11,7 +11,7 @@ const COMMON_PASSWORDS = new Set([
 ])
 
 export function suggestNameFromEmail(email: string): string {
-  const local = email.includes('@') ? email.split('@')[0] : email
+  const local = email.includes('@') ? (email.split('@')[0] ?? '') : email
   return local
       .replace(/[._-]/g, ' ')
       .replace(/\b\w/g, (c) => c.toUpperCase())

@@ -17,7 +17,6 @@ export function formatDateTime(iso: string | null) {
 
 export function formatPermission(item: Item) {
     if (isShared(item)) {
-        if (item.permissions === 'owner') return 'Owner'
         return item.permissions === 'write' ? 'Can edit' : 'Can view'
     }
     return item.is_public ? 'Public link' : 'Private'

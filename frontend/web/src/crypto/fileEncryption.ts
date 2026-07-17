@@ -182,7 +182,7 @@ export function isChunkedFileNonce(nonceBase64: string): boolean {
     }
 }
 
-export function streamToBlob(stream: ReadableStream<Uint8Array>, mimeType: string | null): Promise<Blob> {
+export async function streamToBlob(stream: ReadableStream<Uint8Array>, mimeType: string | null): Promise<Blob> {
     return new Response(stream).blob().then((blob) => blob.slice(0, blob.size, mimeType || 'application/octet-stream'))
 }
 

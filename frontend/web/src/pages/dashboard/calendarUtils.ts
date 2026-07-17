@@ -74,7 +74,7 @@ export function formatTime(value: string) {
 
 export function parseDateKey(value: string) {
     const [year, month, day] = value.split('-').map(Number)
-    return new Date(year, month - 1, day)
+    return new Date(year ?? 1970, (month ?? 1) - 1, day ?? 1)
 }
 
 export function loadCalendarEntries(): CalendarEntry[] {

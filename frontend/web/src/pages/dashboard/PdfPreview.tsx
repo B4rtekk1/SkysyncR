@@ -153,6 +153,7 @@ export function PdfPreview({ item, url }: { item: Item; url: string }) {
         if (!shell) return
 
         const resizeObserver = new ResizeObserver(([entry]) => {
+            if (!entry) return
             setAvailableWidth(entry.contentRect.width)
         })
         resizeObserver.observe(shell)
@@ -387,7 +388,8 @@ export function PdfPreview({ item, url }: { item: Item; url: string }) {
         if (!searchResults.length) return
         const index = (nextIndex + searchResults.length) % searchResults.length
         setActiveSearchResult(index)
-        goToPage(searchResults[index].pageNumber)
+        const result = searchResults[index]
+        if (result) goToPage(result.pageNumber)
     }
 
     return (

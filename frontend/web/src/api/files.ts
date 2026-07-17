@@ -1,78 +1,47 @@
 import { authenticatedFetch, getValidAccessToken } from './auth'
 import { apiFetch } from './http'
+import type {
+    File as ApiFile,
+    FileShare as FileSharePerson,
+    FileSharePermission,
+    Folder as ApiFolder,
+    ShareRecipient as FileShareRecipient,
+    SharedFile,
+    StorageQuota,
+} from './generated'
+import {
+    file,
+    fileShare,
+    fileShares,
+    files,
+    folder,
+    folders,
+    parseApiErrorBody,
+    readJson,
+    shareRecipient,
+    sharedFiles,
+    storageQuota,
+} from './validators'
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? 'http://localhost:3000/'
 
 async function parseErrorMessage(response: Response): Promise<string> {
     try {
-        const data = await response.json();
-        return data.message || 'An error occurred';
+        const data: unknown = await response.json();
+        return parseApiErrorBody(data) ?? 'An error occurred';
     } catch {
         return 'An error occurred';
     }
 }
 
-export interface ApiFile {
-    id: string
-    filename: string
-    storage_path: string
-    mime_type: string | null
-    size_bytes: number
-    folder_id: string | null
-    note?: string | null
-    is_deleted: boolean
-    is_public: boolean
-    share_token: string | null
-    share_expires_at: string | null
-    share_download_limit: number | null
-    share_download_count: number
-    is_favourite: boolean
-    encrypted_key: string
-    encryption_nonce: string
-    created_at: string
-    updated_at: string
-    deleted_at: string | null
-}
-
-export interface SharedFile extends ApiFile {
-    permissions: FileSharePermission | 'owner';
-    shared_by_user_id: string;
-    shared_by_user_name?: string;
-}
-
-export type FileSharePermission = 'read' | 'download' | 'write'
-
-export interface FileSharePerson {
-    id: string
-    email: string
-    display_name: string | null
-    permission: FileSharePermission
-    created_at: string
-}
-
-export interface FileShareRecipient {
-    email: string
-    public_key: string
-}
-
-export interface ApiFolder {
-    id: string
-    name: string
-    description: string | null
-    parent_folder_id: string | null
-    encrypted_key: string | null
-    is_public: boolean
-    share_token: string | null
-    created_at: string
-    updated_at: string
-    is_deleted: boolean
-    deleted_at: string | null
-    file_count: number
-}
-
-export interface StorageQuota {
-    total_bytes: number
-    used_bytes: number
+export type {
+    ApiFile,
+    ApiFolder,
+    FileSharePermission,
+    FileSharePerson,
+    FileShareRecipient,
+    SharedFile,
+    StorageQuota,
 }
 
 export async function listFiles(folderId?: string): Promise<ApiFile[]> {
@@ -89,7 +58,7 @@ export async function listFiles(folderId?: string): Promise<ApiFile[]> {
         throw new Error(message);
     }
 
-    return res.json();
+    return readJson(res, files, 'File[]');
 }
 
 export async function listTrash(): Promise<ApiFile[]> {
@@ -100,7 +69,7 @@ export async function listTrash(): Promise<ApiFile[]> {
         const message = await parseErrorMessage(res);
         throw new Error(message);
     }
-    return res.json();
+    return readJson(res, files, 'File[]');
 }
 
 export async function listSharedFilesWithMe(): Promise<SharedFile[]> {
@@ -111,7 +80,7 @@ export async function listSharedFilesWithMe(): Promise<SharedFile[]> {
         const message = await parseErrorMessage(res);
         throw new Error(message);
     }
-    return res.json();
+    return readJson(res, sharedFiles, 'SharedFile[]');
 }
 
 export async function getFileShareRecipient(fileId: string, email: string): Promise<FileShareRecipient> {
@@ -120,13 +89,13 @@ export async function getFileShareRecipient(fileId: string, email: string): Prom
         { method: 'GET' },
     )
     if (!res.ok) throw new Error(await parseErrorMessage(res))
-    return res.json()
+    return readJson(res, shareRecipient, 'ShareRecipient')
 }
 
 export async function listFileShares(fileId: string): Promise<FileSharePerson[]> {
     const res = await authenticatedFetch(`${API_BASE}files/${fileId}/shares`, { method: 'GET' })
     if (!res.ok) throw new Error(await parseErrorMessage(res))
-    return res.json()
+    return readJson(res, fileShares, 'FileShare[]')
 }
 
 export async function createFileShare(params: {
@@ -147,7 +116,7 @@ export async function createFileShare(params: {
         }),
     })
     if (!res.ok) throw new Error(await parseErrorMessage(res))
-    return res.json()
+    return readJson(res, fileShare, 'FileShare')
 }
 
 export async function deleteFileShare(fileId: string, shareId: string): Promise<void> {
@@ -171,7 +140,7 @@ export async function listFolders(parentFolderId?: string): Promise<ApiFolder[]>
         throw new Error(message);
     }
 
-    return res.json();
+    return readJson(res, folders, 'Folder[]');
 }
 
 export async function createFolder(params: {
@@ -198,7 +167,7 @@ export async function createFolder(params: {
         throw new Error(message);
     }
 
-    return res.json();
+    return readJson(res, folder, 'Folder');
 }
 
 export async function getStorageQuota(): Promise<StorageQuota> {
@@ -214,7 +183,7 @@ export async function getStorageQuota(): Promise<StorageQuota> {
         throw new Error(message);
     }
 
-    return res.json();
+    return readJson(res, storageQuota, 'StorageQuota');
 }
 
 export async function uploadFile(params: {
@@ -234,7 +203,7 @@ export async function uploadFile(params: {
         streamPart('file', params.encryptedFile, 'encrypted.bin', 'application/octet-stream'),
     ])
     if (!res.ok) throw new Error(await parseErrorMessage(res))
-    return res.json()
+    return readJson(res, file, 'File')
 }
 
 export async function softDeleteFile(id: string): Promise<void> {
@@ -267,7 +236,7 @@ export async function renameFile(id: string, filename: string): Promise<ApiFile>
         body: JSON.stringify({ filename }),
     })
     if (!res.ok) throw new Error(await parseErrorMessage(res))
-    return res.json()
+    return readJson(res, file, 'File')
 }
 
 export async function renameFolder(id: string, name: string, description?: string | null): Promise<ApiFolder> {
@@ -279,7 +248,7 @@ export async function renameFolder(id: string, name: string, description?: strin
         body: JSON.stringify({ name, description: description ?? null }),
     })
     if (!res.ok) throw new Error(await parseErrorMessage(res))
-    return res.json()
+    return readJson(res, folder, 'Folder')
 }
 
 export async function updateFileContent(params: {
@@ -295,7 +264,7 @@ export async function updateFileContent(params: {
         streamPart('file', params.encryptedFile, params.originalFilename, 'application/octet-stream'),
     ], 'PUT')
     if (!res.ok) throw new Error(await parseErrorMessage(res))
-    return res.json()
+    return readJson(res, file, 'File')
 }
 
 export async function shareFile(
@@ -316,7 +285,7 @@ export async function shareFile(
         }),
     })
     if (!res.ok) throw new Error(await parseErrorMessage(res))
-    return res.json()
+    return readJson(res, file, 'File')
 }
 
 export async function setFileFavourite(id: string, isFavourite: boolean): Promise<void> {
@@ -335,7 +304,7 @@ export async function shareFolder(id: string, isPublic: boolean): Promise<ApiFol
         body: JSON.stringify({ is_public: isPublic }),
     })
     if (!res.ok) throw new Error(await parseErrorMessage(res))
-    return res.json()
+    return readJson(res, folder, 'Folder')
 }
 
 export async function updateFileNote(id: string, note: string): Promise<ApiFile> {
@@ -347,7 +316,7 @@ export async function updateFileNote(id: string, note: string): Promise<ApiFile>
         body: JSON.stringify({ note }),
     })
     if (!res.ok) throw new Error(await parseErrorMessage(res))
-    return res.json()
+    return readJson(res, file, 'File')
 }
 
 export async function downloadFile(id: string): Promise<Blob> {

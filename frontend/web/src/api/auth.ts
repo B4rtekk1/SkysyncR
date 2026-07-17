@@ -2,6 +2,8 @@ const API_BASE = import.meta.env.VITE_API_BASE ?? 'http://localhost:3000/'
 
 import { apiFetch } from './http'
 import { clearActivePrivateKeys } from '../crypto/storage'
+import type { TokenPair } from './generated'
+import { readJson, tokenPair } from './validators'
 
 const ACCESS_TOKEN_KEY = 'access_token'
 const REFRESH_TOKEN_KEY = 'refresh_token'
@@ -10,10 +12,7 @@ const REFRESH_LOCK_KEY = 'refresh_token_lock'
 const REFRESH_LOCK_TTL_MS = 10_000
 const REFRESH_WAIT_TIMEOUT_MS = 12_000
 
-export interface TokenPair {
-  access_token: string
-  expires_in: number
-}
+export type { TokenPair }
 
 type RefreshLock = {
   owner: string
@@ -78,7 +77,7 @@ async function requestTokenRefresh(): Promise<string | null> {
     return null
   }
 
-  const tokens: TokenPair = await res.json()
+  const tokens = await readJson(res, tokenPair, 'TokenPair')
   persistTokens(tokens)
   return tokens.access_token
 }

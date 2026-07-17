@@ -33,7 +33,7 @@ export function PermissionDropdown({
     const [open, setOpen] = useState(false)
     const placement = 'up'
     const rootRef = useRef<HTMLDivElement>(null)
-    const selected = PERMISSION_OPTIONS.find((option) => option.value === value) ?? PERMISSION_OPTIONS[0]
+    const selected = PERMISSION_OPTIONS.find((option) => option.value === value) ?? PERMISSION_OPTIONS[0]!
 
     function handleBlur(e: FocusEvent<HTMLDivElement>) {
         const nextTarget = e.relatedTarget
@@ -101,7 +101,7 @@ export function ShareDurationDropdown({
 }) {
     const [open, setOpen] = useState(false)
     const rootRef = useRef<HTMLDivElement>(null)
-    const selected = SHARE_DURATION_OPTIONS.find((option) => option.value === value) ?? SHARE_DURATION_OPTIONS[2]
+    const selected = SHARE_DURATION_OPTIONS.find((option) => option.value === value) ?? SHARE_DURATION_OPTIONS[2]!
 
     function handleBlur(e: FocusEvent<HTMLDivElement>) {
         const nextTarget = e.relatedTarget

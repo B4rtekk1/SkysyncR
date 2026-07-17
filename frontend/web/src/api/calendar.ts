@@ -1,36 +1,24 @@
 import { authenticatedFetch } from './auth'
+import type {
+    CalendarEntry as CalendarEntryRecord,
+    CalendarEntryKind,
+    CalendarEntryRequest as CalendarEntryPayload,
+} from './generated'
+import {
+    calendarEntries,
+    calendarEntry,
+    parseApiErrorBody,
+    readJson,
+} from './validators'
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? 'http://localhost:3000/'
 
-export type CalendarEntryKind = 'event' | 'deadline'
-
-export type CalendarEntryRecord = {
-    id: string
-    kind: CalendarEntryKind
-    date: string
-    time: string
-    title: string
-    note: string
-    reminder: string
-    file_id: string | null
-    created_at: string
-    updated_at: string
-}
-
-export type CalendarEntryPayload = {
-    kind: CalendarEntryKind
-    date: string
-    time: string
-    title: string
-    note: string
-    reminder: string
-    file_id: string | null
-}
+export type { CalendarEntryKind, CalendarEntryPayload, CalendarEntryRecord }
 
 async function parseErrorMessage(response: Response): Promise<string> {
     try {
-        const data = await response.json()
-        return data.message || 'An error occurred'
+        const data: unknown = await response.json()
+        return parseApiErrorBody(data) ?? 'An error occurred'
     } catch {
         return 'An error occurred'
     }
@@ -41,7 +29,7 @@ export async function listCalendarEntries(): Promise<CalendarEntryRecord[]> {
         method: 'GET',
     })
     if (!res.ok) throw new Error(await parseErrorMessage(res))
-    return res.json()
+    return readJson(res, calendarEntries, 'CalendarEntry[]')
 }
 
 export async function createCalendarEntry(payload: CalendarEntryPayload): Promise<CalendarEntryRecord> {
@@ -53,7 +41,7 @@ export async function createCalendarEntry(payload: CalendarEntryPayload): Promis
         body: JSON.stringify(payload),
     })
     if (!res.ok) throw new Error(await parseErrorMessage(res))
-    return res.json()
+    return readJson(res, calendarEntry, 'CalendarEntry')
 }
 
 export async function deleteCalendarEntry(id: string): Promise<void> {

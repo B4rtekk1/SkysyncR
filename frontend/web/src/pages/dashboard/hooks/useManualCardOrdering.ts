@@ -39,6 +39,7 @@ export function useManualCardOrdering({ sortKey, view, setItems }: UseManualCard
             const toIdx = arr.findIndex((item) => item.id === targetId)
             if (fromIdx === -1 || toIdx === -1) return prev
             const [moved] = arr.splice(fromIdx, 1)
+            if (!moved) return prev
             arr.splice(toIdx, 0, moved)
             saveOrderIds(view, arr.map((item) => item.id))
             return arr

@@ -26,12 +26,12 @@ type FileCardActionsProps = {
     onCancelRename: () => void
     onStartRename: () => void
     onToggleInfo: () => void
-    onDownload?: (item: Item) => void
-    onShare?: (item: Item) => void | Promise<void>
-    onNote?: (item: Item) => void
-    onDelete?: (id: string) => void
-    onRestore?: (id: string) => void
-    onPermanentDelete?: (id: string) => void
+    onDownload?: ((item: Item) => void) | undefined
+    onShare?: ((item: Item) => void | Promise<void>) | undefined
+    onNote?: ((item: Item) => void) | undefined
+    onDelete?: ((id: string) => void) | undefined
+    onRestore?: ((id: string) => void) | undefined
+    onPermanentDelete?: ((id: string) => void) | undefined
 }
 
 export function FileCardActions({

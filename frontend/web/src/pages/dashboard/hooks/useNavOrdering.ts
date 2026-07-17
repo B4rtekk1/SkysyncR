@@ -33,6 +33,7 @@ export function useNavOrdering() {
             const toIdx = arr.indexOf(targetKey)
             if (fromIdx === -1 || toIdx === -1) return prev
             const [moved] = arr.splice(fromIdx, 1)
+            if (!moved) return prev
             arr.splice(toIdx, 0, moved)
             saveNavOrder(arr)
             return arr

@@ -78,14 +78,16 @@ export function useFileUpload({
                         ? await encryptTextEnvelope(originalMimeType, key)
                         : null
 
-                    const saved = await uploadFile({
+                    const uploadParams = {
                         encryptedFile: encryptFileStream(file, key),
                         storedFilename: encryptedFilename,
                         storedMimeType: encryptedMimeType,
-                        folderId: folderId ?? undefined,
                         wrappedKey,
                         encryptionNonce: encryptedFileFormatNonce(),
-                    })
+                    }
+                    const saved = await uploadFile(
+                        folderId ? { ...uploadParams, folderId } : uploadParams,
+                    )
 
                     const visibleSaved = {
                         ...saved,

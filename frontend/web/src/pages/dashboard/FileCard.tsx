@@ -45,27 +45,27 @@ export function FileCard({
     item: Item
     index: number
     pending: boolean
-    onDelete?: (id: string) => void
-    onRestore?: (id: string) => void
-    onPermanentDelete?: (id: string) => void
-    onDownload?: (item: Item) => void
-    onPreview?: (item: Item) => void
-    onRename?: (item: Item, filename: string) => Promise<void>
-    onShare?: (item: Item) => void | Promise<void>
-    onNote?: (item: Item) => void
+    onDelete?: ((id: string) => void) | undefined
+    onRestore?: ((id: string) => void) | undefined
+    onPermanentDelete?: ((id: string) => void) | undefined
+    onDownload?: ((item: Item) => void) | undefined
+    onPreview?: ((item: Item) => void) | undefined
+    onRename?: ((item: Item, filename: string) => Promise<void>) | undefined
+    onShare?: ((item: Item) => void | Promise<void>) | undefined
+    onNote?: ((item: Item) => void) | undefined
     view: ViewKey
     isFavourite?: boolean
-    onToggleFavourite?: (id: string) => void | Promise<void>
+    onToggleFavourite?: ((id: string) => void | Promise<void>) | undefined
     draggable?: boolean
     isDragging?: boolean
     isDropTarget?: boolean
     isSearchExiting?: boolean
     style?: CSSProperties
-    onDragStartCard?: (id: string, e: DragEvent<HTMLElement>) => void
-    onDragEnterCard?: (id: string) => void
-    onDragLeaveCard?: (id: string) => void
-    onDropCard?: (id: string, e: DragEvent<HTMLElement>) => void
-    onDragEndCard?: () => void
+    onDragStartCard?: ((id: string, e: DragEvent<HTMLElement>) => void) | undefined
+    onDragEnterCard?: ((id: string) => void) | undefined
+    onDragLeaveCard?: ((id: string) => void) | undefined
+    onDropCard?: ((id: string, e: DragEvent<HTMLElement>) => void) | undefined
+    onDragEndCard?: (() => void) | undefined
 }) {
     const display = useDecryptReveal(item.filename, index * 60)
     const kind = kindFromFile(item.filename, item.mime_type)
@@ -299,5 +299,4 @@ export function FileCard({
         </article>
     )
 }
-
 
