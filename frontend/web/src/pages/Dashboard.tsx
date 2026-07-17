@@ -38,23 +38,18 @@ import {
 } from '../crypto/fileEncryption'
 import { CreateFileModal } from './dashboard/CreateFileModal'
 import { CreateFolderModal } from './dashboard/CreateFolderModal'
+import { DashboardFileGrid } from './dashboard/DashboardFileGrid'
 import { DashboardSidebar } from './dashboard/DashboardSidebar'
+import { DashboardToolbar } from './dashboard/DashboardToolbar'
 import { DashboardTopbar } from './dashboard/DashboardTopbar'
 import { EmptyPane } from './dashboard/EmptyPane'
-import { FileCard } from './dashboard/FileCard'
-import { FileFilterModal } from './dashboard/FileFilterModal'
-import { FolderCard } from './dashboard/FolderCard'
+import { FolderBreadcrumbs } from './dashboard/FolderBreadcrumbs'
 import { FileNoteModal } from './dashboard/FileNoteModal'
 import { CalendarPanel } from './dashboard/CalendarPanel'
 import { GroupsPanel } from './dashboard/GroupsPanel'
 import { ImagePreviewModal } from './dashboard/ImagePreviewModal'
 import { ShareFileModal } from './dashboard/ShareFileModal'
 import {
-    GRID_VIEW_ICON,
-    LIST_VIEW_ICON,
-} from './dashboard/icons'
-import {
-    FILE_SORT_LABELS,
     formatSizeValue,
     getFilterSummary,
     hasActiveFileFilters,
@@ -962,235 +957,59 @@ function Dashboard() {
                             </h1>
                         </div>
 
-                        <div className="shell__content-actions">
-                            {view !== 'groups' && view !== 'calendar' && (
-                                <div className="sort-dropdown" ref={sortMenuRef}>
-                                    <button
-                                        className={`sort-dropdown__trigger ${sortMenuOpen ? 'is-open' : ''}`}
-                                        type="button"
-                                        onClick={toggleSortMenu}
-                                        aria-haspopup="listbox"
-                                        aria-expanded={sortMenuOpen}
-                                        aria-label="Sort files"
-                                        title="Sort files"
-                                    >
-                                        <span className="sort-dropdown__icon" aria-hidden="true">
-                                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none">
-                                                <path
-                                                    d="M4 7h10M4 12h7M4 17h4M18 6v12m0 0 3-3m-3 3-3-3"
-                                                    stroke="currentColor"
-                                                    strokeWidth="1.8"
-                                                    strokeLinecap="round"
-                                                    strokeLinejoin="round"
-                                                />
-                                            </svg>
-                                        </span>
-                                        <span className="sort-dropdown__text">
-                                            <span className="sort-dropdown__label">Sort by</span>
-                                            <span className="sort-dropdown__value">{FILE_SORT_LABELS[sortKey]}</span>
-                                        </span>
-                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                                            <path
-                                                d="m7 10 5 5 5-5"
-                                                stroke="currentColor"
-                                                strokeWidth="1.8"
-                                                strokeLinecap="round"
-                                                strokeLinejoin="round"
-                                            />
-                                        </svg>
-                                    </button>
-
-                                    {sortMenuOpen && (
-                                        <div
-                                            className={`sort-dropdown__menu sort-dropdown__menu--animated ${
-                                                sortMenuClosing ? 'is-closing' : 'is-opening'
-                                            }`}
-                                            role="listbox"
-                                            aria-label="Sort files"
-                                        >
-                                            {Object.entries(FILE_SORT_LABELS).map(([value, label]) => (
-                                                <button
-                                                    key={value}
-                                                    className={`sort-dropdown__option ${
-                                                        sortKey === value ? 'is-selected' : ''
-                                                    }`}
-                                                    type="button"
-                                                    role="option"
-                                                    aria-selected={sortKey === value}
-                                                    onClick={() => {
-                                                        setSortKey(value as FileSortKey)
-                                                        closeSortMenu()
-                                                    }}
-                                                >
-                                                    <span>{label}</span>
-                                                    {sortKey === value && (
-                                                        <svg
-                                                            width="15"
-                                                            height="15"
-                                                            viewBox="0 0 24 24"
-                                                            fill="none"
-                                                            aria-hidden="true"
-                                                        >
-                                                            <path
-                                                                d="M5 12.5 9.3 17 19 7"
-                                                                stroke="currentColor"
-                                                                strokeWidth="1.9"
-                                                                strokeLinecap="round"
-                                                                strokeLinejoin="round"
-                                                            />
-                                                        </svg>
-                                                    )}
-                                                </button>
-                                            ))}
-                                        </div>
-                                    )}
-                                </div>
-                            )}
-
-                            {view !== 'groups' && view !== 'calendar' && (
-                                <div className="sort-dropdown file-filter" ref={filterMenuRef}>
-                                    <button
-                                        className={`sort-dropdown__trigger file-filter__trigger ${
-                                            filterMenuOpen ? 'is-open' : ''
-                                        } ${hasActiveFilter ? 'has-filter' : ''}`}
-                                        type="button"
-                                        onClick={toggleFilterMenu}
-                                        aria-haspopup="dialog"
-                                        aria-expanded={filterMenuOpen}
-                                        aria-label="Filter files"
-                                        title="Filter files"
-                                    >
-                                        <span className="sort-dropdown__icon" aria-hidden="true">
-                                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none">
-                                                <path
-                                                    d="M4 6h16l-6.2 7.1V18l-3.6 1.8v-6.7L4 6Z"
-                                                    stroke="currentColor"
-                                                    strokeWidth="1.8"
-                                                    strokeLinecap="round"
-                                                    strokeLinejoin="round"
-                                                />
-                                            </svg>
-                                        </span>
-                                        <span className="sort-dropdown__text">
-                                            <span className="sort-dropdown__label">Filter</span>
-                                            <span className="sort-dropdown__value">{filterSummary}</span>
-                                        </span>
-                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                                            <path
-                                                d="m7 10 5 5 5-5"
-                                                stroke="currentColor"
-                                                strokeWidth="1.8"
-                                                strokeLinecap="round"
-                                                strokeLinejoin="round"
-                                            />
-                                        </svg>
-                                    </button>
-
-                                    <FileFilterModal
-                                        isOpen={filterMenuOpen}
-                                        isClosing={filterMenuClosing}
-                                        filterSummary={filterSummary}
-                                        query={query}
-                                        fileFilters={fileFilters}
-                                        hasActiveFilter={hasActiveFilter}
-                                        sizeSliderMax={sizeSliderMax}
-                                        sizeSliderMinValue={sizeSliderMinValue}
-                                        sizeSliderMaxValue={sizeSliderMaxValue}
-                                        sizeSliderMinPct={sizeSliderMinPct}
-                                        sizeSliderMaxPct={sizeSliderMaxPct}
-                                        onClose={closeFilterMenu}
-                                        onQueryChange={setQuery}
-                                        onClearFileTypes={() => setFileFilters((current) => ({ ...current, types: [] }))}
-                                        onToggleFileType={toggleFileTypeFilter}
-                                        onVisibilityChange={updateVisibilityFilter}
-                                        onSizeInputChange={updateSizeFilter}
-                                        onSizeSliderChange={updateSizeSlider}
-                                        onExcludedExtensionsChange={updateExcludedExtensions}
-                                        onModifiedDateChange={updateModifiedDateFilter}
-                                        onClearFilters={clearFileFilters}
-                                    />
-                                </div>
-                            )}
-
-                            {view !== 'calendar' && (
-                                <div
-                                    className={`view-toggle view-toggle--${layoutMode} ${
-                                        layoutSwitchTarget ? 'is-switching' : ''
-                                    }`}
-                                    role="group"
-                                    aria-label="File layout"
-                                >
-                                    <button
-                                        className={`view-toggle__button ${layoutMode === 'grid' ? 'is-active' : ''}`}
-                                        type="button"
-                                        onClick={() => changeLayoutMode('grid')}
-                                        aria-label="Grid view"
-                                        aria-pressed={layoutMode === 'grid'}
-                                        title="Grid view"
-                                    >
-                                        {GRID_VIEW_ICON}
-                                    </button>
-                                    <button
-                                        className={`view-toggle__button ${layoutMode === 'list' ? 'is-active' : ''}`}
-                                        type="button"
-                                        onClick={() => changeLayoutMode('list')}
-                                        aria-label="List view"
-                                        aria-pressed={layoutMode === 'list'}
-                                        title="List view"
-                                    >
-                                        {LIST_VIEW_ICON}
-                                    </button>
-                                </div>
-                            )}
-
-                            {view === 'all' && (
-                                <>
-                                    <button
-                                        className="btn btn--ghost"
-                                        type="button"
-                                        onClick={() => setFileCreateOpen(true)}
-                                    >
-                                        New file
-                                    </button>
-                                    <button
-                                        className="btn btn--ghost"
-                                        type="button"
-                                        onClick={() => setFolderCreateOpen(true)}
-                                    >
-                                        New folder
-                                    </button>
-                                    <label className="btn btn--solid">
-                                        Upload
-                                        <input type="file" multiple onChange={onUploadChange} style={{ display: 'none' }} />
-                                    </label>
-                                </>
-                            )}
-                        </div>
+                        <DashboardToolbar
+                            view={view}
+                            sortMenuRef={sortMenuRef}
+                            filterMenuRef={filterMenuRef}
+                            sortMenuOpen={sortMenuOpen}
+                            sortMenuClosing={sortMenuClosing}
+                            filterMenuOpen={filterMenuOpen}
+                            filterMenuClosing={filterMenuClosing}
+                            sortKey={sortKey}
+                            layoutMode={layoutMode}
+                            layoutSwitchTarget={layoutSwitchTarget}
+                            filterSummary={filterSummary}
+                            query={query}
+                            fileFilters={fileFilters}
+                            hasActiveFilter={hasActiveFilter}
+                            sizeSliderMax={sizeSliderMax}
+                            sizeSliderMinValue={sizeSliderMinValue}
+                            sizeSliderMaxValue={sizeSliderMaxValue}
+                            sizeSliderMinPct={sizeSliderMinPct}
+                            sizeSliderMaxPct={sizeSliderMaxPct}
+                            onToggleSortMenu={toggleSortMenu}
+                            onCloseSortMenu={closeSortMenu}
+                            onSortKeyChange={setSortKey}
+                            onToggleFilterMenu={toggleFilterMenu}
+                            onCloseFilterMenu={closeFilterMenu}
+                            onQueryChange={setQuery}
+                            onClearFileTypes={() => setFileFilters((current) => ({ ...current, types: [] }))}
+                            onToggleFileType={toggleFileTypeFilter}
+                            onVisibilityChange={updateVisibilityFilter}
+                            onSizeInputChange={updateSizeFilter}
+                            onSizeSliderChange={updateSizeSlider}
+                            onExcludedExtensionsChange={updateExcludedExtensions}
+                            onModifiedDateChange={updateModifiedDateFilter}
+                            onClearFilters={clearFileFilters}
+                            onLayoutModeChange={changeLayoutMode}
+                            onOpenFileCreate={() => setFileCreateOpen(true)}
+                            onOpenFolderCreate={() => setFolderCreateOpen(true)}
+                            onUploadChange={onUploadChange}
+                        />
                     </div>
 
                     {view === 'all' && folderTrail.length > 0 && (
-                        <div className="folder-path" aria-label="Current folder">
-                            <button type="button" onClick={openFolderRoot}>All files</button>
-                            {folderTrail.map((folder, index) => (
-                                <span key={folder.id}>
-                                    <span aria-hidden="true">/</span>
-                                    <button
-                                        type="button"
-                                        onClick={() => {
-                                            const nextTrail = folderTrail.slice(0, index + 1)
-                                            setFolderTrail(nextTrail)
-                                            setActiveFolderId(folder.id)
-                                            setQuery('')
-                                        }}
-                                    >
-                                        {folder.name}
-                                    </button>
-                                </span>
-                            ))}
-                            <button className="folder-path__up" type="button" onClick={openFolderParent}>
-                                Up
-                            </button>
-                        </div>
+                        <FolderBreadcrumbs
+                            folderTrail={folderTrail}
+                            onOpenRoot={openFolderRoot}
+                            onOpenFolderAt={(folder, index) => {
+                                const nextTrail = folderTrail.slice(0, index + 1)
+                                setFolderTrail(nextTrail)
+                                setActiveFolderId(folder.id)
+                                setQuery('')
+                            }}
+                            onOpenParent={openFolderParent}
+                        />
                     )}
 
                     {error && (
@@ -1299,63 +1118,36 @@ function Dashboard() {
                     )}
 
                     {!loading && (visibleFolders.length > 0 || renderedItems.length > 0) && (
-                        <div
-                            className={`file-grid file-grid--${layoutMode} ${
-                                layoutSwitchTarget ? `is-layout-switching is-switching-to-${layoutSwitchTarget}` : ''
-                            }`}
-                        >
-                            {visibleFolders.map((folder, i) => (
-                                <FolderCard
-                                    key={folder.id}
-                                    folder={folder}
-                                    index={i}
-                                    onOpen={openFolder}
-                                    onShare={handleShareFolder}
-                                    onRename={handleRenameFolder}
-                                />
-                            ))}
-                            {renderedItems.map((item, i) => {
-                                const isSearchExiting = animatedFiles.exitingIds.has(item.id)
-
-                                return (
-                                <FileCard
-                                    key={item.id}
-                                    item={item}
-                                    index={visibleFolders.length + i}
-                                    pending={pendingIds.has(item.id)}
-                                    view={view}
-                                    onDelete={view === 'all' ? handleDelete : undefined}
-                                    onRestore={view === 'trash' ? handleRestore : undefined}
-                                    onPermanentDelete={view === 'trash' ? handlePermanentDelete : undefined}
-                                    onDownload={view !== 'trash' ? handleDownload : undefined}
-                                    onPreview={view !== 'trash' ? handleFilePreview : undefined}
-                                    onRename={
-                                        view === 'all' || view === 'favourites' ? handleRename : undefined
-                                    }
-                                    onShare={
-                                        view === 'all' || view === 'favourites' ? handleShare : undefined
-                                    }
-                                    onNote={
-                                        view === 'all' || view === 'favourites' ? setNoteItem : undefined
-                                    }
-                                    isFavourite={favouriteIds.has(item.id)}
-                                    onToggleFavourite={
-                                        view === 'all' || view === 'favourites' ? toggleFavourite : undefined
-                                    }
-                                    draggable={sortKey === 'manual' && !pendingIds.has(item.id) && !isSearchExiting}
-                                    isDragging={draggedCardId === item.id}
-                                    isDropTarget={dropTargetId === item.id}
-                                    isSearchExiting={isSearchExiting}
-                                    style={{ '--file-index': visibleFolders.length + i } as React.CSSProperties}
-                                    onDragStartCard={handleCardDragStart}
-                                    onDragEnterCard={handleCardDragEnter}
-                                    onDragLeaveCard={handleCardDragLeave}
-                                    onDropCard={handleCardDrop}
-                                    onDragEndCard={handleCardDragEnd}
-                                />
-                                )
-                            })}
-                        </div>
+                        <DashboardFileGrid
+                            visibleFolders={visibleFolders}
+                            renderedItems={renderedItems}
+                            exitingIds={animatedFiles.exitingIds}
+                            pendingIds={pendingIds}
+                            favouriteIds={favouriteIds}
+                            view={view}
+                            layoutMode={layoutMode}
+                            layoutSwitchTarget={layoutSwitchTarget}
+                            sortKey={sortKey}
+                            draggedCardId={draggedCardId}
+                            dropTargetId={dropTargetId}
+                            onOpenFolder={openFolder}
+                            onShareFolder={handleShareFolder}
+                            onRenameFolder={handleRenameFolder}
+                            onDelete={handleDelete}
+                            onRestore={handleRestore}
+                            onPermanentDelete={handlePermanentDelete}
+                            onDownload={handleDownload}
+                            onPreview={handleFilePreview}
+                            onRename={handleRename}
+                            onShare={handleShare}
+                            onNote={setNoteItem}
+                            onToggleFavourite={toggleFavourite}
+                            onDragStartCard={handleCardDragStart}
+                            onDragEnterCard={handleCardDragEnter}
+                            onDragLeaveCard={handleCardDragLeave}
+                            onDropCard={handleCardDrop}
+                            onDragEndCard={handleCardDragEnd}
+                        />
                     )}
 
                     {dragActive && (
