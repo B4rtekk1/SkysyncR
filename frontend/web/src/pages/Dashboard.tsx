@@ -8,10 +8,9 @@ import React, {
     type ChangeEvent,
     type DragEvent,
 } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import '../App.css'
 import '../css/Dashbord.css'
-import ThemeToggle from '../components/ThemeToggle'
 import SettingsModal from './Settings'
 import { loadUserSettings } from './settingsPreferences'
 import {
@@ -21,7 +20,6 @@ import {
     listTrash,
     listSharedFilesWithMe,
     getStorageQuota,
-    renameFile,
     renameFolder,
     shareFolder,
     updateFileNote,
@@ -35,10 +33,13 @@ import type { CurrentUserResponse } from '../api/users'
 import {
     encryptTextEnvelope,
     generateFileKey,
-    isEncryptedTextEnvelope,
     unwrapFileKeyForUser,
     wrapFileKeyForUser,
 } from '../crypto/fileEncryption'
+import { CreateFileModal } from './dashboard/CreateFileModal'
+import { CreateFolderModal } from './dashboard/CreateFolderModal'
+import { DashboardSidebar } from './dashboard/DashboardSidebar'
+import { DashboardTopbar } from './dashboard/DashboardTopbar'
 import { EmptyPane } from './dashboard/EmptyPane'
 import { FileCard } from './dashboard/FileCard'
 import { FileFilterModal } from './dashboard/FileFilterModal'
@@ -49,19 +50,9 @@ import { GroupsPanel } from './dashboard/GroupsPanel'
 import { ImagePreviewModal } from './dashboard/ImagePreviewModal'
 import { ShareFileModal } from './dashboard/ShareFileModal'
 import {
-    DRAG_HANDLE_ICON,
     GRID_VIEW_ICON,
     LIST_VIEW_ICON,
-    NAV_ICONS,
-    SETTINGS_ICON,
-    SIDEBAR_HIDE_ICON,
-    SIDEBAR_SHOW_ICON,
 } from './dashboard/icons'
-import {
-    KIND_ACCENT,
-    KIND_LABELS,
-    formatBytes,
-} from './dashboard/fileUtils'
 import {
     FILE_SORT_LABELS,
     formatSizeValue,
@@ -73,7 +64,6 @@ import {
     sortFiles,
 } from './dashboard/fileFilters'
 import {
-    NAV_LABELS,
     applySavedOrder,
     clearLegacyLocalFileMetadata,
     loadActiveView,
@@ -85,6 +75,7 @@ import {
     saveFileSort,
     saveOrderIds,
 } from './dashboard/storage'
+import { migratePlaintextFileMetadata } from './dashboard/metadataMigration'
 import { useAnimatedItems } from './dashboard/hooks/useAnimatedItems'
 import { useFileActions } from './dashboard/hooks/useFileActions'
 import { useDashboardGroups } from './dashboard/hooks/useDashboardGroups'
@@ -96,26 +87,6 @@ import { useSidebarState } from './dashboard/hooks/useSidebarState'
 import { useStorageSummary } from './dashboard/hooks/useStorageSummary'
 import { decryptFilesMetadata, decryptFoldersMetadata } from './dashboard/encryptedMetadata'
 import type { FileFilters, FileSortKey, FileTypeFilterKey, FileVisibilityFilterKey, Item, NavIndicator, ShareableItem, ViewKey } from './dashboard/types'
-
-async function migratePlaintextFileMetadata(files: ApiFile[], privateKey: CryptoKey) {
-    await Promise.allSettled(
-        files.map(async (file) => {
-            const shouldEncryptFilename = !isEncryptedTextEnvelope(file.filename)
-            const shouldEncryptNote = Boolean(file.note) && !isEncryptedTextEnvelope(file.note)
-            if (!shouldEncryptFilename && !shouldEncryptNote) return
-
-            const fileKey = await unwrapFileKeyForUser(file.encrypted_key, privateKey)
-            await Promise.all([
-                shouldEncryptFilename
-                    ? renameFile(file.id, await encryptTextEnvelope(file.filename, fileKey))
-                    : Promise.resolve(),
-                shouldEncryptNote && file.note
-                    ? updateFileNote(file.id, await encryptTextEnvelope(file.note, fileKey))
-                    : Promise.resolve(),
-            ])
-        }),
-    )
-}
 
 function Dashboard() {
     const navigate = useNavigate()
@@ -924,193 +895,47 @@ function Dashboard() {
             className={`shell ${sidebarHidden ? 'is-sidebar-hidden' : ''} ${sidebarCompact ? 'is-sidebar-compact' : ''}`}
             style={{ '--sidebar-width': sidebarHidden ? '0px' : `${sidebarWidth}px` } as React.CSSProperties}
         >
-            <aside className="shell__sidebar" aria-hidden={sidebarHidden}>
-                <Link to="/dashboard" className="shell__logo">
-                    <span className="nav__logo-mark" aria-hidden="true" />
-                    <span className="shell__sidebar-label">SkysyncR</span>
-                </Link>
-
-                <button
-                    className="shell__sidebar-toggle"
-                    type="button"
-                    onClick={() => setSidebarHidden(true)}
-                    aria-label="Hide navigation"
-                    title="Hide navigation"
-                >
-                    {SIDEBAR_HIDE_ICON}
-                </button>
-
-                <button
-                    className="shell__resize-handle"
-                    type="button"
-                    onMouseDown={startSidebarResize}
-                    aria-label="Resize navigation"
-                    title="Drag to resize navigation"
-                />
-
-                <nav
-                    className="shell__navlist shell__navlist--primary"
-                    ref={navListRef}
-                    style={
-                        {
-                            '--nav-indicator-x': `${navIndicator.x}px`,
-                            '--nav-indicator-y': `${navIndicator.y}px`,
-                            '--nav-indicator-width': `${navIndicator.width}px`,
-                            '--nav-indicator-height': `${navIndicator.height}px`,
-                            '--nav-indicator-opacity': navIndicator.visible ? 1 : 0,
-                        } as React.CSSProperties
-                    }
-                >
-                    <span
-                        className={`shell__nav-indicator ${navIndicatorPulling ? 'is-pulling' : ''}`}
-                        aria-hidden="true"
-                    />
-                    {navOrder.map((key) => (
-                        <button
-                            key={key}
-                            ref={(node) => {
-                                if (node) {
-                                    navItemRefs.current[key] = node
-                                } else {
-                                    delete navItemRefs.current[key]
-                                }
-                            }}
-                            className={`shell__navitem ${view === key ? 'is-active' : ''} ${
-                                draggedNavKey === key ? 'is-dragging-nav' : ''
-                            } ${dropNavTarget === key ? 'is-drop-target-nav' : ''}`}
-                            onClick={() => selectNavView(key)}
-                            draggable
-                            onDragStart={(e) => handleNavDragStart(key, e)}
-                            onDragEnter={(e) => {
-                                e.preventDefault()
-                                handleNavDragEnter(key)
-                            }}
-                            onDragOver={(e) => e.preventDefault()}
-                            onDragLeave={() => handleNavDragLeave(key)}
-                            onDrop={(e) => {
-                                e.preventDefault()
-                                e.stopPropagation()
-                                handleNavDrop(key, e)
-                            }}
-                            onDragEnd={handleNavDragEnd}
-                        >
-                            <span className="shell__navicon shell__navicon--handle">{DRAG_HANDLE_ICON}</span>
-                            <span className="shell__navicon">{NAV_ICONS[key]}</span>
-                            <span className="shell__sidebar-label">{NAV_LABELS[key]}</span>
-                        </button>
-                    ))}
-                </nav>
-
-                <nav className="shell__navlist shell__navlist--footer">
-                    <button className="shell__navitem" type="button" onClick={() => setSettingsOpen(true)}>
-                        <span className="shell__navicon">{SETTINGS_ICON}</span>
-                        <span className="shell__sidebar-label">Settings</span>
-                    </button>
-                </nav>
-
-                <div className="shell__storage">
-                    <div className="shell__storage-row">
-                        <span>Storage</span>
-                        <span>
-              {quota ? `${formatBytes(quota.used_bytes)} / ${formatBytes(quota.total_bytes)}` : '—'}
-            </span>
-                    </div>
-                    <div className="shell__storage-summary">
-                        <strong>{quota ? `${usedPct}% used` : 'Quota unavailable'}</strong>
-                        <span className={`shell__storage-status shell__storage-status--${storageStatus}`}>
-                            {quota ? storageStatusText : 'Check connection'}
-                        </span>
-                    </div>
-                    <div className="shell__storage-bar">
-                        <div
-                            className={`shell__storage-fill shell__storage-fill--${storageStatus}`}
-                            style={{ width: `${usedPct}%` }}
-                        />
-                    </div>
-                    <div className="shell__storage-breakdown" aria-label="Storage by file type">
-                        {storageBreakdown.length > 0 ? (
-                            storageBreakdown.map((item) => {
-                                const percent = storageBreakdownTotal
-                                    ? Math.max(3, Math.round((item.bytes / storageBreakdownTotal) * 100))
-                                    : 0
-                                return (
-                                    <div className="shell__storage-type" key={item.kind}>
-                                        <div className="shell__storage-type-row">
-                                            <span>{KIND_LABELS[item.kind]}</span>
-                                            <span>{formatBytes(item.bytes)}</span>
-                                        </div>
-                                        <div className="shell__storage-type-bar">
-                                            <div
-                                                className="shell__storage-type-fill"
-                                                style={{
-                                                    width: `${percent}%`,
-                                                    background: KIND_ACCENT[item.kind],
-                                                }}
-                                            />
-                                        </div>
-                                    </div>
-                                )
-                            })
-                        ) : (
-                            <p className="shell__storage-empty">No files counted yet</p>
-                        )}
-                    </div>
-                </div>
-            </aside>
+            <DashboardSidebar
+                sidebarHidden={sidebarHidden}
+                navListRef={navListRef}
+                navItemRefs={navItemRefs}
+                navIndicator={navIndicator}
+                navIndicatorPulling={navIndicatorPulling}
+                navOrder={navOrder}
+                view={view}
+                draggedNavKey={draggedNavKey}
+                dropNavTarget={dropNavTarget}
+                quota={quota}
+                usedPct={usedPct}
+                storageStatus={storageStatus}
+                storageStatusText={storageStatusText}
+                storageBreakdown={storageBreakdown}
+                storageBreakdownTotal={storageBreakdownTotal}
+                onHideSidebar={() => setSidebarHidden(true)}
+                onStartSidebarResize={startSidebarResize}
+                onSelectNavView={selectNavView}
+                onNavDragStart={handleNavDragStart}
+                onNavDragEnter={handleNavDragEnter}
+                onNavDragLeave={handleNavDragLeave}
+                onNavDrop={handleNavDrop}
+                onNavDragEnd={handleNavDragEnd}
+                onOpenSettings={() => setSettingsOpen(true)}
+            />
 
             <div className="shell__main">
-                <header className="shell__topbar">
-                    {sidebarHidden && (
-                        <button
-                            className="shell__show-sidebar"
-                            type="button"
-                            onClick={() => setSidebarHidden(false)}
-                            aria-label="Show navigation"
-                            title="Show navigation"
-                        >
-                            {SIDEBAR_SHOW_ICON}
-                        </button>
-                    )}
-                    <label className="shell__search">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                            <circle cx="10.5" cy="10.5" r="6.5" stroke="currentColor" strokeWidth="1.6" />
-                            <path d="M20 20l-4.35-4.35" stroke="currentColor" strokeWidth="1.6" />
-                        </svg>
-                        <input
-                            ref={searchInputRef}
-                            type="text"
-                            placeholder="Search your vault…"
-                            value={query}
-                            onChange={(e) => setQuery(e.target.value)}
-                        />
-                    </label>
-
-                    <div className="shell__topbar-actions">
-            <span className="shell__sync">
-              <span className="eyebrow__dot" /> synced · encrypted
-            </span>
-
-                        <ThemeToggle className="shell__theme-toggle" />
-
-                        <div className="shell__user" ref={menuRef}>
-                            <button
-                                className="shell__avatar"
-                                onClick={() => setMenuOpen((v) => !v)}
-                                aria-label="Account menu"
-                            >
-                                {avatarUrl ? <img src={avatarUrl} alt="" /> : displayName.charAt(0).toUpperCase()}
-                            </button>
-                            {menuOpen && (
-                                <div className="shell__menu">
-                                    <p className="shell__menu-name">{displayName}</p>
-                                    <button className="shell__menu-item" onClick={signOut}>
-                                        Sign out
-                                    </button>
-                                </div>
-                            )}
-                        </div>
-                    </div>
-                </header>
+                <DashboardTopbar
+                    sidebarHidden={sidebarHidden}
+                    searchInputRef={searchInputRef}
+                    query={query}
+                    displayName={displayName}
+                    avatarUrl={avatarUrl}
+                    menuOpen={menuOpen}
+                    menuRef={menuRef}
+                    onShowSidebar={() => setSidebarHidden(false)}
+                    onQueryChange={setQuery}
+                    onToggleMenu={() => setMenuOpen((value) => !value)}
+                    onSignOut={() => void signOut()}
+                />
 
                 <div
                     className={`shell__content ${dragActive ? 'is-dragging' : ''}`}
@@ -1576,132 +1401,31 @@ function Dashboard() {
                 />
             )}
             {fileCreateOpen && (
-                <div className="file-filter__modal is-opening" role="dialog" aria-modal="true" aria-labelledby="file-create-title">
-                    <div className="file-filter__dialog file-create">
-                        <div className="file-filter__modal-head">
-                            <div>
-                                <h2 id="file-create-title">New file</h2>
-                                <span>{folderTrail.at(-1)?.name ?? 'All files'}</span>
-                            </div>
-                            <button
-                                className="file-filter__close"
-                                type="button"
-                                onClick={resetFileCreateDraft}
-                                aria-label="Close"
-                            >
-                                x
-                            </button>
-                        </div>
-                        <div className="file-filter__modal-body file-create__body">
-                            <input
-                                className="folder-create__input"
-                                value={fileNameDraft}
-                                onChange={(event) => setFileNameDraft(event.target.value)}
-                                onKeyDown={(event) => {
-                                    if (event.key === 'Enter') void handleCreateFile()
-                                    if (event.key === 'Escape') resetFileCreateDraft()
-                                }}
-                                placeholder="File name with extension"
-                                autoFocus
-                            />
-                            <p className="file-create__hint">Use an extension like .txt, .md, .json, .html, .css or .js.</p>
-                        </div>
-                        <div className="file-filter__footer">
-                            <button
-                                className="btn btn--ghost"
-                                type="button"
-                                onClick={resetFileCreateDraft}
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                className="btn btn--solid"
-                                type="button"
-                                disabled={!fileNameDraft.trim() || !hasFileExtension(fileNameDraft.trim()) || fileSaving}
-                                onClick={() => void handleCreateFile()}
-                            >
-                                {fileSaving ? 'Creating...' : 'Create'}
-                            </button>
-                        </div>
-                    </div>
-                </div>
+                <CreateFileModal
+                    currentFolderName={folderTrail.at(-1)?.name ?? 'All files'}
+                    fileNameDraft={fileNameDraft}
+                    fileSaving={fileSaving}
+                    canCreate={Boolean(fileNameDraft.trim() && hasFileExtension(fileNameDraft.trim()))}
+                    onFileNameChange={setFileNameDraft}
+                    onCreate={() => void handleCreateFile()}
+                    onClose={resetFileCreateDraft}
+                />
             )}
             {folderCreateOpen && (
-                <div className="file-filter__modal is-opening" role="dialog" aria-modal="true" aria-labelledby="folder-create-title">
-                    <div className="file-filter__dialog folder-create">
-                        <div className="file-filter__modal-head">
-                            <div>
-                                <h2 id="folder-create-title">New folder</h2>
-                                <span>{folderTrail.at(-1)?.name ?? 'All files'}</span>
-                            </div>
-                            <button
-                                className="file-filter__close"
-                                type="button"
-                                onClick={() => {
-                                    setFolderCreateOpen(false)
-                                    setFolderNameDraft('')
-                                    setFolderDescriptionDraft('')
-                                }}
-                                aria-label="Close"
-                            >
-                                x
-                            </button>
-                        </div>
-                        <div className="file-filter__modal-body">
-                            <input
-                                className="folder-create__input"
-                                value={folderNameDraft}
-                                onChange={(event) => setFolderNameDraft(event.target.value)}
-                                onKeyDown={(event) => {
-                                    if (event.key === 'Enter') void handleCreateFolder()
-                                    if (event.key === 'Escape') {
-                                        setFolderCreateOpen(false)
-                                        setFolderNameDraft('')
-                                        setFolderDescriptionDraft('')
-                                    }
-                                }}
-                                placeholder="Folder name"
-                                autoFocus
-                            />
-                            <textarea
-                                className="folder-create__input folder-create__textarea"
-                                value={folderDescriptionDraft}
-                                onChange={(event) => setFolderDescriptionDraft(event.target.value)}
-                                onKeyDown={(event) => {
-                                    if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') void handleCreateFolder()
-                                    if (event.key === 'Escape') {
-                                        setFolderCreateOpen(false)
-                                        setFolderNameDraft('')
-                                        setFolderDescriptionDraft('')
-                                    }
-                                }}
-                                placeholder="Folder description"
-                                rows={4}
-                            />
-                        </div>
-                        <div className="file-filter__footer">
-                            <button
-                                className="btn btn--ghost"
-                                type="button"
-                                onClick={() => {
-                                    setFolderCreateOpen(false)
-                                    setFolderNameDraft('')
-                                    setFolderDescriptionDraft('')
-                                }}
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                className="btn btn--solid"
-                                type="button"
-                                disabled={!folderNameDraft.trim() || folderSaving}
-                                onClick={() => void handleCreateFolder()}
-                            >
-                                {folderSaving ? 'Creating...' : 'Create'}
-                            </button>
-                        </div>
-                    </div>
-                </div>
+                <CreateFolderModal
+                    currentFolderName={folderTrail.at(-1)?.name ?? 'All files'}
+                    folderNameDraft={folderNameDraft}
+                    folderDescriptionDraft={folderDescriptionDraft}
+                    folderSaving={folderSaving}
+                    onFolderNameChange={setFolderNameDraft}
+                    onFolderDescriptionChange={setFolderDescriptionDraft}
+                    onCreate={() => void handleCreateFolder()}
+                    onClose={() => {
+                        setFolderCreateOpen(false)
+                        setFolderNameDraft('')
+                        setFolderDescriptionDraft('')
+                    }}
+                />
             )}
             {noteItem && (
                 <FileNoteModal
