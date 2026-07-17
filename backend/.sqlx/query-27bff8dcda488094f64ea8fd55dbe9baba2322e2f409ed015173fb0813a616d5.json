@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE users\n        SET email_verified = TRUE,\n            verification_token = NULL,\n            verification_token_expires_at = NULL\n        WHERE verification_token = $1\n          AND (verification_token_expires_at IS NULL OR verification_token_expires_at > NOW())\n        RETURNING id\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "users",
+            "name": "id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "27bff8dcda488094f64ea8fd55dbe9baba2322e2f409ed015173fb0813a616d5"
+}

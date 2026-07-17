@@ -1,0 +1,78 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            id,\n            user_id,\n            revoked,\n            expires_at > NOW() AS \"valid_exp!: bool\",\n            session_expires_at AS \"session_expires_at!: DateTime<Utc>\",\n            session_expires_at > NOW() AS \"valid_session!: bool\"\n        FROM refresh_tokens\n        WHERE token_hash = $1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "refresh_tokens",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "user_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "refresh_tokens",
+            "name": "user_id"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "revoked",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "refresh_tokens",
+            "name": "revoked"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "valid_exp!: bool",
+        "type_info": "Bool",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 4,
+        "name": "session_expires_at!: DateTime<Utc>",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "refresh_tokens",
+            "name": "session_expires_at"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "valid_session!: bool",
+        "type_info": "Bool",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      null,
+      false,
+      null
+    ]
+  },
+  "hash": "f79b11b6c6b4b4e5dfe6683e25e1217b744e689e33000ce91235d9ec7954ed8c"
+}

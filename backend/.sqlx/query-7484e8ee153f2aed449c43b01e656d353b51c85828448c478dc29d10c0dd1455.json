@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE refresh_tokens\n        SET revoked = TRUE\n        WHERE user_id = $1 AND revoked = FALSE\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "7484e8ee153f2aed449c43b01e656d353b51c85828448c478dc29d10c0dd1455"
+}

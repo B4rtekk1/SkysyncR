@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE users\n        SET failed_login_attempts = failed_login_attempts + 1,\n            locked_until = CASE\n                WHEN failed_login_attempts + 1 >= $2\n                THEN NOW() + ($3::int * interval '1 minute')\n                ELSE locked_until\n            END\n        WHERE email = $1\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Int4",
+        "Int4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "d384dd69fa30b151d4162f9e4cac5e44593163854ec6cdca470e2dfc228a21c6"
+}

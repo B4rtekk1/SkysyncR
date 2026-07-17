@@ -1,0 +1,255 @@
+use chrono::{Duration, Utc};
+use skysyncr::crypto::jwt::{generate_access_token_capped, verify_access_token};
+use skysyncr::db::files::{
+    NewFileRecord, NewFileShare, create_file_record, get_user_file_for_download,
+    list_files_shared_with_user, upsert_user_file_share,
+};
+use skysyncr::db::refresh_tokens::{
+    RefreshTokenAuth, authenticate_refresh_token, create_refresh_token, rotate_refresh_token,
+};
+use skysyncr::db::storage::{get_storage_quota, try_apply_storage_delta};
+use skysyncr::db::users::{
+    is_login_allowed, record_failed_login, reset_failed_login, update_last_login,
+};
+use sqlx::{Executor, PgPool, postgres::PgPoolOptions};
+use std::sync::{Arc, OnceLock};
+use tokio::sync::{Mutex, OwnedMutexGuard};
+use uuid::Uuid;
+
+static DB_LOCK: OnceLock<Arc<Mutex<()>>> = OnceLock::new();
+
+async fn test_pool() -> (OwnedMutexGuard<()>, PgPool) {
+    let guard = DB_LOCK
+        .get_or_init(|| Arc::new(Mutex::new(())))
+        .clone()
+        .lock_owned()
+        .await;
+    let database_url =
+        std::env::var("DATABASE_URL").expect("DATABASE_URL must be set for integration tests");
+    let allow_non_local_reset = std::env::var("SKYSYNCR_ALLOW_NON_LOCAL_TEST_DB_RESET")
+        .map(|value| value == "true")
+        .unwrap_or(false);
+    assert!(
+        allow_non_local_reset
+            || database_url.contains("localhost")
+            || database_url.contains("127.0.0.1"),
+        "integration tests reset the public schema; use a local DATABASE_URL or set SKYSYNCR_ALLOW_NON_LOCAL_TEST_DB_RESET=true",
+    );
+
+    let pool = PgPoolOptions::new()
+        .max_connections(5)
+        .connect(&database_url)
+        .await
+        .expect("connect to test database");
+
+    pool.execute("DROP SCHEMA IF EXISTS public CASCADE; CREATE SCHEMA public;")
+        .await
+        .expect("reset schema");
+
+    pool.execute(include_str!("../../infra/docker/init.sql"))
+        .await
+        .expect("apply schema");
+
+    (guard, pool)
+}
+
+async fn insert_user(pool: &PgPool, email: &str) -> Uuid {
+    sqlx::query_scalar::<_, Uuid>(
+        r#"
+        INSERT INTO users (
+            email,
+            password_hash,
+            public_key,
+            display_name,
+            email_verified
+        )
+        VALUES ($1, '$2b$12$aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', $2, $3, TRUE)
+        RETURNING id
+        "#,
+    )
+    .bind(email)
+    .bind(format!("public-key-for-{email}"))
+    .bind(email.split('@').next().unwrap_or("user"))
+    .fetch_one(pool)
+    .await
+    .expect("insert user")
+}
+
+#[tokio::test]
+async fn auth_lockout_blocks_after_failed_attempts_and_resets_on_success() {
+    let (_guard, pool) = test_pool().await;
+    let email = "auth-lockout@example.test";
+    insert_user(&pool, email).await;
+
+    assert!(is_login_allowed(&pool, email).await.unwrap());
+
+    record_failed_login(&pool, email, 2, 30).await.unwrap();
+    assert!(is_login_allowed(&pool, email).await.unwrap());
+
+    record_failed_login(&pool, email, 2, 30).await.unwrap();
+    assert!(!is_login_allowed(&pool, email).await.unwrap());
+
+    reset_failed_login(&pool, email).await.unwrap();
+    update_last_login(&pool, email).await.unwrap();
+    assert!(is_login_allowed(&pool, email).await.unwrap());
+}
+
+#[tokio::test]
+async fn storage_quota_rejects_overflow_and_negative_usage() {
+    let (_guard, pool) = test_pool().await;
+    let user_id = insert_user(&pool, "quota@example.test").await;
+
+    sqlx::query(
+        r#"
+        INSERT INTO storage_quotas (user_id, max_bytes, used_bytes)
+        VALUES ($1, 100, 0)
+        ON CONFLICT (user_id)
+        DO UPDATE SET max_bytes = 100, used_bytes = 0
+        "#,
+    )
+    .bind(user_id)
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let mut tx = pool.begin().await.unwrap();
+    assert!(try_apply_storage_delta(&mut tx, user_id, 60).await.unwrap());
+    tx.commit().await.unwrap();
+
+    let mut tx = pool.begin().await.unwrap();
+    assert!(!try_apply_storage_delta(&mut tx, user_id, 41).await.unwrap());
+    tx.commit().await.unwrap();
+
+    let mut tx = pool.begin().await.unwrap();
+    assert!(
+        !try_apply_storage_delta(&mut tx, user_id, -61)
+            .await
+            .unwrap()
+    );
+    tx.commit().await.unwrap();
+
+    let quota = get_storage_quota(&pool, user_id).await.unwrap();
+    assert_eq!(quota.used_bytes, 60);
+    assert_eq!(quota.total_bytes, 100);
+}
+
+#[tokio::test]
+async fn refresh_token_rotation_revokes_old_token_and_accepts_new_token() {
+    let (_guard, pool) = test_pool().await;
+    let user_id = insert_user(&pool, "refresh@example.test").await;
+    let old_token = "old-refresh-token";
+    let new_token = "new-refresh-token";
+
+    let session_expires_at = create_refresh_token(&pool, user_id, old_token)
+        .await
+        .unwrap();
+
+    let valid = authenticate_refresh_token(&pool, old_token).await.unwrap();
+    let RefreshTokenAuth::Valid(stored) = valid else {
+        panic!("old token should start valid");
+    };
+
+    rotate_refresh_token(&pool, stored.id, user_id, new_token, session_expires_at)
+        .await
+        .unwrap();
+
+    match authenticate_refresh_token(&pool, old_token).await.unwrap() {
+        RefreshTokenAuth::ReuseDetected { user_id: detected } => assert_eq!(detected, user_id),
+        _ => panic!("old token reuse should be detected"),
+    }
+
+    match authenticate_refresh_token(&pool, new_token).await.unwrap() {
+        RefreshTokenAuth::Valid(rotated) => {
+            assert_eq!(rotated.user_id, user_id);
+            assert!(
+                (rotated.session_expires_at - session_expires_at)
+                    .num_milliseconds()
+                    .abs()
+                    <= 1
+            );
+        }
+        _ => panic!("new token should be valid"),
+    }
+}
+
+#[tokio::test]
+async fn jwt_access_token_is_capped_by_session_expiration() {
+    let user_id = Uuid::new_v4().to_string();
+    let session_exp = Utc::now() + Duration::seconds(30);
+
+    let (token, expires_in) =
+        generate_access_token_capped(&user_id, "test-secret", session_exp).unwrap();
+    let claims = verify_access_token(&token, "test-secret").unwrap();
+
+    assert_eq!(claims.sub, user_id);
+    assert!(expires_in <= 30);
+    assert!(expires_in > 0);
+}
+
+#[tokio::test]
+async fn file_sharing_grants_recipient_access_without_self_share() {
+    let (_guard, pool) = test_pool().await;
+    let owner_id = insert_user(&pool, "owner@example.test").await;
+    let recipient_id = insert_user(&pool, "recipient@example.test").await;
+
+    let mut tx = pool.begin().await.unwrap();
+    let file = create_file_record(
+        &mut tx,
+        NewFileRecord {
+            owner_id,
+            filename: "shared.txt".to_string(),
+            storage_path: "shared.txt.enc".to_string(),
+            mime_type: Some("text/plain".to_string()),
+            size_bytes: 12,
+            encrypted_key: b"owner-key".to_vec(),
+            encryption_nonce: b"nonce".to_vec(),
+            checksum: "checksum".to_string(),
+            folder_id: None,
+        },
+    )
+    .await
+    .unwrap();
+    tx.commit().await.unwrap();
+
+    let share = upsert_user_file_share(
+        &pool,
+        NewFileShare {
+            owner_id,
+            file_id: file.id,
+            recipient_email: "recipient@example.test".to_string(),
+            permission: "download".to_string(),
+            encrypted_key: b"recipient-wrapped-key".to_vec(),
+        },
+    )
+    .await
+    .unwrap()
+    .expect("share should be created");
+    assert_eq!(share.permission, "download");
+
+    let shared = list_files_shared_with_user(&pool, recipient_id)
+        .await
+        .unwrap();
+    assert_eq!(shared.len(), 1);
+    assert_eq!(shared[0].file.id, file.id);
+    assert_eq!(shared[0].file.encrypted_key, b"recipient-wrapped-key");
+
+    let download = get_user_file_for_download(&pool, recipient_id, file.id)
+        .await
+        .unwrap()
+        .expect("recipient can download shared file");
+    assert_eq!(download.filename, "shared.txt");
+
+    let self_share = upsert_user_file_share(
+        &pool,
+        NewFileShare {
+            owner_id,
+            file_id: file.id,
+            recipient_email: "owner@example.test".to_string(),
+            permission: "read".to_string(),
+            encrypted_key: b"self-key".to_vec(),
+        },
+    )
+    .await
+    .unwrap();
+    assert!(self_share.is_none());
+}

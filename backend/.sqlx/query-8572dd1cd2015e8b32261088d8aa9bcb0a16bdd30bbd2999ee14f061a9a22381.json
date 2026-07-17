@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE users\n        SET last_login_at = NOW()\n        WHERE email = $1\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "8572dd1cd2015e8b32261088d8aa9bcb0a16bdd30bbd2999ee14f061a9a22381"
+}

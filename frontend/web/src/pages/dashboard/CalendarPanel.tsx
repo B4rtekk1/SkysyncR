@@ -282,6 +282,7 @@ export function CalendarPanel({ files, onPreview, onDownload }: CalendarPanelPro
         }
     }
 
+
     return (
         <section className="calendar-panel" aria-label="Calendar">
             <div className="calendar-panel__toolbar">

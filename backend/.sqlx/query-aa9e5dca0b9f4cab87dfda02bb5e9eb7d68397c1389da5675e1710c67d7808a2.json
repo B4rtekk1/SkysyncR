@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            CASE\n                WHEN locked_until IS NULL THEN TRUE\n                WHEN locked_until <= NOW() THEN TRUE\n                ELSE FALSE\n            END AS \"allowed!: bool\"\n        FROM users\n        WHERE email = $1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "allowed!: bool",
+        "type_info": "Bool",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "aa9e5dca0b9f4cab87dfda02bb5e9eb7d68397c1389da5675e1710c67d7808a2"
+}

@@ -3,6 +3,14 @@ name = "SkysyncR"
 version = "0.1.0"
 edition = "2024"
 
+[lib]
+name = "skysyncr"
+path = "src/lib.rs"
+
+[[bin]]
+name = "skysyncr-server"
+path = "src/main.rs"
+
 [dependencies]
 axum = { version = "0.8.9", features = ["multipart"] }
 dotenvy = "0.15.7"

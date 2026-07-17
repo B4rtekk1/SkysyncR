@@ -8,6 +8,7 @@
     "generate:api-types": "node ../../common/generate-api-types.mjs",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
+    "test": "node --experimental-strip-types --test src/crypto/fileEncryption.test.ts src/crypto/keys.test.ts",
     "preview": "vite preview"
   },
   "dependencies": {

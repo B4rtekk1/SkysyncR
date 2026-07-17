@@ -838,13 +838,13 @@ async fn write_multipart_file_field(
     Ok((file_size, hex::encode(hasher.finalize())))
 }
 
-fn storage_path_for(upload_dir: &PathBuf, user_id: Uuid, file_id: Uuid) -> PathBuf {
+fn storage_path_for(upload_dir: &FsPath, user_id: Uuid, file_id: Uuid) -> PathBuf {
     upload_dir
         .join(user_id.to_string())
         .join(format!("{file_id}.bin"))
 }
 
-fn temp_storage_path_for(upload_dir: &PathBuf, user_id: Uuid, file_id: Uuid) -> PathBuf {
+fn temp_storage_path_for(upload_dir: &FsPath, user_id: Uuid, file_id: Uuid) -> PathBuf {
     upload_dir
         .join(user_id.to_string())
         .join(format!("{file_id}.{}.tmp", Uuid::new_v4()))

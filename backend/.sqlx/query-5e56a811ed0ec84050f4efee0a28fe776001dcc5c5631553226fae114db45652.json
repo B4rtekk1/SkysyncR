@@ -1,0 +1,33 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO users (\n            email, password_hash, public_key, display_name,\n            verification_token, verification_token_expires_at\n        )\n        VALUES ($1, $2, $3, $4, $5, NOW() + ($6::int * interval '1 hour'))\n        RETURNING id\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "users",
+            "name": "id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Int4"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "5e56a811ed0ec84050f4efee0a28fe776001dcc5c5631553226fae114db45652"
+}

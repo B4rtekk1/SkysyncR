@@ -1,16 +1,4 @@
-mod app;
-mod auth;
-mod crypto;
-mod db;
-mod handlers;
-mod models;
-mod observability;
-mod routes;
-mod services;
-mod state;
-mod utils;
-
-use app::run_server;
+use skysyncr::app::run_server;
 use tracing_subscriber::EnvFilter;
 
 #[tokio::main]

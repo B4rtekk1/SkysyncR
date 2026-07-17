@@ -22,10 +22,10 @@ pub fn internal_error(context: &str, err: impl std::fmt::Display) -> ApiError {
 }
 
 pub fn map_db_error(context: &str, err: SqlxError) -> ApiError {
-    if let SqlxError::Database(db_err) = &err {
-        if db_err.code().as_deref() == Some("23505") {
-            return ApiError::Conflict("Email already registered".into());
-        }
+    if let SqlxError::Database(db_err) = &err
+        && db_err.code().as_deref() == Some("23505")
+    {
+        return ApiError::Conflict("Email already registered".into());
     }
     internal_error(context, err)
 }
