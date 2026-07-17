@@ -64,65 +64,6 @@ pub struct NewGroupInvite {
     pub role: String,
 }
 
-pub async fn ensure_groups_tables(pool: &PgPool) -> Result<(), sqlx::Error> {
-    sqlx::query(
-        r#"
-        CREATE TABLE IF NOT EXISTS groups
-        (
-            id           UUID PRIMARY KEY     DEFAULT gen_random_uuid(),
-            name         TEXT        NOT NULL,
-            default_role TEXT        NOT NULL DEFAULT 'viewer',
-            owner_id     UUID        NOT NULL REFERENCES users (id) ON DELETE CASCADE,
-            created_at   timestamptz NOT NULL DEFAULT NOW(),
-            updated_at   timestamptz NOT NULL DEFAULT NOW()
-        )
-        "#,
-    )
-    .execute(pool)
-    .await?;
-
-    sqlx::query(
-        "ALTER TABLE groups ADD COLUMN IF NOT EXISTS default_role TEXT NOT NULL DEFAULT 'viewer'",
-    )
-    .execute(pool)
-    .await?;
-
-    sqlx::query(
-        r#"
-        CREATE TABLE IF NOT EXISTS group_invitations
-        (
-            id                 UUID PRIMARY KEY     DEFAULT gen_random_uuid(),
-            group_id           UUID        NOT NULL REFERENCES groups (id) ON DELETE CASCADE,
-            invited_email      TEXT        NOT NULL,
-            invited_by_user_id UUID        NOT NULL REFERENCES users (id),
-            role               TEXT        NOT NULL DEFAULT 'viewer',
-            token              TEXT        NOT NULL UNIQUE,
-            status             TEXT        NOT NULL DEFAULT 'pending',
-            expires_at         timestamptz NOT NULL,
-            created_at         timestamptz NOT NULL DEFAULT NOW()
-        )
-        "#,
-    )
-    .execute(pool)
-    .await?;
-
-    sqlx::query("ALTER TABLE group_invitations ADD COLUMN IF NOT EXISTS role TEXT NOT NULL DEFAULT 'viewer'")
-        .execute(pool)
-        .await?;
-
-    sqlx::query("CREATE INDEX IF NOT EXISTS idx_groups_owner_id ON groups (owner_id)")
-        .execute(pool)
-        .await?;
-
-    sqlx::query(
-        "CREATE INDEX IF NOT EXISTS idx_group_invitations_group_id ON group_invitations (group_id)",
-    )
-    .execute(pool)
-    .await?;
-
-    Ok(())
-}
-
 pub async fn list_user_groups(
     pool: &PgPool,
     user_id: Uuid,

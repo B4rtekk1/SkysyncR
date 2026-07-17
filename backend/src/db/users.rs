@@ -9,42 +9,6 @@ pub struct NewUser<'a> {
     pub public_key: &'a str,
 }
 
-pub async fn ensure_user_settings_columns(pool: &PgPool) -> Result<(), sqlx::Error> {
-    sqlx::query("ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url TEXT")
-        .execute(pool)
-        .await?;
-    sqlx::query(
-        "ALTER TABLE users ADD COLUMN IF NOT EXISTS default_view TEXT NOT NULL DEFAULT 'all'",
-    )
-    .execute(pool)
-    .await?;
-    sqlx::query(
-        "ALTER TABLE users ADD COLUMN IF NOT EXISTS layout_mode TEXT NOT NULL DEFAULT 'grid'",
-    )
-    .execute(pool)
-    .await?;
-    sqlx::query("ALTER TABLE users ADD COLUMN IF NOT EXISTS upload_protection BOOLEAN NOT NULL DEFAULT TRUE")
-        .execute(pool)
-        .await?;
-    sqlx::query(
-        "ALTER TABLE users ADD COLUMN IF NOT EXISTS compact_metadata BOOLEAN NOT NULL DEFAULT TRUE",
-    )
-    .execute(pool)
-    .await?;
-    sqlx::query(
-        "ALTER TABLE users ADD COLUMN IF NOT EXISTS device_lock BOOLEAN NOT NULL DEFAULT FALSE",
-    )
-    .execute(pool)
-    .await?;
-    sqlx::query(
-        "ALTER TABLE users ADD COLUMN IF NOT EXISTS sync_on_metered BOOLEAN NOT NULL DEFAULT FALSE",
-    )
-    .execute(pool)
-    .await?;
-
-    Ok(())
-}
-
 pub async fn create_user(
     pool: &PgPool,
     new_user: NewUser<'_>,

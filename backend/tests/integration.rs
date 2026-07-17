@@ -19,6 +19,15 @@ use uuid::Uuid;
 static DB_LOCK: OnceLock<Arc<Mutex<()>>> = OnceLock::new();
 
 async fn test_pool() -> (OwnedMutexGuard<()>, PgPool) {
+    let (guard, pool) = reset_test_pool().await;
+    skysyncr::db::migrations::run(&pool)
+        .await
+        .expect("apply migrations");
+
+    (guard, pool)
+}
+
+async fn reset_test_pool() -> (OwnedMutexGuard<()>, PgPool) {
     let guard = DB_LOCK
         .get_or_init(|| Arc::new(Mutex::new(())))
         .clone()
@@ -42,15 +51,148 @@ async fn test_pool() -> (OwnedMutexGuard<()>, PgPool) {
         .await
         .expect("connect to test database");
 
-    pool.execute("DROP SCHEMA IF EXISTS public CASCADE; CREATE SCHEMA public;")
+    pool.execute(
+        "DROP SCHEMA IF EXISTS public CASCADE; DROP SCHEMA IF EXISTS migration_backups CASCADE; CREATE SCHEMA public;",
+    )
         .await
         .expect("reset schema");
 
-    pool.execute(include_str!("../../infra/docker/init.sql"))
-        .await
-        .expect("apply schema");
-
     (guard, pool)
+}
+
+async fn table_column_exists(pool: &PgPool, table: &str, column: &str) -> bool {
+    sqlx::query_scalar::<_, bool>(
+        r#"
+        SELECT EXISTS (
+            SELECT 1
+            FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND table_name = $1
+              AND column_name = $2
+        )
+        "#,
+    )
+    .bind(table)
+    .bind(column)
+    .fetch_one(pool)
+    .await
+    .expect("check column")
+}
+
+async fn create_legacy_schema(pool: &PgPool) {
+    pool.execute(
+        r#"
+        CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
+        CREATE TABLE users
+        (
+            id                              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            email                           TEXT NOT NULL UNIQUE,
+            password_hash                   TEXT NOT NULL,
+            public_key                      TEXT,
+            email_verified                  BOOLEAN NOT NULL DEFAULT FALSE,
+            verification_token              TEXT,
+            display_name                    TEXT,
+            is_active                       BOOLEAN NOT NULL DEFAULT TRUE,
+            failed_login_attempts           INT NOT NULL DEFAULT 0,
+            locked_until                    timestamptz,
+            password_reset_token            TEXT,
+            password_reset_token_expiration timestamptz,
+            created_at                      timestamptz NOT NULL DEFAULT NOW(),
+            updated_at                      timestamptz NOT NULL DEFAULT NOW(),
+            last_login_at                   timestamptz
+        );
+
+        CREATE TABLE folders
+        (
+            id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            owner_id         UUID NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+            name             TEXT NOT NULL,
+            parent_folder_id UUID REFERENCES folders (id) ON DELETE SET NULL,
+            deleted_at       timestamptz,
+            is_deleted       BOOLEAN NOT NULL DEFAULT FALSE,
+            created_at       timestamptz NOT NULL DEFAULT NOW(),
+            updated_at       timestamptz NOT NULL DEFAULT NOW()
+        );
+
+        CREATE TABLE files
+        (
+            id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            owner_id         UUID NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+            filename         TEXT NOT NULL,
+            storage_path     TEXT NOT NULL,
+            mime_type        TEXT,
+            size_bytes       BIGINT NOT NULL,
+            encrypted_key    bytea,
+            encryption_nonce bytea,
+            checksum         TEXT,
+            folder_id        UUID REFERENCES folders (id) ON DELETE SET NULL,
+            is_deleted       BOOLEAN NOT NULL DEFAULT FALSE,
+            is_public        BOOLEAN NOT NULL DEFAULT FALSE,
+            share_token      TEXT,
+            created_at       timestamptz NOT NULL DEFAULT NOW(),
+            updated_at       timestamptz NOT NULL DEFAULT NOW(),
+            deleted_at       timestamptz
+        );
+
+        CREATE TABLE refresh_tokens
+        (
+            id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            user_id    UUID NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+            token_hash TEXT NOT NULL UNIQUE,
+            expires_at timestamptz NOT NULL,
+            revoked    BOOLEAN NOT NULL DEFAULT FALSE,
+            user_agent TEXT,
+            ip_address TEXT,
+            device_id  TEXT,
+            created_at timestamptz NOT NULL DEFAULT NOW()
+        );
+
+        CREATE TABLE audit_logs
+        (
+            id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            user_id       UUID REFERENCES users (id) ON DELETE SET NULL,
+            action        TEXT NOT NULL,
+            resource_id   UUID,
+            resource_type TEXT,
+            ip_address    TEXT,
+            created_at    timestamptz NOT NULL DEFAULT NOW()
+        );
+
+        CREATE TABLE groups
+        (
+            id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            name       TEXT NOT NULL,
+            owner_id   UUID NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+            created_at timestamptz NOT NULL DEFAULT NOW(),
+            updated_at timestamptz NOT NULL DEFAULT NOW()
+        );
+
+        CREATE TABLE group_invitations
+        (
+            id                 UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            group_id           UUID NOT NULL REFERENCES groups (id) ON DELETE CASCADE,
+            invited_email      TEXT NOT NULL,
+            invited_by_user_id UUID NOT NULL REFERENCES users (id),
+            token              TEXT NOT NULL UNIQUE,
+            status             TEXT NOT NULL DEFAULT 'pending',
+            expires_at         timestamptz NOT NULL,
+            created_at         timestamptz NOT NULL DEFAULT NOW()
+        );
+
+        CREATE TABLE file_shares
+        (
+            id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            file_id             UUID NOT NULL REFERENCES files (id) ON DELETE CASCADE,
+            shared_by_user_id   UUID NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+            shared_with_user_id UUID NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+            permission          TEXT NOT NULL DEFAULT 'read',
+            created_at          timestamptz NOT NULL DEFAULT NOW()
+        );
+        "#,
+    )
+    .await
+    .expect("create legacy schema");
 }
 
 async fn insert_user(pool: &PgPool, email: &str) -> Uuid {
@@ -73,6 +215,99 @@ async fn insert_user(pool: &PgPool, email: &str) -> Uuid {
     .fetch_one(pool)
     .await
     .expect("insert user")
+}
+
+#[tokio::test]
+async fn migrations_apply_to_empty_database() {
+    let (_guard, pool) = reset_test_pool().await;
+
+    skysyncr::db::migrations::run(&pool)
+        .await
+        .expect("migrate empty database");
+
+    assert!(table_column_exists(&pool, "users", "avatar_url").await);
+    assert!(table_column_exists(&pool, "file_shares", "encrypted_key").await);
+    assert!(table_column_exists(&pool, "calendar_entries", "reminder").await);
+}
+
+#[tokio::test]
+async fn migrations_apply_to_existing_legacy_database_and_backup_destructive_changes() {
+    let (_guard, pool) = reset_test_pool().await;
+    create_legacy_schema(&pool).await;
+
+    let owner_id = insert_user(&pool, "legacy-owner@example.test").await;
+    let recipient_id = insert_user(&pool, "legacy-recipient@example.test").await;
+    let file_id = sqlx::query_scalar::<_, Uuid>(
+        r#"
+        INSERT INTO files (owner_id, filename, storage_path, size_bytes)
+        VALUES ($1, 'legacy.txt', 'legacy.txt.enc', 10)
+        RETURNING id
+        "#,
+    )
+    .bind(owner_id)
+    .fetch_one(&pool)
+    .await
+    .expect("insert legacy file");
+
+    sqlx::query(
+        r#"
+        INSERT INTO file_shares (file_id, shared_by_user_id, shared_with_user_id)
+        VALUES ($1, $2, $3)
+        "#,
+    )
+    .bind(file_id)
+    .bind(owner_id)
+    .bind(recipient_id)
+    .execute(&pool)
+    .await
+    .expect("insert legacy share without encrypted key");
+
+    sqlx::query(
+        r#"
+        INSERT INTO refresh_tokens (
+            user_id, token_hash, expires_at, user_agent, ip_address, device_id
+        )
+        VALUES ($1, 'legacy-token', NOW() + interval '1 day', 'test-agent', '127.0.0.1', 'device-1')
+        "#,
+    )
+    .bind(owner_id)
+    .execute(&pool)
+    .await
+    .expect("insert legacy refresh token");
+
+    skysyncr::db::migrations::run(&pool)
+        .await
+        .expect("migrate legacy database");
+
+    assert!(table_column_exists(&pool, "users", "verification_token_expires_at").await);
+    assert!(table_column_exists(&pool, "users", "sync_on_metered").await);
+    assert!(table_column_exists(&pool, "refresh_tokens", "session_expires_at").await);
+    assert!(!table_column_exists(&pool, "refresh_tokens", "user_agent").await);
+    assert!(table_column_exists(&pool, "file_shares", "owner_id").await);
+    assert!(table_column_exists(&pool, "file_shares", "recipient_user_id").await);
+    assert!(table_column_exists(&pool, "file_shares", "encrypted_key").await);
+
+    let backed_up_refresh_tokens = sqlx::query_scalar::<_, i64>(
+        "SELECT COUNT(*) FROM migration_backups.refresh_tokens_device_metadata_20260717000400",
+    )
+    .fetch_one(&pool)
+    .await
+    .expect("count refresh token backup rows");
+    assert_eq!(backed_up_refresh_tokens, 1);
+
+    let backed_up_file_shares = sqlx::query_scalar::<_, i64>(
+        "SELECT COUNT(*) FROM migration_backups.file_shares_missing_encrypted_key_20260717001400",
+    )
+    .fetch_one(&pool)
+    .await
+    .expect("count file share backup rows");
+    assert_eq!(backed_up_file_shares, 1);
+
+    let remaining_file_shares = sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM file_shares")
+        .fetch_one(&pool)
+        .await
+        .expect("count migrated shares");
+    assert_eq!(remaining_file_shares, 0);
 }
 
 #[tokio::test]

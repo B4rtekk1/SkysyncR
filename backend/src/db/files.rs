@@ -7,7 +7,6 @@ pub use super::file_records::{
     DownloadFileRecord, FilePurgeTarget, FileRecord, FileShareRecord, NewFileRecord, NewFileShare,
     ShareRecipientRecord, SharedFileRecord, UpdateFileContentTarget,
 };
-pub use super::file_share_schema::ensure_file_shares_table;
 use super::storage::try_apply_storage_delta;
 
 pub async fn list_user_files(

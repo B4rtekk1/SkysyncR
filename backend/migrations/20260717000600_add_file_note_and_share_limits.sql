@@ -1,0 +1,4 @@
+ALTER TABLE files ADD COLUMN IF NOT EXISTS note TEXT;
+ALTER TABLE files ADD COLUMN IF NOT EXISTS share_expires_at timestamptz;
+ALTER TABLE files ADD COLUMN IF NOT EXISTS share_download_limit INT;
+ALTER TABLE files ADD COLUMN IF NOT EXISTS share_download_count INT NOT NULL DEFAULT 0;

@@ -1,3 +1,5 @@
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
 CREATE TABLE IF NOT EXISTS users
 (
     id                              UUID PRIMARY KEY     DEFAULT gen_random_uuid(),
@@ -34,54 +36,54 @@ CREATE TABLE IF NOT EXISTS folders
     description      TEXT,
     parent_folder_id UUID        REFERENCES folders (id) ON DELETE SET NULL,
     encrypted_key    bytea,
-    deleted_at        timestamptz,
+    deleted_at       timestamptz,
     is_deleted       BOOLEAN     NOT NULL DEFAULT FALSE,
     is_public        BOOLEAN     NOT NULL DEFAULT FALSE,
     share_token      TEXT,
     created_at       timestamptz NOT NULL DEFAULT NOW(),
     updated_at       timestamptz NOT NULL DEFAULT NOW()
 );
-CREATE INDEX idx_folders_owner_id ON folders (owner_id);
-CREATE INDEX idx_folders_parent ON folders (parent_folder_id);
+CREATE INDEX IF NOT EXISTS idx_folders_owner_id ON folders (owner_id);
+CREATE INDEX IF NOT EXISTS idx_folders_parent ON folders (parent_folder_id);
 
 CREATE TABLE IF NOT EXISTS files
 (
-    id               UUID PRIMARY KEY     DEFAULT gen_random_uuid(),
-    owner_id         UUID        NOT NULL REFERENCES users (id) ON DELETE CASCADE,
-    filename         TEXT        NOT NULL,
-    storage_path     TEXT        NOT NULL,
-    mime_type        TEXT,
-    size_bytes       BIGINT      NOT NULL,
-    encrypted_key    bytea,
-    encryption_nonce bytea,
-    checksum         TEXT,
-    folder_id        UUID        REFERENCES folders (id) ON DELETE SET NULL,
-    note             TEXT,
-    is_deleted       BOOLEAN     NOT NULL DEFAULT FALSE,
-    is_public        BOOLEAN     NOT NULL DEFAULT FALSE,
-    share_token      TEXT,
-    share_expires_at timestamptz,
+    id                   UUID PRIMARY KEY     DEFAULT gen_random_uuid(),
+    owner_id             UUID        NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+    filename             TEXT        NOT NULL,
+    storage_path         TEXT        NOT NULL,
+    mime_type            TEXT,
+    size_bytes           BIGINT      NOT NULL,
+    encrypted_key        bytea,
+    encryption_nonce     bytea,
+    checksum             TEXT,
+    folder_id            UUID        REFERENCES folders (id) ON DELETE SET NULL,
+    note                 TEXT,
+    is_deleted           BOOLEAN     NOT NULL DEFAULT FALSE,
+    is_public            BOOLEAN     NOT NULL DEFAULT FALSE,
+    share_token          TEXT,
+    share_expires_at     timestamptz,
     share_download_limit INT,
     share_download_count INT         NOT NULL DEFAULT 0,
-    created_at       timestamptz NOT NULL DEFAULT NOW(),
-    updated_at       timestamptz NOT NULL DEFAULT NOW(),
-    deleted_at       timestamptz
+    created_at           timestamptz NOT NULL DEFAULT NOW(),
+    updated_at           timestamptz NOT NULL DEFAULT NOW(),
+    deleted_at           timestamptz
 );
-CREATE INDEX idx_files_owner_id ON files (owner_id);
-CREATE INDEX idx_files_folder_id ON files (folder_id);
+CREATE INDEX IF NOT EXISTS idx_files_owner_id ON files (owner_id);
+CREATE INDEX IF NOT EXISTS idx_files_folder_id ON files (folder_id);
 CREATE INDEX IF NOT EXISTS idx_files_deleted_at ON files (deleted_at) WHERE is_deleted = TRUE;
 
 CREATE TABLE IF NOT EXISTS refresh_tokens
 (
-    id         UUID PRIMARY KEY     DEFAULT gen_random_uuid(),
-    user_id    UUID        NOT NULL REFERENCES users (id) ON DELETE CASCADE,
-    token_hash TEXT        NOT NULL UNIQUE,
-    expires_at timestamptz NOT NULL,
+    id                 UUID PRIMARY KEY     DEFAULT gen_random_uuid(),
+    user_id            UUID        NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+    token_hash         TEXT        NOT NULL UNIQUE,
+    expires_at         timestamptz NOT NULL,
     session_expires_at timestamptz NOT NULL DEFAULT (NOW() + interval '90 days'),
-    revoked    BOOLEAN     NOT NULL DEFAULT FALSE,
-    created_at timestamptz NOT NULL DEFAULT NOW()
+    revoked            BOOLEAN     NOT NULL DEFAULT FALSE,
+    created_at         timestamptz NOT NULL DEFAULT NOW()
 );
-CREATE INDEX idx_refresh_tokens_user_id ON refresh_tokens (user_id);
+CREATE INDEX IF NOT EXISTS idx_refresh_tokens_user_id ON refresh_tokens (user_id);
 
 CREATE TABLE IF NOT EXISTS file_shares
 (
@@ -96,8 +98,28 @@ CREATE TABLE IF NOT EXISTS file_shares
     UNIQUE (file_id, recipient_user_id),
     CHECK (owner_id <> recipient_user_id)
 );
-CREATE INDEX IF NOT EXISTS idx_file_shares_recipient ON file_shares (recipient_user_id);
-CREATE INDEX IF NOT EXISTS idx_file_shares_owner_file ON file_shares (owner_id, file_id);
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1
+        FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = 'file_shares'
+          AND column_name = 'recipient_user_id'
+    ) THEN
+        CREATE INDEX IF NOT EXISTS idx_file_shares_recipient ON file_shares (recipient_user_id);
+    END IF;
+
+    IF EXISTS (
+        SELECT 1
+        FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = 'file_shares'
+          AND column_name = 'owner_id'
+    ) THEN
+        CREATE INDEX IF NOT EXISTS idx_file_shares_owner_file ON file_shares (owner_id, file_id);
+    END IF;
+END $$;
 
 CREATE TABLE IF NOT EXISTS file_versions
 (
@@ -118,7 +140,7 @@ CREATE TABLE IF NOT EXISTS audit_logs
     resource_type TEXT,
     created_at    timestamptz NOT NULL DEFAULT NOW()
 );
-CREATE INDEX idx_audit_logs_user_id ON audit_logs (user_id);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_user_id ON audit_logs (user_id);
 
 CREATE TABLE IF NOT EXISTS groups
 (
@@ -140,7 +162,7 @@ CREATE TABLE IF NOT EXISTS group_members
     joined_at timestamptz NOT NULL DEFAULT NOW(),
     UNIQUE (group_id, user_id)
 );
-CREATE INDEX idx_group_members_user_id ON group_members (user_id);
+CREATE INDEX IF NOT EXISTS idx_group_members_user_id ON group_members (user_id);
 
 CREATE TABLE IF NOT EXISTS group_invitations
 (
@@ -181,7 +203,7 @@ CREATE TABLE IF NOT EXISTS notifications
     is_read    BOOLEAN     NOT NULL DEFAULT FALSE,
     created_at timestamptz NOT NULL DEFAULT NOW()
 );
-CREATE INDEX idx_notifications_user_id ON notifications (user_id, is_read);
+CREATE INDEX IF NOT EXISTS idx_notifications_user_id ON notifications (user_id, is_read);
 
 CREATE TABLE IF NOT EXISTS calendar_entries
 (
@@ -202,66 +224,11 @@ CREATE INDEX IF NOT EXISTS idx_calendar_entries_owner_date ON calendar_entries (
 CREATE TABLE IF NOT EXISTS storage_quotas
 (
     user_id    UUID PRIMARY KEY REFERENCES users (id) ON DELETE CASCADE,
-    max_bytes  BIGINT      NOT NULL DEFAULT 5368709120, -- 5 GB
+    max_bytes  BIGINT      NOT NULL DEFAULT 5368709120,
     used_bytes BIGINT      NOT NULL DEFAULT 0,
     updated_at timestamptz NOT NULL DEFAULT NOW()
 );
 
-CREATE TABLE IF NOT EXISTS favorites
-(
-    user_id    UUID        NOT NULL REFERENCES users (id) ON DELETE CASCADE,
-    file_id    UUID        NOT NULL REFERENCES files (id) ON DELETE CASCADE,
-    created_at timestamptz NOT NULL DEFAULT NOW(),
-    PRIMARY KEY (user_id, file_id)
-);
-
--- Migrations for existing dev databases
-ALTER TABLE users ADD COLUMN IF NOT EXISTS verification_token_expires_at timestamptz;
-ALTER TABLE refresh_tokens ADD COLUMN IF NOT EXISTS session_expires_at timestamptz;
-UPDATE refresh_tokens
-SET session_expires_at = COALESCE(session_expires_at, created_at + interval '90 days', NOW() + interval '90 days')
-WHERE session_expires_at IS NULL;
-ALTER TABLE refresh_tokens ALTER COLUMN session_expires_at SET DEFAULT (NOW() + interval '90 days');
-ALTER TABLE refresh_tokens ALTER COLUMN session_expires_at SET NOT NULL;
-ALTER TABLE refresh_tokens DROP COLUMN IF EXISTS user_agent;
-ALTER TABLE refresh_tokens DROP COLUMN IF EXISTS ip_address;
-ALTER TABLE refresh_tokens DROP COLUMN IF EXISTS device_id;
-ALTER TABLE audit_logs DROP COLUMN IF EXISTS ip_address;
-ALTER TABLE files ADD COLUMN IF NOT EXISTS note TEXT;
-ALTER TABLE files ADD COLUMN IF NOT EXISTS share_expires_at timestamptz;
-ALTER TABLE files ADD COLUMN IF NOT EXISTS share_download_limit INT;
-ALTER TABLE files ADD COLUMN IF NOT EXISTS share_download_count INT NOT NULL DEFAULT 0;
-ALTER TABLE users ADD COLUMN IF NOT EXISTS trash_retention_days INT NOT NULL DEFAULT 30;
-ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url TEXT;
-ALTER TABLE users ADD COLUMN IF NOT EXISTS default_view TEXT NOT NULL DEFAULT 'all';
-ALTER TABLE users ADD COLUMN IF NOT EXISTS layout_mode TEXT NOT NULL DEFAULT 'grid';
-ALTER TABLE users ADD COLUMN IF NOT EXISTS upload_protection BOOLEAN NOT NULL DEFAULT TRUE;
-ALTER TABLE users ADD COLUMN IF NOT EXISTS compact_metadata BOOLEAN NOT NULL DEFAULT TRUE;
-ALTER TABLE users ADD COLUMN IF NOT EXISTS device_lock BOOLEAN NOT NULL DEFAULT FALSE;
-ALTER TABLE users ADD COLUMN IF NOT EXISTS sync_on_metered BOOLEAN NOT NULL DEFAULT FALSE;
-ALTER TABLE folders ADD COLUMN IF NOT EXISTS encrypted_key bytea;
-ALTER TABLE folders ADD COLUMN IF NOT EXISTS is_public BOOLEAN NOT NULL DEFAULT FALSE;
-ALTER TABLE folders ADD COLUMN IF NOT EXISTS share_token TEXT;
-ALTER TABLE folders ADD COLUMN IF NOT EXISTS description TEXT;
-ALTER TABLE groups ADD COLUMN IF NOT EXISTS default_role TEXT NOT NULL DEFAULT 'viewer';
-ALTER TABLE group_invitations ADD COLUMN IF NOT EXISTS role TEXT NOT NULL DEFAULT 'viewer';
-CREATE INDEX IF NOT EXISTS idx_groups_owner_id ON groups (owner_id);
-CREATE INDEX IF NOT EXISTS idx_group_invitations_group_id ON group_invitations (group_id);
-CREATE TABLE IF NOT EXISTS calendar_entries
-(
-    id         UUID PRIMARY KEY     DEFAULT gen_random_uuid(),
-    owner_id   UUID        NOT NULL REFERENCES users (id) ON DELETE CASCADE,
-    kind       TEXT        NOT NULL CHECK (kind IN ('event', 'deadline')),
-    date       TEXT        NOT NULL,
-    time       TEXT        NOT NULL,
-    title      TEXT        NOT NULL,
-    note       TEXT        NOT NULL DEFAULT '',
-    reminder   TEXT        NOT NULL DEFAULT '',
-    file_id    UUID        REFERENCES files (id) ON DELETE SET NULL,
-    created_at timestamptz NOT NULL DEFAULT NOW(),
-    updated_at timestamptz NOT NULL DEFAULT NOW()
-);
-CREATE INDEX IF NOT EXISTS idx_calendar_entries_owner_date ON calendar_entries (owner_id, date);
 CREATE TABLE IF NOT EXISTS favorites
 (
     user_id    UUID        NOT NULL REFERENCES users (id) ON DELETE CASCADE,

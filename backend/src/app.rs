@@ -108,20 +108,6 @@ pub async fn run_server() {
         "loaded application config"
     );
 
-    crate::db::calendar::ensure_calendar_entries_table(&pool)
-        .await
-        .expect("Failed to ensure calendar_entries table");
-    crate::db::groups::ensure_groups_tables(&pool)
-        .await
-        .expect("Failed to ensure groups tables");
-    crate::db::files::ensure_file_shares_table(&pool)
-        .await
-        .expect("Failed to ensure file_shares table");
-    crate::db::users::ensure_user_settings_columns(&pool)
-        .await
-        .expect("Failed to ensure user settings columns");
-    tracing::info!("database schema checks completed");
-
     if config.is_dev {
         tracing::info!("running in development mode");
     }

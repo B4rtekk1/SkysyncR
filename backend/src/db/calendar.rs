@@ -38,40 +38,6 @@ pub struct CalendarEntryUpdate {
     pub file_id: Option<Uuid>,
 }
 
-pub async fn ensure_calendar_entries_table(pool: &PgPool) -> Result<(), sqlx::Error> {
-    sqlx::query(
-        r#"
-        CREATE TABLE IF NOT EXISTS calendar_entries
-        (
-            id         UUID PRIMARY KEY     DEFAULT gen_random_uuid(),
-            owner_id   UUID        NOT NULL REFERENCES users (id) ON DELETE CASCADE,
-            kind       TEXT        NOT NULL CHECK (kind IN ('event', 'deadline')),
-            date       TEXT        NOT NULL,
-            time       TEXT        NOT NULL,
-            title      TEXT        NOT NULL,
-            note       TEXT        NOT NULL DEFAULT '',
-            reminder   TEXT        NOT NULL DEFAULT '',
-            file_id    UUID        REFERENCES files (id) ON DELETE SET NULL,
-            created_at timestamptz NOT NULL DEFAULT NOW(),
-            updated_at timestamptz NOT NULL DEFAULT NOW()
-        )
-        "#,
-    )
-    .execute(pool)
-    .await?;
-
-    sqlx::query(
-        r#"
-        CREATE INDEX IF NOT EXISTS idx_calendar_entries_owner_date
-        ON calendar_entries (owner_id, date)
-        "#,
-    )
-    .execute(pool)
-    .await?;
-
-    Ok(())
-}
-
 pub async fn list_calendar_entries(
     pool: &PgPool,
     user_id: Uuid,
