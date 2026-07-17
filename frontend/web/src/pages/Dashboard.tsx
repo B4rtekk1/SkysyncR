@@ -11,8 +11,7 @@ import React, {
 import { useNavigate } from 'react-router-dom'
 import '../App.css'
 import '../css/Dashbord.css'
-import SettingsModal from './Settings'
-import { loadUserSettings } from './settingsPreferences'
+import { loadUserSettings, type SettingsState } from './settingsPreferences'
 import {
     listFiles,
     listFolders,
@@ -36,19 +35,11 @@ import {
     unwrapFileKeyForUser,
     wrapFileKeyForUser,
 } from '../crypto/fileEncryption'
-import { CreateFileModal } from './dashboard/CreateFileModal'
-import { CreateFolderModal } from './dashboard/CreateFolderModal'
-import { DashboardFileGrid } from './dashboard/DashboardFileGrid'
+import { DashboardContent } from './dashboard/DashboardContent'
+import { DashboardModals } from './dashboard/DashboardModals'
 import { DashboardSidebar } from './dashboard/DashboardSidebar'
-import { DashboardToolbar } from './dashboard/DashboardToolbar'
 import { DashboardTopbar } from './dashboard/DashboardTopbar'
-import { EmptyPane } from './dashboard/EmptyPane'
-import { FolderBreadcrumbs } from './dashboard/FolderBreadcrumbs'
-import { FileNoteModal } from './dashboard/FileNoteModal'
-import { CalendarPanel } from './dashboard/CalendarPanel'
-import { GroupsPanel } from './dashboard/GroupsPanel'
-import { ImagePreviewModal } from './dashboard/ImagePreviewModal'
-import { ShareFileModal } from './dashboard/ShareFileModal'
+import { hasFileExtension, mimeTypeForCreatedFile } from './dashboard/createdFile'
 import {
     formatSizeValue,
     getFilterSummary,
@@ -522,24 +513,9 @@ function Dashboard() {
         }
     }
 
-    function mimeTypeForCreatedFile(filename: string) {
-        const lower = filename.toLowerCase()
-        if (lower.endsWith('.md') || lower.endsWith('.markdown')) return 'text/markdown'
-        if (lower.endsWith('.csv')) return 'text/csv'
-        if (lower.endsWith('.json')) return 'application/json'
-        if (lower.endsWith('.html') || lower.endsWith('.htm')) return 'text/html'
-        if (lower.endsWith('.css')) return 'text/css'
-        if (lower.endsWith('.js') || lower.endsWith('.mjs') || lower.endsWith('.cjs')) return 'text/javascript'
-        return 'text/plain'
-    }
-
     function resetFileCreateDraft() {
         setFileCreateOpen(false)
         setFileNameDraft('Untitled.txt')
-    }
-
-    function hasFileExtension(filename: string) {
-        return /\.[^.\s/\\]+$/.test(filename)
     }
 
     async function handleCreateFile() {
@@ -885,6 +861,27 @@ function Dashboard() {
         window.location.href = '/login'
     }
 
+    function handleSettingsSave(profile: SettingsState) {
+        setDisplayName(profile.displayName || 'You')
+        setAvatarUrl(profile.avatarUrl)
+        setCurrentUser((current) =>
+            current
+                ? {
+                      ...current,
+                      display_name: profile.displayName || null,
+                      avatar_url: profile.avatarUrl || null,
+                      default_view: profile.defaultView,
+                      layout_mode: profile.layoutMode,
+                      upload_protection: profile.uploadProtection,
+                      compact_metadata: profile.compactMetadata,
+                      device_lock: profile.deviceLock,
+                      sync_on_metered: profile.syncOnMetered,
+                      trash_retention_days: profile.trashRetentionDays,
+                  }
+                : current,
+        )
+    }
+
     return (
         <div
             className={`shell ${sidebarHidden ? 'is-sidebar-hidden' : ''} ${sidebarCompact ? 'is-sidebar-compact' : ''}`}
@@ -932,330 +929,150 @@ function Dashboard() {
                     onSignOut={() => void signOut()}
                 />
 
-                <div
-                    className={`shell__content ${dragActive ? 'is-dragging' : ''}`}
-                    onDragOver={(e) => {
-                        if (!isFileDrag(e)) return
-                        e.preventDefault()
-                        setDragActive(true)
+                <DashboardContent
+                    view={view}
+                    dragActive={dragActive}
+                    isFileDrag={isFileDrag}
+                    onDragActiveChange={setDragActive}
+                    onDrop={onDrop}
+                    sortMenuRef={sortMenuRef}
+                    filterMenuRef={filterMenuRef}
+                    sortMenuOpen={sortMenuOpen}
+                    sortMenuClosing={sortMenuClosing}
+                    filterMenuOpen={filterMenuOpen}
+                    filterMenuClosing={filterMenuClosing}
+                    sortKey={sortKey}
+                    layoutMode={layoutMode}
+                    layoutSwitchTarget={layoutSwitchTarget}
+                    filterSummary={filterSummary}
+                    query={query}
+                    fileFilters={fileFilters}
+                    hasActiveFilter={hasActiveFilter}
+                    sizeSliderMax={sizeSliderMax}
+                    sizeSliderMinValue={sizeSliderMinValue}
+                    sizeSliderMaxValue={sizeSliderMaxValue}
+                    sizeSliderMinPct={sizeSliderMinPct}
+                    sizeSliderMaxPct={sizeSliderMaxPct}
+                    onToggleSortMenu={toggleSortMenu}
+                    onCloseSortMenu={closeSortMenu}
+                    onSortKeyChange={setSortKey}
+                    onToggleFilterMenu={toggleFilterMenu}
+                    onCloseFilterMenu={closeFilterMenu}
+                    onQueryChange={setQuery}
+                    onClearFileTypes={() => setFileFilters((current) => ({ ...current, types: [] }))}
+                    onToggleFileType={toggleFileTypeFilter}
+                    onVisibilityChange={updateVisibilityFilter}
+                    onSizeInputChange={updateSizeFilter}
+                    onSizeSliderChange={updateSizeSlider}
+                    onExcludedExtensionsChange={updateExcludedExtensions}
+                    onModifiedDateChange={updateModifiedDateFilter}
+                    onClearFilters={clearFileFilters}
+                    onLayoutModeChange={changeLayoutMode}
+                    onOpenFileCreate={() => setFileCreateOpen(true)}
+                    onOpenFolderCreate={() => setFolderCreateOpen(true)}
+                    onUploadChange={onUploadChange}
+                    folderTrail={folderTrail}
+                    onOpenRoot={openFolderRoot}
+                    onOpenFolderAt={(folder, index) => {
+                        const nextTrail = folderTrail.slice(0, index + 1)
+                        setFolderTrail(nextTrail)
+                        setActiveFolderId(folder.id)
+                        setQuery('')
                     }}
-                    onDragLeave={() => setDragActive(false)}
-                    onDrop={(e) => {
-                        if (!isFileDrag(e)) return
-                        onDrop(e)
-                    }}
-                >
-                    <div className="shell__content-head">
-                        <div>
-                            <h1 className="shell__title">
-                                {view === 'all' && 'All files'}
-                                {view === 'favourites' && 'Favourites'}
-                                {view === 'shared' && 'Shared with me'}
-                                {view === 'groups' && 'Groups'}
-                                {view === 'calendar' && 'Calendar'}
-                                {view === 'trash' && 'Trash'}
-                            </h1>
-                        </div>
-
-                        <DashboardToolbar
-                            view={view}
-                            sortMenuRef={sortMenuRef}
-                            filterMenuRef={filterMenuRef}
-                            sortMenuOpen={sortMenuOpen}
-                            sortMenuClosing={sortMenuClosing}
-                            filterMenuOpen={filterMenuOpen}
-                            filterMenuClosing={filterMenuClosing}
-                            sortKey={sortKey}
-                            layoutMode={layoutMode}
-                            layoutSwitchTarget={layoutSwitchTarget}
-                            filterSummary={filterSummary}
-                            query={query}
-                            fileFilters={fileFilters}
-                            hasActiveFilter={hasActiveFilter}
-                            sizeSliderMax={sizeSliderMax}
-                            sizeSliderMinValue={sizeSliderMinValue}
-                            sizeSliderMaxValue={sizeSliderMaxValue}
-                            sizeSliderMinPct={sizeSliderMinPct}
-                            sizeSliderMaxPct={sizeSliderMaxPct}
-                            onToggleSortMenu={toggleSortMenu}
-                            onCloseSortMenu={closeSortMenu}
-                            onSortKeyChange={setSortKey}
-                            onToggleFilterMenu={toggleFilterMenu}
-                            onCloseFilterMenu={closeFilterMenu}
-                            onQueryChange={setQuery}
-                            onClearFileTypes={() => setFileFilters((current) => ({ ...current, types: [] }))}
-                            onToggleFileType={toggleFileTypeFilter}
-                            onVisibilityChange={updateVisibilityFilter}
-                            onSizeInputChange={updateSizeFilter}
-                            onSizeSliderChange={updateSizeSlider}
-                            onExcludedExtensionsChange={updateExcludedExtensions}
-                            onModifiedDateChange={updateModifiedDateFilter}
-                            onClearFilters={clearFileFilters}
-                            onLayoutModeChange={changeLayoutMode}
-                            onOpenFileCreate={() => setFileCreateOpen(true)}
-                            onOpenFolderCreate={() => setFolderCreateOpen(true)}
-                            onUploadChange={onUploadChange}
-                        />
-                    </div>
-
-                    {view === 'all' && folderTrail.length > 0 && (
-                        <FolderBreadcrumbs
-                            folderTrail={folderTrail}
-                            onOpenRoot={openFolderRoot}
-                            onOpenFolderAt={(folder, index) => {
-                                const nextTrail = folderTrail.slice(0, index + 1)
-                                setFolderTrail(nextTrail)
-                                setActiveFolderId(folder.id)
-                                setQuery('')
-                            }}
-                            onOpenParent={openFolderParent}
-                        />
-                    )}
-
-                    {error && (
-                        <p className="shell__error" role="alert">
-                            {error}
-                        </p>
-                    )}
-
-                    {loading && <p className="shell__loading">Loading…</p>}
-
-                    {!loading && view === 'shared' && visibleItems.length === 0 && renderedItems.length === 0 && (
-                        <EmptyPane
-                            title={
-                                query
-                                    ? 'No shared files match your search'
-                                    : hasActiveFilter
-                                        ? 'No shared files match your filters'
-                                        : 'Nothing shared yet'
-                            }
-                            body={
-                                query || hasActiveFilter
-                                    ? 'Adjust the search or filter to see more shared files.'
-                                    : 'Files someone shares with you will show up here, still encrypted end-to-end.'
-                            }
-                        />
-                    )}
-
-                    {!loading && view === 'groups' && (
-                        <GroupsPanel
-                            groups={groups}
-                            error={groupError}
-                            activeGroupId={activeGroupId}
-                            createOpen={groupCreateOpen}
-                            inviteOpen={groupInviteOpen}
-                            onCreateGroup={createGroup}
-                            onOpenCreate={() => {
-                                setGroupCreateOpen(true)
-                                setGroupInviteOpen(false)
-                            }}
-                            onCloseCreate={() => setGroupCreateOpen(false)}
-                            onOpenGroup={openGroup}
-                            onBackToGroups={backToGroups}
-                            onOpenInvite={() => {
-                                setGroupInviteOpen(true)
-                                setGroupCreateOpen(false)
-                            }}
-                            onCloseInvite={() => setGroupInviteOpen(false)}
-                            onInvite={addGroupInvite}
-                            onRemoveInvite={removeGroupInvite}
-                            onUpdateGroup={updateGroup}
-                            onDeleteGroup={deleteGroup}
-                        />
-                    )}
-
-                    {!loading && view === 'favourites' && visibleItems.length === 0 && renderedItems.length === 0 && (
-                        <EmptyPane
-                            title={
-                                query
-                                    ? 'No favourites match your search'
-                                    : hasActiveFilter
-                                        ? 'No favourites match your filters'
-                                        : 'No favourites yet'
-                            }
-                            body={
-                                query || hasActiveFilter
-                                    ? 'Adjust the search or filter to see more favourites.'
-                                    : 'Tap the star on any file to pin it here for quick access.'
-                            }
-                        />
-                    )}
-
-                    {!loading && view === 'calendar' && (
-                        <CalendarPanel
-                            files={storageItems}
-                            onPreview={handleFilePreview}
-                            onDownload={(item) => void handleDownload(item)}
-                        />
-                    )}
-
-                    {!loading && view === 'trash' && visibleItems.length === 0 && renderedItems.length === 0 && (
-                        <EmptyPane
-                            title={hasActiveFilter || query ? 'No deleted files match' : 'Trash is empty'}
-                            body={
-                                hasActiveFilter || query
-                                    ? 'Adjust the search or filter to see more deleted files.'
-                                    : `Deleted files stay here for ${currentUser?.trash_retention_days ?? 30} days before they're gone for good.`
-                            }
-                        />
-                    )}
-
-                    {!loading && view === 'all' && visibleFolders.length === 0 && visibleItems.length === 0 && renderedItems.length === 0 && (
-                        <EmptyPane
-                            title={
-                                query
-                                    ? 'No files match your search'
-                                    : hasActiveFilter
-                                        ? 'No files match your filters'
-                                        : 'Drop files to encrypt and sync'
-                            }
-                            body={
-                                query || hasActiveFilter
-                                    ? 'Try a different name, or clear the filter to see everything.'
-                                    : 'Files are locked with AES-256 on this device before they ever reach the network.'
-                            }
-                        />
-                    )}
-
-                    {!loading && (visibleFolders.length > 0 || renderedItems.length > 0) && (
-                        <DashboardFileGrid
-                            visibleFolders={visibleFolders}
-                            renderedItems={renderedItems}
-                            exitingIds={animatedFiles.exitingIds}
-                            pendingIds={pendingIds}
-                            favouriteIds={favouriteIds}
-                            view={view}
-                            layoutMode={layoutMode}
-                            layoutSwitchTarget={layoutSwitchTarget}
-                            sortKey={sortKey}
-                            draggedCardId={draggedCardId}
-                            dropTargetId={dropTargetId}
-                            onOpenFolder={openFolder}
-                            onShareFolder={handleShareFolder}
-                            onRenameFolder={handleRenameFolder}
-                            onDelete={handleDelete}
-                            onRestore={handleRestore}
-                            onPermanentDelete={handlePermanentDelete}
-                            onDownload={handleDownload}
-                            onPreview={handleFilePreview}
-                            onRename={handleRename}
-                            onShare={handleShare}
-                            onNote={setNoteItem}
-                            onToggleFavourite={toggleFavourite}
-                            onDragStartCard={handleCardDragStart}
-                            onDragEnterCard={handleCardDragEnter}
-                            onDragLeaveCard={handleCardDragLeave}
-                            onDropCard={handleCardDrop}
-                            onDragEndCard={handleCardDragEnd}
-                        />
-                    )}
-
-                    {dragActive && (
-                        <div className="dropzone-overlay">
-                            <p>Drop to encrypt &amp; upload</p>
-                        </div>
-                    )}
-                </div>
-            </div>
-            {filePreview && (
-                <ImagePreviewModal
-                    key={filePreview.item.id}
-                    preview={filePreview}
-                    onClose={closeFilePreview}
-                    onDownload={handleDownload}
-                    onSaveText={handleSaveTextFile}
-                />
-            )}
-            {settingsOpen && (
-                <SettingsModal
+                    onOpenParent={openFolderParent}
+                    error={error}
+                    loading={loading}
+                    visibleItems={visibleItems}
+                    renderedItems={renderedItems}
+                    visibleFolders={visibleFolders}
+                    storageItems={storageItems}
+                    exitingIds={animatedFiles.exitingIds}
+                    pendingIds={pendingIds}
+                    favouriteIds={favouriteIds}
                     currentUser={currentUser}
-                    onClose={() => setSettingsOpen(false)}
-                    onSave={(profile) => {
-                        setDisplayName(profile.displayName || 'You')
-                        setAvatarUrl(profile.avatarUrl)
-                        setCurrentUser((current) =>
-                            current
-                                ? {
-                                      ...current,
-                                      display_name: profile.displayName || null,
-                                      avatar_url: profile.avatarUrl || null,
-                                      default_view: profile.defaultView,
-                                      layout_mode: profile.layoutMode,
-                                      upload_protection: profile.uploadProtection,
-                                      compact_metadata: profile.compactMetadata,
-                                      device_lock: profile.deviceLock,
-                                      sync_on_metered: profile.syncOnMetered,
-                                      trash_retention_days: profile.trashRetentionDays,
-                                  }
-                                : current,
-                        )
-                    }}
-                />
-            )}
-            {fileCreateOpen && (
-                <CreateFileModal
-                    currentFolderName={folderTrail.at(-1)?.name ?? 'All files'}
-                    fileNameDraft={fileNameDraft}
-                    fileSaving={fileSaving}
-                    canCreate={Boolean(fileNameDraft.trim() && hasFileExtension(fileNameDraft.trim()))}
-                    onFileNameChange={setFileNameDraft}
-                    onCreate={() => void handleCreateFile()}
-                    onClose={resetFileCreateDraft}
-                />
-            )}
-            {folderCreateOpen && (
-                <CreateFolderModal
-                    currentFolderName={folderTrail.at(-1)?.name ?? 'All files'}
-                    folderNameDraft={folderNameDraft}
-                    folderDescriptionDraft={folderDescriptionDraft}
-                    folderSaving={folderSaving}
-                    onFolderNameChange={setFolderNameDraft}
-                    onFolderDescriptionChange={setFolderDescriptionDraft}
-                    onCreate={() => void handleCreateFolder()}
-                    onClose={() => {
-                        setFolderCreateOpen(false)
-                        setFolderNameDraft('')
-                        setFolderDescriptionDraft('')
-                    }}
-                />
-            )}
-            {noteItem && (
-                <FileNoteModal
-                    item={noteItem}
-                    saving={noteSaving}
-                    onClose={() => setNoteItem(null)}
-                    onSave={handleSaveNote}
-                />
-            )}
-            {shareItem && (
-                <ShareFileModal
-                    item={shareItem}
-                    itemKind={'filename' in shareItem ? 'file' : 'folder'}
-                    shareUrl={
-                        shareItem.is_public && shareItem.share_token
-                            ? `${window.location.origin}/share/${'filename' in shareItem ? '' : 'folders/'}${shareItem.share_token}`
-                            : null
-                    }
-                    loading={shareLoading}
-                    privateKey={privateKey}
                     groups={groups}
-                    onClose={() => setShareItem(null)}
-                    onEnableShare={async (expiresInSeconds, downloadLimit) => {
-                        if ('filename' in shareItem) {
-                            await setFileSharing(shareItem, true, expiresInSeconds, downloadLimit)
-                        } else {
-                            await setFolderSharing(shareItem, true)
-                        }
+                    groupError={groupError}
+                    activeGroupId={activeGroupId}
+                    groupCreateOpen={groupCreateOpen}
+                    groupInviteOpen={groupInviteOpen}
+                    onCreateGroup={createGroup}
+                    onOpenGroupCreate={() => {
+                        setGroupCreateOpen(true)
+                        setGroupInviteOpen(false)
                     }}
-                    onDisableShare={async () => {
-                        if ('filename' in shareItem) {
-                            await setFileSharing(shareItem, false)
-                        } else {
-                            await setFolderSharing(shareItem, false)
-                        }
+                    onCloseGroupCreate={() => setGroupCreateOpen(false)}
+                    onOpenGroup={openGroup}
+                    onBackToGroups={backToGroups}
+                    onOpenGroupInvite={() => {
+                        setGroupInviteOpen(true)
+                        setGroupCreateOpen(false)
                     }}
+                    onCloseGroupInvite={() => setGroupInviteOpen(false)}
+                    onInvite={addGroupInvite}
+                    onRemoveInvite={removeGroupInvite}
+                    onUpdateGroup={updateGroup}
+                    onDeleteGroup={deleteGroup}
+                    draggedCardId={draggedCardId}
+                    dropTargetId={dropTargetId}
+                    onOpenFolder={openFolder}
+                    onShareFolder={handleShareFolder}
+                    onRenameFolder={handleRenameFolder}
+                    onDelete={handleDelete}
+                    onRestore={handleRestore}
+                    onPermanentDelete={handlePermanentDelete}
+                    onDownload={handleDownload}
+                    onPreview={handleFilePreview}
+                    onRename={handleRename}
+                    onShare={handleShare}
+                    onNote={setNoteItem}
+                    onToggleFavourite={toggleFavourite}
+                    onDragStartCard={handleCardDragStart}
+                    onDragEnterCard={handleCardDragEnter}
+                    onDragLeaveCard={handleCardDragLeave}
+                    onDropCard={handleCardDrop}
+                    onDragEndCard={handleCardDragEnd}
                 />
-            )}
+            </div>
+            <DashboardModals
+                filePreview={filePreview}
+                onCloseFilePreview={closeFilePreview}
+                onDownload={handleDownload}
+                onSaveTextFile={handleSaveTextFile}
+                settingsOpen={settingsOpen}
+                currentUser={currentUser}
+                onCloseSettings={() => setSettingsOpen(false)}
+                onSaveSettings={handleSettingsSave}
+                fileCreateOpen={fileCreateOpen}
+                currentFolderName={folderTrail.at(-1)?.name ?? 'All files'}
+                fileNameDraft={fileNameDraft}
+                fileSaving={fileSaving}
+                onFileNameChange={setFileNameDraft}
+                onCreateFile={() => void handleCreateFile()}
+                onCloseFileCreate={resetFileCreateDraft}
+                folderCreateOpen={folderCreateOpen}
+                folderNameDraft={folderNameDraft}
+                folderDescriptionDraft={folderDescriptionDraft}
+                folderSaving={folderSaving}
+                onFolderNameChange={setFolderNameDraft}
+                onFolderDescriptionChange={setFolderDescriptionDraft}
+                onCreateFolder={() => void handleCreateFolder()}
+                onCloseFolderCreate={() => {
+                    setFolderCreateOpen(false)
+                    setFolderNameDraft('')
+                    setFolderDescriptionDraft('')
+                }}
+                noteItem={noteItem}
+                noteSaving={noteSaving}
+                onCloseNote={() => setNoteItem(null)}
+                onSaveNote={handleSaveNote}
+                shareItem={shareItem}
+                shareLoading={shareLoading}
+                privateKey={privateKey}
+                groups={groups}
+                onCloseShare={() => setShareItem(null)}
+                onSetFileSharing={setFileSharing}
+                onSetFolderSharing={setFolderSharing}
+            />
         </div>
     )
 }
