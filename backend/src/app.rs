@@ -8,6 +8,7 @@ use crate::services::storage_consistency::spawn_storage_consistency_worker;
 use crate::services::trash::spawn_trash_purge_worker;
 use crate::state::{AppConfig, AppState};
 use axum::http::{HeaderName, HeaderValue, Method, header};
+use axum::middleware;
 use axum::routing::get;
 use axum::{Json, Router};
 use serde::{Deserialize, Serialize};
@@ -106,7 +107,7 @@ pub async fn run_server() {
         .expect("Failed to ensure user settings columns");
 
     if config.is_dev {
-        println!("Running in development mode");
+        tracing::info!("running in development mode");
     }
 
     spawn_trash_purge_worker(
@@ -164,6 +165,9 @@ pub async fn run_server() {
             HeaderName::from_static("permissions-policy"),
             "camera=(), microphone=(), geolocation=(), payment=(), usb=(), fullscreen=(self)",
         ))
+        .layer(middleware::from_fn(
+            crate::observability::request_observability,
+        ))
         .layer(cors_layer());
 
     let app = if config.is_dev {
@@ -176,7 +180,7 @@ pub async fn run_server() {
     };
 
     let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
-    println!("listening on http://0.0.0.0:3000 (dev)");
+    tracing::info!(address = "0.0.0.0:3000", "listening");
 
     axum::serve(
         listener,

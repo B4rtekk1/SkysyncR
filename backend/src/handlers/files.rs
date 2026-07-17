@@ -1,7 +1,7 @@
 use axum::{
     Json,
     body::Body,
-    extract::{Multipart, Path, Query, State},
+    extract::{Extension, Multipart, Path, Query, State},
     http::{
         HeaderMap, HeaderValue, StatusCode,
         header::{CONTENT_DISPOSITION, CONTENT_TYPE},
@@ -29,6 +29,7 @@ use crate::db::files::{
     upsert_user_file_share, user_file_exists,
 };
 use crate::db::storage::try_apply_storage_delta;
+use crate::observability::RequestId;
 use crate::services::trash::permanently_delete_user_file;
 use crate::state::AppState;
 use crate::utils::errors::{ApiError, internal_error};
@@ -107,6 +108,7 @@ pub async fn list_files(
 
 pub async fn upload_file(
     State(state): State<AppState>,
+    Extension(request_id): Extension<RequestId>,
     auth: AuthUser,
     multipart: Multipart,
 ) -> Result<(StatusCode, Json<FileRecord>), ApiError> {
@@ -187,6 +189,15 @@ pub async fn upload_file(
         return Err(internal_error("commit upload transaction", err));
     }
 
+    tracing::info!(
+        request_id = %request_id.0,
+        transfer_direction = "upload",
+        user_id = %auth.user_id,
+        file_id = %record.id,
+        bytes = file_size,
+        "file_transfer"
+    );
+
     Ok((StatusCode::CREATED, Json(record)))
 }
 
@@ -255,6 +266,7 @@ pub async fn rename_file(
 
 pub async fn update_file_content(
     State(state): State<AppState>,
+    Extension(request_id): Extension<RequestId>,
     auth: AuthUser,
     Path(file_id): Path<Uuid>,
     multipart: Multipart,
@@ -336,6 +348,15 @@ pub async fn update_file_content(
     if let Err(err) = tx.commit().await {
         return Err(internal_error("commit file update transaction", err));
     }
+
+    tracing::info!(
+        request_id = %request_id.0,
+        transfer_direction = "update",
+        user_id = %auth.user_id,
+        file_id = %file.id,
+        bytes = file_size,
+        "file_transfer"
+    );
 
     Ok(Json(file))
 }
@@ -559,6 +580,7 @@ async fn ensure_user_file_exists(
 
 pub async fn download_file(
     State(state): State<AppState>,
+    Extension(request_id): Extension<RequestId>,
     auth: AuthUser,
     Path(file_id): Path<Uuid>,
 ) -> Result<Response, ApiError> {
@@ -576,6 +598,9 @@ pub async fn download_file(
         CONTENT_TYPE,
         HeaderValue::from_static("application/octet-stream"),
     );
+    if let Ok(value) = HeaderValue::from_str(&file.size_bytes.to_string()) {
+        headers.insert(axum::http::header::CONTENT_LENGTH, value);
+    }
     let disposition = format!(
         "attachment; filename=\"{}\"",
         sanitize_download_filename(&file.filename)
@@ -584,6 +609,15 @@ pub async fn download_file(
         CONTENT_DISPOSITION,
         HeaderValue::from_str(&disposition)
             .unwrap_or_else(|_| HeaderValue::from_static("attachment")),
+    );
+
+    tracing::info!(
+        request_id = %request_id.0,
+        transfer_direction = "download",
+        user_id = %auth.user_id,
+        file_id = %file_id,
+        bytes = file.size_bytes,
+        "file_transfer"
     );
 
     Ok((headers, Body::from_stream(ReaderStream::new(download))).into_response())

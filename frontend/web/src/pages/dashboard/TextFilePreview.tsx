@@ -1,8 +1,18 @@
-import { useEffect, useState } from 'react'
+import { lazy, Suspense, useEffect, useState } from 'react'
 import { COPY_ICON } from './icons'
-import { MarkdownPreview } from './MarkdownPreview'
 import type { Item } from './types'
 import type { TextPreviewMode } from './useTextFilePreview'
+
+const MarkdownPreview = lazy(() => import('./MarkdownPreview').then((module) => ({ default: module.MarkdownPreview })))
+
+function MarkdownFallback() {
+    return (
+        <div className="image-preview__loading">
+            <span className="spinner" />
+            Loading Markdown preview...
+        </div>
+    )
+}
 
 export function TextFilePreviewModeToggle({
     setTextMode,
@@ -78,7 +88,11 @@ export function TextFilePreview({
     textMode: TextPreviewMode
 }) {
     if (canRenderMarkdown && textMode === 'render') {
-        return <MarkdownPreview text={text} />
+        return (
+            <Suspense fallback={<MarkdownFallback />}>
+                <MarkdownPreview text={text} />
+            </Suspense>
+        )
     }
 
     return (
@@ -123,7 +137,9 @@ export function TextFileEditor({
             </div>
             {canRenderMarkdown && (
                 <div className="image-preview__editor-pane image-preview__editor-pane--preview" aria-live="polite">
-                    <MarkdownPreview text={text} />
+                    <Suspense fallback={<MarkdownFallback />}>
+                        <MarkdownPreview text={text} />
+                    </Suspense>
                 </div>
             )}
             {error && <p className="image-preview__editor-error">{error}</p>}

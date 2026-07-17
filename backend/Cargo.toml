@@ -14,6 +14,8 @@ bcrypt = "0.19.2"
 tower = { version = "0.5.2", features = ["limit"] }
 tower-http = {version = "0.7.0", features = ["cors", "limit", "set-header", "timeout"]}
 tower_governor = "0.8.0"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 chrono = { version = "0.4.45" , features = ["serde"]}
 jsonwebtoken = { version = "10", features = ["rust_crypto"] }
 lettre = { version = "0.11", features = ["tokio1-native-tls", "tokio1"] }

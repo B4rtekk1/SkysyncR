@@ -110,6 +110,7 @@ pub struct NewFileShare {
 pub struct DownloadFileRecord {
     pub filename: String,
     pub storage_path: String,
+    pub size_bytes: i64,
 }
 
 #[derive(FromRow)]

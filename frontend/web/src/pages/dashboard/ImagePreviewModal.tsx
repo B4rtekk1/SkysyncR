@@ -1,11 +1,24 @@
-import { useState } from 'react'
+import { lazy, Suspense, useState } from 'react'
 import { CANCEL_ICON, CHECK_ICON, DOWNLOAD_ICON, RENAME_ICON } from './icons'
 import type { FilePreviewState, Item } from './types'
 import { formatBytes } from './fileUtils'
 import { TextFileCopyButton, TextFileEditor, TextFilePreview, TextFilePreviewModeToggle } from './TextFilePreview'
 import { useTextFilePreview } from './useTextFilePreview'
-import { VideoPreviewPlayer } from './VideoPreviewPlayer'
-import { PdfPreview } from './PdfPreview'
+
+const PdfPreview = lazy(() => import('./PdfPreview').then((module) => ({ default: module.PdfPreview })))
+const SlidesPreview = lazy(() => import('./SlidesPreview').then((module) => ({ default: module.SlidesPreview })))
+const VideoPreviewPlayer = lazy(() =>
+    import('./VideoPreviewPlayer').then((module) => ({ default: module.VideoPreviewPlayer })),
+)
+
+function PreviewFallback({ label }: { label: string }) {
+    return (
+        <div className="image-preview__loading">
+            <span className="spinner" />
+            {label}
+        </div>
+    )
+}
 
 export function ImagePreviewModal({
                                preview,
@@ -140,10 +153,19 @@ export function ImagePreviewModal({
                         <img className="image-preview__image" src={preview.url} alt={preview.item.filename} />
                     )}
                     {preview.url && preview.kind === 'video' && (
-                        <VideoPreviewPlayer item={preview.item} url={preview.url} />
+                        <Suspense fallback={<PreviewFallback label="Loading video preview..." />}>
+                            <VideoPreviewPlayer item={preview.item} url={preview.url} />
+                        </Suspense>
                     )}
                     {preview.url && preview.kind === 'pdf' && (
-                        <PdfPreview item={preview.item} url={preview.url} />
+                        <Suspense fallback={<PreviewFallback label="Loading PDF preview..." />}>
+                            <PdfPreview item={preview.item} url={preview.url} />
+                        </Suspense>
+                    )}
+                    {preview.url && preview.kind === 'presentation' && (
+                        <Suspense fallback={<PreviewFallback label="Loading presentation preview..." />}>
+                            <SlidesPreview item={preview.item} url={preview.url} onDownload={onDownload} />
+                        </Suspense>
                     )}
                     {preview.text !== null && (
                         isEditingText ? (
@@ -168,5 +190,4 @@ export function ImagePreviewModal({
         </div>
     )
 }
-
 

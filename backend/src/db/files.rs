@@ -117,7 +117,7 @@ pub async fn get_user_file_for_download(
 ) -> Result<Option<DownloadFileRecord>, sqlx::Error> {
     sqlx::query_as::<_, DownloadFileRecord>(
         r#"
-        SELECT filename, storage_path
+        SELECT filename, storage_path, size_bytes
         FROM files
         WHERE id = $1
           AND (

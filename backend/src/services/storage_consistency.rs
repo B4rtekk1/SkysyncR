@@ -25,18 +25,18 @@ pub fn spawn_storage_consistency_worker(pool: PgPool, upload_dir: PathBuf, inter
 async fn inspect_storage(pool: &PgPool, upload_dir: &Path) {
     match reconcile_all_storage_quotas(pool).await {
         Ok(rows) if rows > 0 => {
-            eprintln!("storage consistency: reconciled {rows} quota rows");
+            tracing::info!(rows, "storage consistency reconciled quota rows");
         }
         Ok(_) => {}
         Err(err) => {
-            eprintln!("storage consistency: failed to reconcile quotas: {err}");
+            tracing::error!(error = %err, "storage consistency failed to reconcile quotas");
         }
     }
 
     let records = match list_storage_records(pool).await {
         Ok(records) => records,
         Err(err) => {
-            eprintln!("storage consistency: failed to list file records: {err}");
+            tracing::error!(error = %err, "storage consistency failed to list file records");
             return;
         }
     };
@@ -48,26 +48,21 @@ async fn inspect_storage(pool: &PgPool, upload_dir: &Path) {
 
     for (id, storage_path) in &records {
         if fs::metadata(storage_path).await.is_err() {
-            eprintln!(
-                "storage consistency: record {id} references missing binary at {storage_path}"
-            );
+            tracing::warn!(file_id = %id, "storage consistency record references missing binary");
         }
     }
 
     let disk_paths = match list_disk_binaries(upload_dir).await {
         Ok(paths) => paths,
         Err(err) => {
-            eprintln!("storage consistency: failed to scan upload dir: {err}");
+            tracing::error!(error = %err, "storage consistency failed to scan upload dir");
             return;
         }
     };
 
     for path in disk_paths {
         if !known_paths.contains(&path) {
-            eprintln!(
-                "storage consistency: binary has no file record at {}",
-                path.display()
-            );
+            tracing::warn!("storage consistency binary has no file record");
         }
     }
 }

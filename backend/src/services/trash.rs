@@ -70,7 +70,7 @@ async fn purge_expired_files(pool: &PgPool, retention_days: i64) {
         {
             Ok(targets) => targets,
             Err(err) => {
-                eprintln!("trash purge: failed to list expired files: {err}");
+                tracing::error!(error = %err, "trash purge failed to list expired files");
                 return;
             }
         };
@@ -82,7 +82,7 @@ async fn purge_expired_files(pool: &PgPool, retention_days: i64) {
         let count = targets.len();
         for target in targets {
             if let Err(err) = purge_target(pool, target, true).await {
-                eprintln!("trash purge: failed to purge file: {err}");
+                tracing::error!(error = %err, "trash purge failed to purge file");
             }
         }
 
@@ -102,9 +102,10 @@ async fn purge_target(
         Err(err) if err.kind() == std::io::ErrorKind::NotFound => {}
         Err(err) => {
             if defer_storage_errors {
-                eprintln!(
-                    "trash purge: failed to remove binary for file {} at {}: {}",
-                    target.id, target.storage_path, err
+                tracing::error!(
+                    file_id = %target.id,
+                    error = %err,
+                    "trash purge failed to remove binary"
                 );
                 return Ok(());
             }

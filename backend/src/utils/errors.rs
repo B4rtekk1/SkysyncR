@@ -17,7 +17,7 @@ pub enum ApiError {
 }
 
 pub fn internal_error(context: &str, err: impl std::fmt::Display) -> ApiError {
-    eprintln!("[internal] {context}: {err}");
+    tracing::error!(context, error = %err, "internal error");
     ApiError::Internal("An internal error occurred".into())
 }
 

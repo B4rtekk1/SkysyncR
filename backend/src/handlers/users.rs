@@ -305,7 +305,7 @@ pub async fn register_user(
     let verification_email = email.clone();
     tokio::spawn(async move {
         if let Err(e) = send_verification_email(&verification_email, &token).await {
-            eprintln!("Failed to send verification email: {e}");
+            tracing::error!(error = %e, "failed to send verification email");
         }
     });
 
