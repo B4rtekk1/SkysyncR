@@ -28,6 +28,7 @@ import {
 import { logout } from '../api/auth'
 import { getUnlockedVaultSession } from '../api/session'
 import type { CurrentUserResponse } from '../api/users'
+import { onActivePrivateKeyCleared } from '../crypto/storage'
 import {
     encryptTextEnvelope,
     generateFileKey,
@@ -268,6 +269,15 @@ function Dashboard() {
     useEffect(() => {
         clearLegacyLocalFileMetadata()
     }, [])
+
+    useEffect(() => {
+        return onActivePrivateKeyCleared((userId) => {
+            setPrivateKey(null)
+            if (!currentUser || userId === null || userId === currentUser.id) {
+                navigate('/login', { replace: true })
+            }
+        })
+    }, [currentUser, navigate])
 
     useEffect(() => {
         const timeout = setTimeout(() => void refreshQuota(), 0)
@@ -705,7 +715,7 @@ function Dashboard() {
 
     async function signOut() {
         await logout()
-        window.location.href = '/login'
+        navigate('/login', { replace: true })
     }
 
     function handleSettingsSave(profile: SettingsState) {

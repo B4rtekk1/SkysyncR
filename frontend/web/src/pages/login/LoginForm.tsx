@@ -192,7 +192,7 @@ function LoginForm() {
 
       await storeActivePrivateKey(user.id, privateKey)
 
-      window.location.href = '/dashboard'
+      navigate('/dashboard', { replace: true })
     } catch (err) {
       setError(getLoginError(err))
     } finally {

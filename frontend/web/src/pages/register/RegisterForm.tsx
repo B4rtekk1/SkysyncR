@@ -1,7 +1,7 @@
 import { type SubmitEvent, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { registerUser } from '../../api/users'
-import { generateKeyPair, exportPublicKey, encryptPrivateKey } from '../../crypto/keys'
+import { generateKeyPair, exportPublicKey, encryptPrivateKey, decryptPrivateKey } from '../../crypto/keys'
 import { storeActivePrivateKey, storeEncryptedPrivateKey } from '../../crypto/storage'
 import EyeIcon from '../login/EyeIcon'
 import PasswordRequirements from './PasswordRequirements'
@@ -61,7 +61,8 @@ function RegisterForm() {
       })
 
       await storeEncryptedPrivateKey(userId, encryptedPrivateKey)
-      await storeActivePrivateKey(userId, keyPair.privateKey)
+      const activePrivateKey = await decryptPrivateKey(encryptedPrivateKey, password)
+      await storeActivePrivateKey(userId, activePrivateKey)
 
       navigate('/', {
         state: {
