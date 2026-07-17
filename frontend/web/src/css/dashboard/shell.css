@@ -127,7 +127,7 @@
     width: var(--nav-indicator-width, 0);
     height: var(--nav-indicator-height, 0);
     border-radius: 8px;
-    background: linear-gradient(90deg, rgba(var(--signal-rgb), 0.2), var(--panel-2));
+    background: rgba(var(--signal-rgb), 0.12);
     box-shadow: inset 0 0 0 1px rgba(var(--signal-rgb), 0.08);
     opacity: var(--nav-indicator-opacity, 0);
     transform: translate3d(var(--nav-indicator-x, 0), var(--nav-indicator-y, 0), 0);
@@ -140,19 +140,11 @@
 }
 
 .shell__nav-indicator::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    border-radius: inherit;
-    background: linear-gradient(90deg, rgba(var(--signal-rgb), 0.18), transparent 72%);
-    filter: blur(4px);
-    opacity: 0.82;
-    transform: scaleX(0.78);
-    transform-origin: left center;
+    content: none;
 }
 
 .shell__nav-indicator.is-pulling::before {
-    animation: nav-indicator-pull 0.5s cubic-bezier(0.16, 1.18, 0.24, 1);
+    animation: none;
 }
 
 .shell__navlist--footer {
