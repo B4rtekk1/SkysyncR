@@ -97,6 +97,9 @@ pub async fn run_server() {
     crate::db::groups::ensure_groups_tables(&pool)
         .await
         .expect("Failed to ensure groups tables");
+    crate::db::files::ensure_file_shares_table(&pool)
+        .await
+        .expect("Failed to ensure file_shares table");
     crate::db::users::ensure_user_settings_columns(&pool)
         .await
         .expect("Failed to ensure user settings columns");

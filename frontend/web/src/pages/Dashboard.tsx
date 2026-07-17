@@ -1721,6 +1721,7 @@ function Dashboard() {
                             : null
                     }
                     loading={shareLoading}
+                    privateKey={privateKey}
                     onClose={() => setShareItem(null)}
                     onEnableShare={async (expiresInSeconds, downloadLimit) => {
                         if ('filename' in shareItem) {

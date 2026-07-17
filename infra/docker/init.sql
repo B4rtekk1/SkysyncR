@@ -85,14 +85,19 @@ CREATE INDEX idx_refresh_tokens_user_id ON refresh_tokens (user_id);
 
 CREATE TABLE IF NOT EXISTS file_shares
 (
-    id                  UUID PRIMARY KEY     DEFAULT gen_random_uuid(),
-    file_id             UUID        NOT NULL REFERENCES files (id) ON DELETE CASCADE,
-    shared_with_user_id UUID        NOT NULL REFERENCES users (id) ON DELETE CASCADE,
-    permission          TEXT        NOT NULL DEFAULT 'read' CHECK (permission IN ('read', 'write')),
-    shared_by_user_id   UUID        NOT NULL REFERENCES users (id),
-    created_at          timestamptz NOT NULL DEFAULT NOW(),
-    UNIQUE (file_id, shared_with_user_id)
+    id                UUID PRIMARY KEY     DEFAULT gen_random_uuid(),
+    file_id           UUID        NOT NULL REFERENCES files (id) ON DELETE CASCADE,
+    owner_id          UUID        NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+    recipient_user_id UUID        NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+    permission        TEXT        NOT NULL DEFAULT 'read' CHECK (permission IN ('read', 'download', 'write')),
+    encrypted_key     BYTEA       NOT NULL,
+    created_at        timestamptz NOT NULL DEFAULT NOW(),
+    updated_at        timestamptz NOT NULL DEFAULT NOW(),
+    UNIQUE (file_id, recipient_user_id),
+    CHECK (owner_id <> recipient_user_id)
 );
+CREATE INDEX IF NOT EXISTS idx_file_shares_recipient ON file_shares (recipient_user_id);
+CREATE INDEX IF NOT EXISTS idx_file_shares_owner_file ON file_shares (owner_id, file_id);
 
 CREATE TABLE IF NOT EXISTS file_versions
 (

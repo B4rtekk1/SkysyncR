@@ -17,11 +17,13 @@ use uuid::Uuid;
 
 use crate::auth::AuthUser;
 use crate::db::files::{
-    FileRecord, NewFileRecord, SharedFileRecord, add_user_file_favourite, create_file_record,
-    folder_belongs_to_user, get_user_file_for_content_update, get_user_file_for_download,
-    list_files_shared_with_user, list_user_files, remove_user_file_favourite, rename_user_file,
-    restore_user_file, soft_delete_user_file, update_user_file_content, update_user_file_note,
-    update_user_file_share, user_file_exists,
+    FileRecord, FileShareRecord, NewFileRecord, NewFileShare, ShareRecipientRecord,
+    SharedFileRecord, add_user_file_favourite, create_file_record, delete_user_file_share,
+    folder_belongs_to_user, get_file_share_recipient, get_user_file_for_content_update,
+    get_user_file_for_download, list_files_shared_with_user, list_user_file_shares,
+    list_user_files, remove_user_file_favourite, rename_user_file, restore_user_file,
+    soft_delete_user_file, update_user_file_content, update_user_file_note, update_user_file_share,
+    upsert_user_file_share, user_file_exists,
 };
 use crate::db::storage::get_storage_quota;
 use crate::services::trash::permanently_delete_user_file;
@@ -45,6 +47,18 @@ pub struct ShareFileRequest {
     pub is_public: bool,
     pub expires_in_seconds: Option<i64>,
     pub download_limit: Option<i32>,
+}
+
+#[derive(Deserialize)]
+pub struct ShareRecipientQuery {
+    pub email: String,
+}
+
+#[derive(Deserialize)]
+pub struct CreateFileShareRequest {
+    pub email: String,
+    pub permission: String,
+    pub encrypted_key: String,
 }
 
 #[derive(Deserialize)]
@@ -298,6 +312,82 @@ pub async fn share_file(
     Ok(Json(file))
 }
 
+pub async fn get_file_share_recipient_profile(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Path(file_id): Path<Uuid>,
+    Query(query): Query<ShareRecipientQuery>,
+) -> Result<Json<ShareRecipientRecord>, ApiError> {
+    let email = normalize_share_email(&query.email)?;
+    let recipient = get_file_share_recipient(&state.db_pool, auth.user_id, file_id, &email)
+        .await
+        .map_err(|e| internal_error("get share recipient", e))?
+        .ok_or_else(|| ApiError::BadRequest("User not found or cannot receive shares".into()))?;
+
+    Ok(Json(recipient))
+}
+
+pub async fn list_file_shares(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Path(file_id): Path<Uuid>,
+) -> Result<Json<Vec<FileShareRecord>>, ApiError> {
+    ensure_user_file_exists(&state, auth.user_id, file_id).await?;
+    let shares = list_user_file_shares(&state.db_pool, auth.user_id, file_id)
+        .await
+        .map_err(|e| internal_error("list file shares", e))?;
+
+    Ok(Json(shares))
+}
+
+pub async fn create_file_share(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Path(file_id): Path<Uuid>,
+    Json(payload): Json<CreateFileShareRequest>,
+) -> Result<(StatusCode, Json<FileShareRecord>), ApiError> {
+    let email = normalize_share_email(&payload.email)?;
+    let permission = validate_share_permission(&payload.permission)?;
+    let encrypted_key = decode_base64_field("encrypted_key", &payload.encrypted_key)?;
+    if encrypted_key.len() < 128 {
+        return Err(ApiError::BadRequest(
+            "encrypted_key must be wrapped for the recipient".into(),
+        ));
+    }
+
+    let share = upsert_user_file_share(
+        &state.db_pool,
+        NewFileShare {
+            owner_id: auth.user_id,
+            file_id,
+            recipient_email: email,
+            permission,
+            encrypted_key,
+        },
+    )
+    .await
+    .map_err(|e| internal_error("create file share", e))?
+    .ok_or_else(|| ApiError::BadRequest("User not found or cannot receive shares".into()))?;
+
+    Ok((StatusCode::CREATED, Json(share)))
+}
+
+pub async fn delete_file_share(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Path((file_id, share_id)): Path<(Uuid, Uuid)>,
+) -> Result<StatusCode, ApiError> {
+    let rows = delete_user_file_share(&state.db_pool, auth.user_id, file_id, share_id)
+        .await
+        .map_err(|e| internal_error("delete file share", e))?;
+
+    if rows == 0 {
+        return Err(ApiError::BadRequest("File share not found".into()));
+    }
+
+    Ok(StatusCode::NO_CONTENT)
+}
+
 fn validate_share_duration(seconds: i64) -> Result<Duration, ApiError> {
     const MIN_SHARE_SECONDS: i64 = 60;
     const MAX_SHARE_SECONDS: i64 = 60 * 60 * 24 * 365;
@@ -322,6 +412,22 @@ fn validate_share_download_limit(limit: i32) -> Result<i32, ApiError> {
     }
 
     Ok(limit)
+}
+
+fn normalize_share_email(value: &str) -> Result<String, ApiError> {
+    let email = value.trim().to_lowercase();
+    crate::utils::validation::validate_email(&email)
+        .map_err(|msg| ApiError::BadRequest(msg.into()))?;
+    Ok(email)
+}
+
+fn validate_share_permission(value: &str) -> Result<String, ApiError> {
+    let trimmed = value.trim();
+    if matches!(trimmed, "read" | "download" | "write") {
+        return Ok(trimmed.to_string());
+    }
+
+    Err(ApiError::BadRequest("Invalid share permission".into()))
 }
 
 pub async fn update_file_note(

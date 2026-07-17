@@ -34,9 +34,24 @@ export interface ApiFile {
 }
 
 export interface SharedFile extends ApiFile {
-    permissions: 'read' | 'write' | 'owner';
+    permissions: FileSharePermission | 'owner';
     shared_by_user_id: string;
     shared_by_user_name?: string;
+}
+
+export type FileSharePermission = 'read' | 'download' | 'write'
+
+export interface FileSharePerson {
+    id: string
+    email: string
+    display_name: string | null
+    permission: FileSharePermission
+    created_at: string
+}
+
+export interface FileShareRecipient {
+    email: string
+    public_key: string
 }
 
 export interface ApiFolder {
@@ -96,6 +111,49 @@ export async function listSharedFilesWithMe(): Promise<SharedFile[]> {
         throw new Error(message);
     }
     return res.json();
+}
+
+export async function getFileShareRecipient(fileId: string, email: string): Promise<FileShareRecipient> {
+    const res = await authenticatedFetch(
+        `${API_BASE}files/${fileId}/shares/recipient?email=${encodeURIComponent(email)}`,
+        { method: 'GET' },
+    )
+    if (!res.ok) throw new Error(await parseErrorMessage(res))
+    return res.json()
+}
+
+export async function listFileShares(fileId: string): Promise<FileSharePerson[]> {
+    const res = await authenticatedFetch(`${API_BASE}files/${fileId}/shares`, { method: 'GET' })
+    if (!res.ok) throw new Error(await parseErrorMessage(res))
+    return res.json()
+}
+
+export async function createFileShare(params: {
+    fileId: string
+    email: string
+    permission: FileSharePermission
+    encryptedKey: ArrayBuffer | Uint8Array
+}): Promise<FileSharePerson> {
+    const res = await authenticatedFetch(`${API_BASE}files/${params.fileId}/shares`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            email: params.email,
+            permission: params.permission,
+            encrypted_key: arrayBufferToBase64(params.encryptedKey),
+        }),
+    })
+    if (!res.ok) throw new Error(await parseErrorMessage(res))
+    return res.json()
+}
+
+export async function deleteFileShare(fileId: string, shareId: string): Promise<void> {
+    const res = await authenticatedFetch(`${API_BASE}files/${fileId}/shares/${shareId}`, {
+        method: 'DELETE',
+    })
+    if (!res.ok) throw new Error(await parseErrorMessage(res))
 }
 
 export async function listFolders(parentFolderId?: string): Promise<ApiFolder[]> {

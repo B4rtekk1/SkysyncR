@@ -1,4 +1,13 @@
 import { useEffect, useMemo, useRef, useState, type FocusEvent, type KeyboardEvent } from 'react'
+import {
+    createFileShare,
+    deleteFileShare,
+    getFileShareRecipient,
+    listFileShares,
+    type FileSharePermission,
+    type FileSharePerson,
+} from '../../api/files'
+import { unwrapFileKeyForUser, wrapFileKeyForUser } from '../../crypto/fileEncryption'
 import { COPY_ICON } from './icons'
 import { createQrPath } from './qr'
 import type { ShareableItem } from './types'
@@ -8,14 +17,16 @@ type ShareFileModalProps = {
     itemKind: 'file' | 'folder'
     shareUrl: string | null
     loading: boolean
+    privateKey: CryptoKey | null
     onClose: () => void
     onEnableShare: (expiresInSeconds?: number | null, downloadLimit?: number | null) => Promise<void>
     onDisableShare: () => Promise<void>
 }
 
 type SharePerson = {
+    id: string
     email: string
-    permission: 'read' | 'download' | 'write'
+    permission: FileSharePermission
 }
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
@@ -28,7 +39,7 @@ const SHARE_DURATION_OPTIONS = [
     { label: 'No expiry', description: 'Manual stop only', value: null },
 ]
 const PERMISSION_OPTIONS: Array<{
-    value: SharePerson['permission']
+    value: FileSharePermission
     label: string
     description: string
 }> = [
@@ -43,8 +54,8 @@ function PermissionDropdown({
     value,
 }: {
     ariaLabel: string
-    onChange: (permission: SharePerson['permission']) => void
-    value: SharePerson['permission']
+    onChange: (permission: FileSharePermission) => void
+    value: FileSharePermission
 }) {
     const [open, setOpen] = useState(false)
     const placement = 'up'
@@ -180,19 +191,22 @@ export function ShareFileModal({
     itemKind,
     shareUrl,
     loading,
+    privateKey,
     onClose,
     onEnableShare,
     onDisableShare,
 }: ShareFileModalProps) {
     const [people, setPeople] = useState<SharePerson[]>([])
     const [emailDraft, setEmailDraft] = useState('')
-    const [permissionDraft, setPermissionDraft] = useState<SharePerson['permission']>('read')
+    const [permissionDraft, setPermissionDraft] = useState<FileSharePermission>('read')
     const [shareDuration, setShareDuration] = useState<number | null>(DEFAULT_SHARE_DURATION_SECONDS)
     const [downloadLimitDraft, setDownloadLimitDraft] = useState(() =>
         'filename' in item && item.share_download_limit ? String(item.share_download_limit) : '',
     )
     const [copied, setCopied] = useState(false)
     const [error, setError] = useState<string | null>(null)
+    const [peopleLoading, setPeopleLoading] = useState(false)
+    const [peopleSaving, setPeopleSaving] = useState(false)
     const [sharePreviewBaseTime] = useState(() => Date.now())
     const requestedShareRef = useRef<string | null>(null)
     const qr = useMemo(() => (shareUrl ? createQrPath(shareUrl) : null), [shareUrl])
@@ -218,6 +232,14 @@ export function ShareFileModal({
                 : `${item.share_download_count ?? 0} downloads, no limit`
             : null
 
+    function toSharePerson(person: FileSharePerson): SharePerson {
+        return {
+            id: person.id,
+            email: person.email,
+            permission: person.permission,
+        }
+    }
+
     useEffect(() => {
         function closeOnEscape(e: globalThis.KeyboardEvent) {
             if (e.key === 'Escape') onClose()
@@ -242,6 +264,33 @@ export function ShareFileModal({
         }
     }, [downloadLimit, hasInvalidDownloadLimit, item.id, item.is_public, item.share_token, onEnableShare, shareDuration])
 
+    useEffect(() => {
+        let active = true
+        if (!isFileShare) {
+            return () => {
+                active = false
+            }
+        }
+
+        async function loadPeople() {
+            setPeopleLoading(true)
+            setError(null)
+            try {
+                const shares = await listFileShares(item.id)
+                if (active) setPeople(shares.map(toSharePerson))
+            } catch (e) {
+                if (active) setError(e instanceof Error ? e.message : 'Could not load shared people.')
+            } finally {
+                if (active) setPeopleLoading(false)
+            }
+        }
+
+        void loadPeople()
+        return () => {
+            active = false
+        }
+    }, [isFileShare, item.id])
+
     async function copyShareUrl() {
         if (!shareUrl) return
         setError(null)
@@ -254,7 +303,24 @@ export function ShareFileModal({
         }
     }
 
-    function addPerson() {
+    async function savePerson(email: string, permission: FileSharePermission) {
+        if (!isFileShare) return null
+        if (!privateKey) {
+            throw new Error('Private key is locked. Sign in again to share encrypted files.')
+        }
+
+        const recipient = await getFileShareRecipient(item.id, email)
+        const fileKey = await unwrapFileKeyForUser(item.encrypted_key, privateKey)
+        const wrappedKey = await wrapFileKeyForUser(fileKey, recipient.public_key)
+        return createFileShare({
+            fileId: item.id,
+            email: recipient.email,
+            permission,
+            encryptedKey: wrappedKey,
+        })
+    }
+
+    async function addPerson() {
         const email = emailDraft.trim().toLowerCase()
         setError(null)
 
@@ -263,27 +329,61 @@ export function ShareFileModal({
             return
         }
 
-        setPeople((current) => {
-            if (current.some((person) => person.email === email)) return current
-            return [...current, { email, permission: permissionDraft }]
-        })
-        setEmailDraft('')
+        setPeopleSaving(true)
+        try {
+            const saved = await savePerson(email, permissionDraft)
+            if (!saved) return
+
+            const next = toSharePerson(saved)
+            setPeople((current) => {
+                if (current.some((person) => person.id === next.id || person.email === next.email)) {
+                    return current.map((person) =>
+                        person.id === next.id || person.email === next.email ? next : person,
+                    )
+                }
+                return [next, ...current]
+            })
+            setEmailDraft('')
+        } catch (e) {
+            setError(e instanceof Error ? e.message : 'Could not share with that person.')
+        } finally {
+            setPeopleSaving(false)
+        }
     }
 
     function handleEmailKeyDown(e: KeyboardEvent<HTMLInputElement>) {
         if (e.key !== 'Enter') return
         e.preventDefault()
-        addPerson()
+        void addPerson()
     }
 
-    function updatePersonPermission(email: string, permission: SharePerson['permission']) {
-        setPeople((current) =>
-            current.map((person) => (person.email === email ? { ...person, permission } : person)),
-        )
+    async function updatePersonPermission(email: string, permission: FileSharePermission) {
+        setError(null)
+        setPeopleSaving(true)
+        try {
+            const saved = await savePerson(email, permission)
+            if (!saved) return
+            const next = toSharePerson(saved)
+            setPeople((current) => current.map((person) => (person.email === email ? next : person)))
+        } catch (e) {
+            setError(e instanceof Error ? e.message : 'Could not update permission.')
+        } finally {
+            setPeopleSaving(false)
+        }
     }
 
-    function removePerson(email: string) {
-        setPeople((current) => current.filter((person) => person.email !== email))
+    async function removePerson(person: SharePerson) {
+        if (!isFileShare) return
+        setError(null)
+        setPeopleSaving(true)
+        try {
+            await deleteFileShare(item.id, person.id)
+            setPeople((current) => current.filter((currentPerson) => currentPerson.id !== person.id))
+        } catch (e) {
+            setError(e instanceof Error ? e.message : 'Could not remove access.')
+        } finally {
+            setPeopleSaving(false)
+        }
     }
 
     return (
@@ -398,7 +498,7 @@ export function ShareFileModal({
                     <section className="share-modal__panel share-modal__panel--people">
                         <div className="share-modal__section-head">
                             <h3>People with accounts</h3>
-                            <span>{people.length}</span>
+                            <span>{peopleLoading ? '...' : people.length}</span>
                         </div>
                         <div className="share-modal__person-form">
                             <input
@@ -413,12 +513,16 @@ export function ShareFileModal({
                                 value={permissionDraft}
                                 onChange={setPermissionDraft}
                             />
-                            <button className="btn btn--solid" type="button" onClick={addPerson}>
-                                Add
+                            <button className="btn btn--solid" type="button" onClick={() => void addPerson()} disabled={peopleSaving || !isFileShare}>
+                                {peopleSaving ? 'Saving' : 'Add'}
                             </button>
                         </div>
                         <div className="share-modal__people-list">
-                            {people.length === 0 ? (
+                            {!isFileShare ? (
+                                <p className="share-modal__empty">Account sharing is available for files.</p>
+                            ) : peopleLoading ? (
+                                <p className="share-modal__empty">Loading people...</p>
+                            ) : people.length === 0 ? (
                                 <p className="share-modal__empty">Add account email addresses to grant explicit permissions.</p>
                             ) : (
                                 people.map((person) => (
@@ -427,9 +531,9 @@ export function ShareFileModal({
                                         <PermissionDropdown
                                             ariaLabel={`Permission for ${person.email}`}
                                             value={person.permission}
-                                            onChange={(permission) => updatePersonPermission(person.email, permission)}
+                                            onChange={(permission) => void updatePersonPermission(person.email, permission)}
                                         />
-                                        <button type="button" onClick={() => removePerson(person.email)} aria-label={`Remove ${person.email}`}>
+                                        <button type="button" onClick={() => void removePerson(person)} aria-label={`Remove ${person.email}`}>
                                             x
                                         </button>
                                     </div>
