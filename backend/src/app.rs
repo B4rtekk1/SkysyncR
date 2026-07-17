@@ -139,7 +139,11 @@ pub async fn run_server() {
         .merge(auth_routes)
         .merge(users_routes())
         .merge(storage_routes())
-        .merge(files_routes())
+        .merge(files_routes(
+            config.max_file_size_bytes,
+            config.max_concurrent_file_transfers,
+            config.file_transfer_timeout_seconds,
+        ))
         .merge(folders_routes())
         .merge(groups_routes())
         .merge(calendar_routes())

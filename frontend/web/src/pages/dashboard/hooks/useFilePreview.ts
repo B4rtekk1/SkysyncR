@@ -2,8 +2,12 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { downloadFile, updateFileContent, type ApiFile } from '../../../api/files'
 import {
     decryptFile,
-    encryptText,
+    decryptFileStream,
+    encryptedFileFormatNonce,
+    encryptFileStream,
     generateFileKey,
+    isChunkedFileNonce,
+    streamToBlob,
     unwrapFileKeyForUser,
     wrapFileKeyForUser,
 } from '../../../crypto/fileEncryption'
@@ -55,6 +59,9 @@ export function useFilePreview(
 
         const encryptedBlob = await downloadFile(item.id)
         const fileKey = await unwrapFileKeyForUser(item.encrypted_key, privateKey)
+        if (isChunkedFileNonce(item.encryption_nonce)) {
+            return streamToBlob(decryptFileStream(encryptedBlob, fileKey, item.encryption_nonce), item.mime_type)
+        }
         return decryptFile(encryptedBlob, fileKey, item.encryption_nonce, item.mime_type)
     }, [privateKey])
 
@@ -171,17 +178,14 @@ export function useFilePreview(
         }
 
         const fileKey = await generateFileKey()
-        const encrypted = await encryptText(text, fileKey)
         const wrappedKey = await wrapFileKeyForUser(fileKey, publicKey)
-        const encryptedFile = new Blob([encrypted.ciphertext], {
-            type: 'application/octet-stream',
-        })
+        const encryptedFile = encryptFileStream(new Blob([text], { type: item.mime_type || 'text/plain' }), fileKey)
         const updated = await updateFileContent({
             id: item.id,
             encryptedFile,
             originalFilename: item.filename,
             wrappedKey,
-            encryptionNonce: encrypted.nonce,
+            encryptionNonce: encryptedFileFormatNonce(),
         })
 
         const visibleUpdated = {

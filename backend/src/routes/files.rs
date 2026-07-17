@@ -1,6 +1,10 @@
 use axum::Router;
 use axum::extract::DefaultBodyLimit;
 use axum::routing::{delete, get, post, put};
+use std::time::Duration;
+use tower::limit::ConcurrencyLimitLayer;
+use tower_http::limit::RequestBodyLimitLayer;
+use tower_http::timeout::TimeoutLayer;
 
 use crate::handlers::files::{
     add_file_favourite, create_file_share, delete_file_share, download_file,
@@ -10,7 +14,13 @@ use crate::handlers::files::{
 };
 use crate::state::AppState;
 
-pub fn files_routes() -> Router<AppState> {
+pub fn files_routes(
+    max_file_size_bytes: u64,
+    max_concurrent_transfers: usize,
+    transfer_timeout_seconds: u64,
+) -> Router<AppState> {
+    let request_limit = max_file_size_bytes.saturating_add(1024 * 1024);
+
     Router::new()
         .route("/files", get(list_files).post(upload_file))
         .route("/files/shared-with-me", get(list_shared_files_with_me))
@@ -34,5 +44,11 @@ pub fn files_routes() -> Router<AppState> {
         .route("/files/{id}/permanent", delete(permanent_delete_file))
         .route("/files/{id}", delete(soft_delete_file).patch(rename_file))
         .route("/files/{id}/restore", post(restore_file))
-        .layer(DefaultBodyLimit::disable())
+        .layer(DefaultBodyLimit::max(request_limit as usize))
+        .layer(RequestBodyLimitLayer::new(request_limit as usize))
+        .layer(TimeoutLayer::with_status_code(
+            axum::http::StatusCode::REQUEST_TIMEOUT,
+            Duration::from_secs(transfer_timeout_seconds),
+        ))
+        .layer(ConcurrencyLimitLayer::new(max_concurrent_transfers))
 }

@@ -15,6 +15,8 @@ pub struct AppConfig {
     pub verification_token_ttl_hours: i64,
     pub upload_dir: PathBuf,
     pub max_file_size_bytes: u64,
+    pub max_concurrent_file_transfers: usize,
+    pub file_transfer_timeout_seconds: u64,
     pub trash_retention_days: i64,
     pub trash_purge_interval_hours: u64,
     pub is_dev: bool,
@@ -46,6 +48,18 @@ impl AppConfig {
             .and_then(|v| v.parse().ok())
             .unwrap_or(1_073_741_824);
 
+        let max_concurrent_file_transfers = std::env::var("MAX_CONCURRENT_FILE_TRANSFERS")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .filter(|limit| *limit >= 1)
+            .unwrap_or(4);
+
+        let file_transfer_timeout_seconds = std::env::var("FILE_TRANSFER_TIMEOUT_SECONDS")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .filter(|seconds| *seconds >= 1)
+            .unwrap_or(900);
+
         let trash_retention_days = std::env::var("TRASH_RETENTION_DAYS")
             .ok()
             .and_then(|v| v.parse().ok())
@@ -69,6 +83,8 @@ impl AppConfig {
             verification_token_ttl_hours,
             upload_dir,
             max_file_size_bytes,
+            max_concurrent_file_transfers,
+            file_transfer_timeout_seconds,
             trash_retention_days,
             trash_purge_interval_hours,
             is_dev,

@@ -1,4 +1,5 @@
-import { authenticatedFetch } from './auth'
+import { authenticatedFetch, getValidAccessToken } from './auth'
+import { apiFetch } from './http'
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? 'http://localhost:3000/'
 
@@ -217,25 +218,21 @@ export async function getStorageQuota(): Promise<StorageQuota> {
 }
 
 export async function uploadFile(params: {
-    encryptedFile: Blob
+    encryptedFile: Blob | ReadableStream<Uint8Array>
     storedFilename: string
     storedMimeType: string | null
     folderId?: string
     wrappedKey: ArrayBuffer
-    encryptionNonce: ArrayBuffer
+    encryptionNonce: ArrayBuffer | Uint8Array
 }): Promise<ApiFile> {
-    const form = new FormData()
-    form.append('file', params.encryptedFile, 'encrypted.bin')
-    form.append('filename', params.storedFilename)
-    if (params.storedMimeType) form.append('mime_type', params.storedMimeType)
-    if (params.folderId) form.append('folder_id', params.folderId)
-    form.append('encrypted_key', arrayBufferToBase64(params.wrappedKey))
-    form.append('encryption_nonce', arrayBufferToBase64(params.encryptionNonce))
-
-    const res = await authenticatedFetch(`${API_BASE}files`, {
-        method: 'POST',
-        body: form,
-    })
+    const res = await authenticatedMultipartStream(`${API_BASE}files`, [
+        textPart('filename', params.storedFilename),
+        ...(params.storedMimeType ? [textPart('mime_type', params.storedMimeType)] : []),
+        ...(params.folderId ? [textPart('folder_id', params.folderId)] : []),
+        textPart('encrypted_key', arrayBufferToBase64(params.wrappedKey)),
+        textPart('encryption_nonce', arrayBufferToBase64(params.encryptionNonce)),
+        streamPart('file', params.encryptedFile, 'encrypted.bin', 'application/octet-stream'),
+    ])
     if (!res.ok) throw new Error(await parseErrorMessage(res))
     return res.json()
 }
@@ -287,20 +284,16 @@ export async function renameFolder(id: string, name: string, description?: strin
 
 export async function updateFileContent(params: {
     id: string
-    encryptedFile: Blob
+    encryptedFile: Blob | ReadableStream<Uint8Array>
     originalFilename: string
     wrappedKey: ArrayBuffer | Uint8Array
     encryptionNonce: ArrayBuffer | Uint8Array
 }): Promise<ApiFile> {
-    const form = new FormData()
-    form.append('file', params.encryptedFile, params.originalFilename)
-    form.append('encrypted_key', arrayBufferToBase64(params.wrappedKey))
-    form.append('encryption_nonce', arrayBufferToBase64(params.encryptionNonce))
-
-    const res = await authenticatedFetch(`${API_BASE}files/${params.id}/content`, {
-        method: 'PUT',
-        body: form,
-    })
+    const res = await authenticatedMultipartStream(`${API_BASE}files/${params.id}/content`, [
+        textPart('encrypted_key', arrayBufferToBase64(params.wrappedKey)),
+        textPart('encryption_nonce', arrayBufferToBase64(params.encryptionNonce)),
+        streamPart('file', params.encryptedFile, params.originalFilename, 'application/octet-stream'),
+    ], 'PUT')
     if (!res.ok) throw new Error(await parseErrorMessage(res))
     return res.json()
 }
@@ -358,7 +351,7 @@ export async function updateFileNote(id: string, note: string): Promise<ApiFile>
 }
 
 export async function downloadFile(id: string): Promise<Blob> {
-    const res = await authenticatedFetch(`${API_BASE}files/${id}/download`, {
+    const res = await authenticatedRequest(`${API_BASE}files/${id}/download`, {
         method: 'GET',
     })
     if (!res.ok) throw new Error(await parseErrorMessage(res))
@@ -367,4 +360,92 @@ export async function downloadFile(id: string): Promise<Blob> {
 
 function arrayBufferToBase64(buf: ArrayBuffer | Uint8Array): string {
     return btoa(String.fromCharCode(...new Uint8Array(buf)))
+}
+
+type MultipartPart =
+    | { kind: 'text'; name: string; value: string }
+    | { kind: 'stream'; name: string; value: Blob | ReadableStream<Uint8Array>; filename: string; contentType: string }
+
+type StreamingRequestInit = RequestInit & { duplex?: 'half' }
+
+function textPart(name: string, value: string): MultipartPart {
+    return { kind: 'text', name, value }
+}
+
+function streamPart(
+    name: string,
+    value: Blob | ReadableStream<Uint8Array>,
+    filename: string,
+    contentType: string,
+): MultipartPart {
+    return { kind: 'stream', name, value, filename, contentType }
+}
+
+async function authenticatedRequest(input: RequestInfo | URL, init: RequestInit = {}): Promise<Response> {
+    const headers = new Headers(init.headers)
+    const token = await getValidAccessToken()
+    if (token) headers.set('Authorization', `Bearer ${token}`)
+    return apiFetch(input, { ...init, headers })
+}
+
+async function authenticatedMultipartStream(
+    url: string,
+    parts: MultipartPart[],
+    method = 'POST',
+): Promise<Response> {
+    const boundary = `skysyncr-${crypto.randomUUID()}`
+    const headers = new Headers({ 'Content-Type': `multipart/form-data; boundary=${boundary}` })
+    const body = multipartStream(boundary, parts)
+    return authenticatedRequest(url, { method, headers, body, duplex: 'half' } as StreamingRequestInit)
+}
+
+function multipartStream(boundary: string, parts: MultipartPart[]): ReadableStream<Uint8Array> {
+    const encoder = new TextEncoder()
+
+    async function* chunks() {
+        for (const part of parts) {
+            if (part.kind === 'text') {
+                yield encoder.encode(
+                    `--${boundary}\r\nContent-Disposition: form-data; name="${escapeMultipartValue(part.name)}"\r\n\r\n${part.value}\r\n`,
+                )
+                continue
+            }
+
+            yield encoder.encode(
+                `--${boundary}\r\nContent-Disposition: form-data; name="${escapeMultipartValue(part.name)}"; filename="${escapeMultipartValue(part.filename)}"\r\nContent-Type: ${part.contentType}\r\n\r\n`,
+            )
+            const stream = part.value instanceof Blob ? part.value.stream() : part.value
+            const reader = stream.getReader()
+            try {
+                while (true) {
+                    const { done, value } = await reader.read()
+                    if (done) break
+                    yield value
+                }
+            } finally {
+                reader.releaseLock()
+            }
+            yield encoder.encode('\r\n')
+        }
+        yield encoder.encode(`--${boundary}--\r\n`)
+    }
+
+    const iterator = chunks()
+    return new ReadableStream<Uint8Array>({
+        async pull(controller) {
+            const { done, value } = await iterator.next()
+            if (done) {
+                controller.close()
+            } else {
+                controller.enqueue(value)
+            }
+        },
+        async cancel() {
+            await iterator.return?.()
+        },
+    })
+}
+
+function escapeMultipartValue(value: string): string {
+    return value.replaceAll('\\', '\\\\').replaceAll('"', '\\"').replaceAll('\r', '').replaceAll('\n', '')
 }

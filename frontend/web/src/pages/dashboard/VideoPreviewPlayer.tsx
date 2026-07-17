@@ -42,6 +42,7 @@ const EXIT_FULLSCREEN_ICON = (
 
 const SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 2]
 const WAVEFORM_BARS = 96
+const MAX_WAVEFORM_BYTES = 16 * 1024 * 1024
 
 function formatTime(seconds: number) {
     if (!Number.isFinite(seconds) || seconds <= 0) return '0:00'
@@ -246,6 +247,10 @@ export function VideoPreviewPlayer({ item, url }: { item: Item; url: string }) {
 
         const loadWaveform = async () => {
             setWaveform(null)
+            if (item.size_bytes > MAX_WAVEFORM_BYTES) {
+                setWaveform([])
+                return
+            }
 
             const AudioContextCtor =
                 window.AudioContext ||
@@ -273,7 +278,7 @@ export function VideoPreviewPlayer({ item, url }: { item: Item; url: string }) {
             controller.abort()
             void audioContext?.close()
         }
-    }, [url])
+    }, [item.size_bytes, url])
 
     useEffect(() => {
         drawAudioGraph(waveform, currentTime, duration)

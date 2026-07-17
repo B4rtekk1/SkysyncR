@@ -1,5 +1,6 @@
 use axum::{
     Json,
+    body::Body,
     extract::{Multipart, Path, Query, State},
     http::{
         HeaderMap, HeaderValue, StatusCode,
@@ -13,6 +14,8 @@ use serde::Deserialize;
 use sha2::{Digest, Sha256};
 use std::path::{Path as FsPath, PathBuf};
 use tokio::fs;
+use tokio::io::AsyncWriteExt;
+use tokio_util::io::ReaderStream;
 use uuid::Uuid;
 
 use crate::auth::AuthUser;
@@ -69,14 +72,16 @@ pub struct UpdateFileNoteRequest {
 struct UploadPayload {
     filename: String,
     mime_type: Option<String>,
-    bytes: Vec<u8>,
+    file_size: u64,
+    checksum: String,
     encrypted_key: Vec<u8>,
     encryption_nonce: Vec<u8>,
     folder_id: Option<Uuid>,
 }
 
 struct UpdateContentPayload {
-    bytes: Vec<u8>,
+    file_size: u64,
+    checksum: String,
     encrypted_key: Vec<u8>,
     encryption_nonce: Vec<u8>,
 }
@@ -105,8 +110,24 @@ pub async fn upload_file(
     auth: AuthUser,
     multipart: Multipart,
 ) -> Result<(StatusCode, Json<FileRecord>), ApiError> {
-    let payload = parse_upload_payload(multipart, state.config.max_file_size_bytes).await?;
-    let file_size = i64::try_from(payload.bytes.len())
+    let file_id = Uuid::new_v4();
+    let storage_path = storage_path_for(&state.config.upload_dir, auth.user_id, file_id);
+    let temp_path = temp_storage_path_for(&state.config.upload_dir, auth.user_id, file_id);
+    if let Some(parent) = storage_path.parent() {
+        fs::create_dir_all(parent)
+            .await
+            .map_err(|e| internal_error("create upload directory", e))?;
+    }
+
+    let payload =
+        match parse_upload_payload(multipart, state.config.max_file_size_bytes, &temp_path).await {
+            Ok(payload) => payload,
+            Err(err) => {
+                let _ = fs::remove_file(&temp_path).await;
+                return Err(err);
+            }
+        };
+    let file_size = i64::try_from(payload.file_size)
         .map_err(|_| ApiError::BadRequest("File is too large".into()))?;
 
     if let Some(folder_id) = payload.folder_id {
@@ -118,20 +139,6 @@ pub async fn upload_file(
         }
     }
 
-    let file_id = Uuid::new_v4();
-    let storage_path = storage_path_for(&state.config.upload_dir, auth.user_id, file_id);
-    let temp_path = temp_storage_path_for(&state.config.upload_dir, auth.user_id, file_id);
-    if let Some(parent) = storage_path.parent() {
-        fs::create_dir_all(parent)
-            .await
-            .map_err(|e| internal_error("create upload directory", e))?;
-    }
-
-    fs::write(&temp_path, &payload.bytes)
-        .await
-        .map_err(|e| internal_error("write uploaded file", e))?;
-
-    let checksum = hex::encode(Sha256::digest(&payload.bytes));
     let storage_path_string = storage_path.to_string_lossy().into_owned();
     let mut tx = state
         .db_pool
@@ -157,7 +164,7 @@ pub async fn upload_file(
             size_bytes: file_size,
             encrypted_key: payload.encrypted_key,
             encryption_nonce: payload.encryption_nonce,
-            checksum,
+            checksum: payload.checksum,
             folder_id: payload.folder_id,
         },
     )
@@ -252,19 +259,24 @@ pub async fn update_file_content(
     Path(file_id): Path<Uuid>,
     multipart: Multipart,
 ) -> Result<Json<FileRecord>, ApiError> {
-    let payload = parse_update_content_payload(multipart, state.config.max_file_size_bytes).await?;
-    let file_size = i64::try_from(payload.bytes.len())
-        .map_err(|_| ApiError::BadRequest("File is too large".into()))?;
-
     let temp_path = temp_storage_path_for(&state.config.upload_dir, auth.user_id, file_id);
     if let Some(parent) = temp_path.parent() {
         fs::create_dir_all(parent)
             .await
             .map_err(|e| internal_error("create upload directory", e))?;
     }
-    fs::write(&temp_path, &payload.bytes)
-        .await
-        .map_err(|e| internal_error("write updated file", e))?;
+    let payload =
+        match parse_update_content_payload(multipart, state.config.max_file_size_bytes, &temp_path)
+            .await
+        {
+            Ok(payload) => payload,
+            Err(err) => {
+                let _ = fs::remove_file(&temp_path).await;
+                return Err(err);
+            }
+        };
+    let file_size = i64::try_from(payload.file_size)
+        .map_err(|_| ApiError::BadRequest("File is too large".into()))?;
 
     let mut tx = state
         .db_pool
@@ -295,7 +307,6 @@ pub async fn update_file_content(
         return Err(ApiError::BadRequest("Storage quota exceeded".into()));
     }
 
-    let checksum = hex::encode(Sha256::digest(&payload.bytes));
     let file = update_user_file_content(
         &mut tx,
         auth.user_id,
@@ -303,7 +314,7 @@ pub async fn update_file_content(
         file_size,
         payload.encrypted_key,
         payload.encryption_nonce,
-        checksum,
+        payload.checksum,
     )
     .await
     .map_err(|e| {
@@ -556,9 +567,9 @@ pub async fn download_file(
         .map_err(|e| internal_error("get download file", e))?
         .ok_or_else(|| ApiError::BadRequest("File not found".into()))?;
 
-    let bytes = fs::read(&file.storage_path)
+    let download = fs::File::open(&file.storage_path)
         .await
-        .map_err(|e| internal_error("read download file", e))?;
+        .map_err(|e| internal_error("open download file", e))?;
 
     let mut headers = HeaderMap::new();
     headers.insert(
@@ -575,7 +586,7 @@ pub async fn download_file(
             .unwrap_or_else(|_| HeaderValue::from_static("attachment")),
     );
 
-    Ok((headers, bytes).into_response())
+    Ok((headers, Body::from_stream(ReaderStream::new(download))).into_response())
 }
 
 pub async fn list_shared_files_with_me(
@@ -592,8 +603,9 @@ pub async fn list_shared_files_with_me(
 async fn parse_update_content_payload(
     mut multipart: Multipart,
     max_file_size_bytes: u64,
+    temp_path: &FsPath,
 ) -> Result<UpdateContentPayload, ApiError> {
-    let mut bytes: Option<Vec<u8>> = None;
+    let mut file_info: Option<(u64, String)> = None;
     let mut encrypted_key: Option<Vec<u8>> = None;
     let mut encryption_nonce: Option<Vec<u8>> = None;
 
@@ -605,17 +617,8 @@ async fn parse_update_content_payload(
         let name = field.name().unwrap_or_default().to_string();
         match name.as_str() {
             "file" => {
-                let data = field
-                    .bytes()
-                    .await
-                    .map_err(|_| ApiError::BadRequest("Invalid uploaded file".into()))?;
-                if data.len() as u64 > max_file_size_bytes {
-                    return Err(ApiError::BadRequest("File is too large".into()));
-                }
-                if data.is_empty() {
-                    return Err(ApiError::BadRequest("File is empty".into()));
-                }
-                bytes = Some(data.to_vec());
+                file_info =
+                    Some(write_multipart_file_field(field, temp_path, max_file_size_bytes).await?);
             }
             "encrypted_key" => {
                 let value = field
@@ -636,7 +639,7 @@ async fn parse_update_content_payload(
                     .await
                     .map_err(|_| ApiError::BadRequest("Invalid encryption_nonce".into()))?;
                 let decoded = decode_base64_field("encryption_nonce", &value)?;
-                if decoded.len() != 12 {
+                if !is_valid_file_encryption_nonce(&decoded) {
                     return Err(ApiError::BadRequest("Invalid encryption_nonce".into()));
                 }
                 encryption_nonce = Some(decoded);
@@ -646,7 +649,13 @@ async fn parse_update_content_payload(
     }
 
     Ok(UpdateContentPayload {
-        bytes: bytes.ok_or_else(|| ApiError::BadRequest("Missing file".into()))?,
+        file_size: file_info
+            .as_ref()
+            .map(|(size, _)| *size)
+            .ok_or_else(|| ApiError::BadRequest("Missing file".into()))?,
+        checksum: file_info
+            .map(|(_, checksum)| checksum)
+            .ok_or_else(|| ApiError::BadRequest("Missing file".into()))?,
         encrypted_key: encrypted_key
             .ok_or_else(|| ApiError::BadRequest("Missing encrypted_key".into()))?,
         encryption_nonce: encryption_nonce
@@ -657,10 +666,11 @@ async fn parse_update_content_payload(
 async fn parse_upload_payload(
     mut multipart: Multipart,
     max_file_size_bytes: u64,
+    temp_path: &FsPath,
 ) -> Result<UploadPayload, ApiError> {
     let mut filename: Option<String> = None;
     let mut mime_type: Option<String> = None;
-    let mut bytes: Option<Vec<u8>> = None;
+    let mut file_info: Option<(u64, String)> = None;
     let mut encrypted_key: Option<Vec<u8>> = None;
     let mut encryption_nonce: Option<Vec<u8>> = None;
     let mut folder_id: Option<Uuid> = None;
@@ -674,17 +684,8 @@ async fn parse_upload_payload(
         match name.as_str() {
             "file" => {
                 let content_type = field.content_type().map(|value| value.to_string());
-                let data = field
-                    .bytes()
-                    .await
-                    .map_err(|_| ApiError::BadRequest("Invalid uploaded file".into()))?;
-                if data.len() as u64 > max_file_size_bytes {
-                    return Err(ApiError::BadRequest("File is too large".into()));
-                }
-                if data.is_empty() {
-                    return Err(ApiError::BadRequest("File is empty".into()));
-                }
-                bytes = Some(data.to_vec());
+                file_info =
+                    Some(write_multipart_file_field(field, temp_path, max_file_size_bytes).await?);
                 mime_type = content_type;
             }
             "filename" => {
@@ -721,7 +722,7 @@ async fn parse_upload_payload(
                     .await
                     .map_err(|_| ApiError::BadRequest("Invalid encryption_nonce".into()))?;
                 let decoded = decode_base64_field("encryption_nonce", &value)?;
-                if decoded.len() != 12 {
+                if !is_valid_file_encryption_nonce(&decoded) {
                     return Err(ApiError::BadRequest("Invalid encryption_nonce".into()));
                 }
                 encryption_nonce = Some(decoded);
@@ -747,13 +748,60 @@ async fn parse_upload_payload(
             .filter(|value| !value.is_empty())
             .ok_or_else(|| ApiError::BadRequest("Missing filename".into()))?,
         mime_type,
-        bytes: bytes.ok_or_else(|| ApiError::BadRequest("Missing file".into()))?,
+        file_size: file_info
+            .as_ref()
+            .map(|(size, _)| *size)
+            .ok_or_else(|| ApiError::BadRequest("Missing file".into()))?,
+        checksum: file_info
+            .map(|(_, checksum)| checksum)
+            .ok_or_else(|| ApiError::BadRequest("Missing file".into()))?,
         encrypted_key: encrypted_key
             .ok_or_else(|| ApiError::BadRequest("Missing encrypted_key".into()))?,
         encryption_nonce: encryption_nonce
             .ok_or_else(|| ApiError::BadRequest("Missing encryption_nonce".into()))?,
         folder_id,
     })
+}
+
+async fn write_multipart_file_field(
+    mut field: axum::extract::multipart::Field<'_>,
+    temp_path: &FsPath,
+    max_file_size_bytes: u64,
+) -> Result<(u64, String), ApiError> {
+    let mut file = fs::File::create(temp_path)
+        .await
+        .map_err(|e| internal_error("create temporary upload file", e))?;
+    let mut hasher = Sha256::new();
+    let mut file_size = 0_u64;
+
+    while let Some(chunk) = field
+        .chunk()
+        .await
+        .map_err(|_| ApiError::BadRequest("Invalid uploaded file".into()))?
+    {
+        file_size = file_size
+            .checked_add(chunk.len() as u64)
+            .ok_or_else(|| ApiError::BadRequest("File is too large".into()))?;
+        if file_size > max_file_size_bytes {
+            let _ = fs::remove_file(temp_path).await;
+            return Err(ApiError::BadRequest("File is too large".into()));
+        }
+        hasher.update(&chunk);
+        file.write_all(&chunk)
+            .await
+            .map_err(|e| internal_error("write uploaded file", e))?;
+    }
+
+    if file_size == 0 {
+        let _ = fs::remove_file(temp_path).await;
+        return Err(ApiError::BadRequest("File is empty".into()));
+    }
+
+    file.flush()
+        .await
+        .map_err(|e| internal_error("flush uploaded file", e))?;
+
+    Ok((file_size, hex::encode(hasher.finalize())))
 }
 
 fn storage_path_for(upload_dir: &PathBuf, user_id: Uuid, file_id: Uuid) -> PathBuf {
@@ -849,6 +897,10 @@ fn decode_base64_field(field_name: &str, value: &str) -> Result<Vec<u8>, ApiErro
     general_purpose::STANDARD
         .decode(value.trim())
         .map_err(|_| ApiError::BadRequest(format!("Invalid {field_name}")))
+}
+
+fn is_valid_file_encryption_nonce(value: &[u8]) -> bool {
+    value.len() == 12 || value == b"skysyncr-file:v2"
 }
 
 fn sanitize_download_filename(filename: &str) -> String {

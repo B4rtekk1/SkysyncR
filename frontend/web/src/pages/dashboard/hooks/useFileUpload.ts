@@ -1,7 +1,8 @@
 import { useCallback, type Dispatch, type SetStateAction } from 'react'
 import { uploadFile, type ApiFile } from '../../../api/files'
 import {
-    encryptFile,
+    encryptedFileFormatNonce,
+    encryptFileStream,
     encryptTextEnvelope,
     generateFileKey,
     wrapFileKeyForUser,
@@ -70,24 +71,20 @@ export function useFileUpload({
 
                 try {
                     const key = await generateFileKey()
-                    const { ciphertext, nonce } = await encryptFile(file, key)
                     const encryptedFilename = await encryptTextEnvelope(file.name, key)
                     const wrappedKey = await wrapFileKeyForUser(key, publicKey)
                     const originalMimeType = file.type || null
                     const encryptedMimeType = originalMimeType
                         ? await encryptTextEnvelope(originalMimeType, key)
                         : null
-                    const encryptedBlob = new Blob([ciphertext], {
-                        type: 'application/octet-stream',
-                    })
 
                     const saved = await uploadFile({
-                        encryptedFile: encryptedBlob,
+                        encryptedFile: encryptFileStream(file, key),
                         storedFilename: encryptedFilename,
                         storedMimeType: encryptedMimeType,
                         folderId: folderId ?? undefined,
                         wrappedKey,
-                        encryptionNonce: nonce.buffer as ArrayBuffer,
+                        encryptionNonce: encryptedFileFormatNonce(),
                     })
 
                     const visibleSaved = {
