@@ -7,10 +7,11 @@ import {
     type FileSharePermission,
     type FileSharePerson,
 } from '../../api/files'
+import { listGroupShareRecipients } from '../../api/groups'
 import { unwrapFileKeyForUser, wrapFileKeyForUser } from '../../crypto/fileEncryption'
 import { COPY_ICON } from './icons'
 import { createQrPath } from './qr'
-import type { ShareableItem } from './types'
+import type { Group, GroupInviteRole, ShareableItem } from './types'
 
 type ShareFileModalProps = {
     item: ShareableItem
@@ -18,6 +19,7 @@ type ShareFileModalProps = {
     shareUrl: string | null
     loading: boolean
     privateKey: CryptoKey | null
+    groups: Group[]
     onClose: () => void
     onEnableShare: (expiresInSeconds?: number | null, downloadLimit?: number | null) => Promise<void>
     onDisableShare: () => Promise<void>
@@ -192,6 +194,7 @@ export function ShareFileModal({
     shareUrl,
     loading,
     privateKey,
+    groups,
     onClose,
     onEnableShare,
     onDisableShare,
@@ -207,6 +210,8 @@ export function ShareFileModal({
     const [error, setError] = useState<string | null>(null)
     const [peopleLoading, setPeopleLoading] = useState(false)
     const [peopleSaving, setPeopleSaving] = useState(false)
+    const [selectedGroupId, setSelectedGroupId] = useState('')
+    const [groupSharing, setGroupSharing] = useState(false)
     const [sharePreviewBaseTime] = useState(() => Date.now())
     const requestedShareRef = useRef<string | null>(null)
     const qr = useMemo(() => (shareUrl ? createQrPath(shareUrl) : null), [shareUrl])
@@ -238,6 +243,11 @@ export function ShareFileModal({
             email: person.email,
             permission: person.permission,
         }
+    }
+
+    function roleToPermission(role: GroupInviteRole): FileSharePermission {
+        if (role === 'viewer') return 'read'
+        return 'write'
     }
 
     useEffect(() => {
@@ -348,6 +358,54 @@ export function ShareFileModal({
             setError(e instanceof Error ? e.message : 'Could not share with that person.')
         } finally {
             setPeopleSaving(false)
+        }
+    }
+
+    async function addGroup() {
+        if (!isFileShare) return
+        const group = groups.find((current) => current.id === selectedGroupId)
+        if (!group) {
+            setError('Choose a group to share with.')
+            return
+        }
+        if (!privateKey) {
+            setError('Private key is locked. Sign in again to share encrypted files.')
+            return
+        }
+
+        setError(null)
+        setGroupSharing(true)
+        try {
+            const recipients = await listGroupShareRecipients(group.id)
+            if (recipients.length === 0) {
+                setError('This group has no active account members with public keys.')
+                return
+            }
+
+            const fileKey = await unwrapFileKeyForUser(item.encrypted_key, privateKey)
+            const savedPeople = await Promise.all(
+                recipients.map(async (recipient) => {
+                    const wrappedKey = await wrapFileKeyForUser(fileKey, recipient.public_key)
+                    return createFileShare({
+                        fileId: item.id,
+                        email: recipient.email,
+                        permission: roleToPermission(recipient.role),
+                        encryptedKey: wrappedKey,
+                    })
+                }),
+            )
+
+            const nextPeople = savedPeople.map(toSharePerson)
+            setPeople((current) => {
+                const byEmail = new Map(current.map((person) => [person.email, person]))
+                for (const person of nextPeople) byEmail.set(person.email, person)
+                return Array.from(byEmail.values()).sort((a, b) => a.email.localeCompare(b.email))
+            })
+            setError(`Shared with ${nextPeople.length} group member${nextPeople.length === 1 ? '' : 's'}.`)
+        } catch (e) {
+            setError(e instanceof Error ? e.message : 'Could not share with that group.')
+        } finally {
+            setGroupSharing(false)
         }
     }
 
@@ -499,6 +557,29 @@ export function ShareFileModal({
                         <div className="share-modal__section-head">
                             <h3>People with accounts</h3>
                             <span>{peopleLoading ? '...' : people.length}</span>
+                        </div>
+                        <div className="share-modal__group-form">
+                            <select
+                                value={selectedGroupId}
+                                onChange={(event) => setSelectedGroupId(event.target.value)}
+                                disabled={groupSharing || !isFileShare || groups.length === 0}
+                                aria-label="Group"
+                            >
+                                <option value="">Choose group</option>
+                                {groups.map((group) => (
+                                    <option key={group.id} value={group.id}>
+                                        {group.name}
+                                    </option>
+                                ))}
+                            </select>
+                            <button
+                                className="btn btn--outline"
+                                type="button"
+                                onClick={() => void addGroup()}
+                                disabled={groupSharing || !isFileShare || !selectedGroupId}
+                            >
+                                {groupSharing ? 'Sharing' : 'Share with group'}
+                            </button>
                         </div>
                         <div className="share-modal__person-form">
                             <input

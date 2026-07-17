@@ -18,6 +18,12 @@ type ApiGroup = {
     invites: ApiGroupInvite[]
 }
 
+export type GroupShareRecipient = {
+    email: string
+    public_key: string
+    role: GroupInviteRole
+}
+
 async function parseErrorMessage(response: Response): Promise<string> {
     try {
         const data = await response.json()
@@ -111,4 +117,12 @@ export async function deleteGroupInvite(groupId: string, inviteId: string): Prom
         method: 'DELETE',
     })
     if (!res.ok) throw new Error(await parseErrorMessage(res))
+}
+
+export async function listGroupShareRecipients(groupId: string): Promise<GroupShareRecipient[]> {
+    const res = await authenticatedFetch(`${API_BASE}groups/${groupId}/recipients`, {
+        method: 'GET',
+    })
+    if (!res.ok) throw new Error(await parseErrorMessage(res))
+    return res.json()
 }

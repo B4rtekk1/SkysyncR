@@ -8,9 +8,10 @@ use uuid::Uuid;
 
 use crate::auth::AuthUser;
 use crate::db::groups::{
-    GroupInviteRecord, GroupRecord, GroupUpdate, NewGroup, NewGroupInvite,
-    create_group_invite_record, create_group_record, delete_group_invite_record,
-    delete_group_record, group_belongs_to_user, list_user_groups, update_group_record,
+    GroupInviteRecord, GroupRecord, GroupShareRecipientRecord, GroupUpdate, NewGroup,
+    NewGroupInvite, create_group_invite_record, create_group_record, delete_group_invite_record,
+    delete_group_record, group_belongs_to_user, list_group_share_recipients, list_user_groups,
+    update_group_record,
 };
 use crate::state::AppState;
 use crate::utils::errors::{ApiError, internal_error};
@@ -95,6 +96,18 @@ pub async fn delete_group(
     }
 
     Ok(StatusCode::NO_CONTENT)
+}
+
+pub async fn list_group_recipients(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Path(group_id): Path<Uuid>,
+) -> Result<Json<Vec<GroupShareRecipientRecord>>, ApiError> {
+    let recipients = list_group_share_recipients(&state.db_pool, auth.user_id, group_id)
+        .await
+        .map_err(|e| internal_error("list group recipients", e))?;
+
+    Ok(Json(recipients))
 }
 
 pub async fn create_group_invite(

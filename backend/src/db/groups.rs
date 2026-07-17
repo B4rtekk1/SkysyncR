@@ -12,6 +12,13 @@ pub struct GroupInviteRecord {
     pub created_at: DateTime<Utc>,
 }
 
+#[derive(FromRow, Serialize)]
+pub struct GroupShareRecipientRecord {
+    pub email: String,
+    pub public_key: String,
+    pub role: String,
+}
+
 #[derive(FromRow)]
 struct GroupInviteRow {
     id: Uuid,
@@ -268,6 +275,35 @@ pub async fn group_belongs_to_user(
     .bind(group_id)
     .bind(user_id)
     .fetch_one(pool)
+    .await
+}
+
+pub async fn list_group_share_recipients(
+    pool: &PgPool,
+    user_id: Uuid,
+    group_id: Uuid,
+) -> Result<Vec<GroupShareRecipientRecord>, sqlx::Error> {
+    sqlx::query_as::<_, GroupShareRecipientRecord>(
+        r#"
+        SELECT DISTINCT ON (recipient.email)
+            recipient.email,
+            recipient.public_key AS public_key,
+            group_invitations.role
+        FROM group_invitations
+        JOIN groups ON groups.id = group_invitations.group_id
+        JOIN users recipient ON recipient.email = group_invitations.invited_email
+        WHERE groups.id = $1
+          AND groups.owner_id = $2
+          AND group_invitations.status = 'pending'
+          AND recipient.is_active = TRUE
+          AND recipient.public_key IS NOT NULL
+          AND recipient.id <> $2
+        ORDER BY recipient.email, group_invitations.created_at DESC
+        "#,
+    )
+    .bind(group_id)
+    .bind(user_id)
+    .fetch_all(pool)
     .await
 }
 

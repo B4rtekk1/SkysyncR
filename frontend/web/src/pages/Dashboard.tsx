@@ -1722,6 +1722,7 @@ function Dashboard() {
                     }
                     loading={shareLoading}
                     privateKey={privateKey}
+                    groups={groups}
                     onClose={() => setShareItem(null)}
                     onEnableShare={async (expiresInSeconds, downloadLimit) => {
                         if ('filename' in shareItem) {
