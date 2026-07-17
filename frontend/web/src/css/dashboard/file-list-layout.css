@@ -1,0 +1,80 @@
+.file-grid--list .file-card {
+    display: grid;
+    grid-template-columns: minmax(190px, 1fr) auto auto auto;
+    align-items: center;
+    gap: 12px;
+    min-height: 58px;
+    padding: 12px 14px;
+}
+
+.file-grid--list .file-card:hover {
+    transform: none;
+}
+
+.file-grid--list .file-card__handle {
+    top: 50%;
+    left: 12px;
+    transform: translateY(-50%);
+}
+
+.file-grid--list .file-card__top {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+    justify-content: flex-start;
+    gap: 8px;
+    margin: 0;
+    padding: 0;
+    transform: none;
+    min-width: 132px;
+}
+
+.file-grid--list .file-card__badge {
+    white-space: nowrap;
+}
+
+.file-grid--list .file-card__name {
+    margin: 0;
+}
+
+.file-grid--list .file-card__name-slot {
+    grid-column: 1;
+    margin: 0;
+    padding-left: 16px;
+}
+
+.file-grid--list .file-card__meta {
+    grid-column: 1;
+    padding-left: 16px;
+}
+
+.file-grid--list .file-card__fav {
+    position: static;
+    grid-column: 3;
+    grid-row: 1 / span 2;
+    align-self: center;
+    justify-self: center;
+}
+
+.file-grid--list .file-card__actions {
+    grid-column: 4;
+    grid-row: 1 / span 2;
+    margin-top: 0;
+}
+
+.file-grid--list .file-card--has-action:not(.file-card--has-favourite) .file-card__actions {
+    grid-column: 3;
+}
+
+.file-grid--list .folder-card {
+    grid-template-columns: minmax(190px, 1fr) auto;
+}
+
+.file-grid--list .folder-card .file-card__top {
+    grid-column: 2;
+}
+
+.file-grid--list .folder-card .file-card__name-slot,
+.file-grid--list .folder-card .file-card__meta {
+    grid-column: 1;
+}
+

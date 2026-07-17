@@ -1,0 +1,171 @@
+.rename-icon__line,
+.rename-icon__pencil,
+.rename-icon__spark {
+    transform-box: fill-box;
+    transform-origin: center;
+}
+
+.rename-icon__line {
+    transform-origin: left center;
+    transition: stroke-width 0.16s ease, transform 0.16s ease;
+}
+
+.rename-icon__pencil {
+    transition: stroke-width 0.16s ease, transform 0.16s ease;
+}
+
+.rename-icon__spark {
+    opacity: 0;
+    transform: translate(2px, 2px) scale(0.72);
+}
+
+.file-card__action--rename:hover .rename-icon__line,
+.file-card__action--rename:focus-visible .rename-icon__line {
+    animation: rename-line-write 0.48s cubic-bezier(0.2, 0.8, 0.2, 1);
+    stroke-width: 2;
+}
+
+.file-card__action--rename:hover .rename-icon__pencil,
+.file-card__action--rename:focus-visible .rename-icon__pencil {
+    animation: rename-pencil-write 0.48s cubic-bezier(0.2, 0.8, 0.2, 1);
+    stroke-width: 1.9;
+}
+
+.file-card__action--rename:hover .rename-icon__spark,
+.file-card__action--rename:focus-visible .rename-icon__spark {
+    animation: rename-spark-pop 0.48s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes rename-pencil-write {
+    0% {
+        transform: translate(-2px, 2px) rotate(-7deg);
+        opacity: 0.78;
+    }
+    42% {
+        transform: translate(1px, -1px) rotate(5deg);
+        opacity: 1;
+    }
+    72% {
+        transform: translate(-1px, 1px) rotate(-2deg);
+    }
+    100% {
+        transform: translate(0) rotate(0);
+    }
+}
+
+@keyframes rename-line-write {
+    0% {
+        transform: scaleX(0.52);
+        opacity: 0.62;
+    }
+    55% {
+        transform: scaleX(1.14);
+        opacity: 1;
+    }
+    100% {
+        transform: scaleX(1);
+    }
+}
+
+@keyframes rename-spark-pop {
+    0%,
+    24% {
+        opacity: 0;
+        transform: translate(2px, 2px) scale(0.72);
+    }
+    45% {
+        opacity: 0.95;
+        transform: translate(0) scale(1.08);
+    }
+    100% {
+        opacity: 0;
+        transform: translate(-1px, -1px) scale(0.92);
+    }
+}
+
+.download-icon__arrow,
+.download-icon__tray {
+    transform-box: fill-box;
+    transition: stroke-width 0.16s ease, transform 0.16s ease;
+}
+
+.download-icon__arrow {
+    transform-origin: center;
+}
+
+.download-icon__tray {
+    transform-origin: center;
+}
+
+.file-card__action--download:hover .download-icon__arrow,
+.file-card__action--download:focus-visible .download-icon__arrow {
+    animation: download-arrow-land 0.46s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.file-card__action--download:hover .download-icon__tray,
+.file-card__action--download:focus-visible .download-icon__tray {
+    animation: download-tray-receive 0.46s cubic-bezier(0.2, 0.8, 0.2, 1);
+    stroke-width: 2;
+}
+
+@keyframes download-arrow-land {
+    0% {
+        transform: translateY(-2px);
+        opacity: 0.75;
+    }
+    55% {
+        transform: translateY(3px);
+        opacity: 1;
+    }
+    72% {
+        transform: translateY(1px);
+    }
+    100% {
+        transform: translateY(0);
+    }
+}
+
+@keyframes download-tray-receive {
+    0% {
+        transform: scaleX(0.72);
+        opacity: 0.75;
+    }
+    55% {
+        transform: scaleX(1.16);
+        opacity: 1;
+    }
+    100% {
+        transform: scaleX(1);
+    }
+}
+
+.file-card__action--trash {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border: none;
+    border-radius: 8px;
+    color: #ef4444;
+    transition: color 0.16s ease, border-color 0.16s ease, background 0.16s ease, transform 0.16s ease;
+}
+
+.file-card__action--trash:hover,
+.file-card__action--trash:focus-visible {
+    color: #dc2626;
+    background: rgba(239, 68, 68, 0.08);
+    transform: translateY(-1px);
+}
+
+.trash-open-icon__lid {
+    transform-box: fill-box;
+    transform-origin: 15% 100%;
+    transition: transform 0.18s ease;
+}
+
+.file-card__action--trash:hover .trash-open-icon__lid,
+.file-card__action--trash:focus-visible .trash-open-icon__lid {
+    transform: translate(-1px, -2px) rotate(-18deg);
+}
+

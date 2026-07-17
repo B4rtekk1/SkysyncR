@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode, type SubmitEvent } from 'react'
+import { useEffect, useMemo, useState, type SubmitEvent } from 'react'
 import type { ApiFile } from '../../api/files'
 import {
     createCalendarEntry,
@@ -6,251 +6,39 @@ import {
     listCalendarEntries,
     type CalendarEntryKind,
 } from '../../api/calendar'
-import { formatBytes, kindFromFile, KIND_LABELS, type FileKind } from './fileUtils'
+import { formatBytes, kindFromFile, KIND_LABELS } from './fileUtils'
+import { CalendarDropdown } from './CalendarDropdown'
+import type {
+    CalendarDay,
+    CalendarDropdownId,
+    CalendarEntry,
+    CalendarKindFilter,
+    CalendarSourceFilter,
+    CalendarViewMode,
+} from './calendarTypes'
+import {
+    DAY_LABELS,
+    CALENDAR_ENTRIES_STORAGE_KEY,
+    KIND_OPTIONS,
+    MONTH_LABELS,
+    REMINDER_OPTIONS,
+    SOURCE_OPTIONS,
+    entryKey,
+    formatFullDate,
+    formatPeriod,
+    formatTime,
+    fromApiEntry,
+    loadCalendarEntries,
+    parseDateKey,
+    startOfDay,
+    startOfWeek,
+    toDateKey,
+} from './calendarUtils'
 
 type CalendarPanelProps = {
     files: ApiFile[]
     onPreview: (item: ApiFile) => void
     onDownload: (item: ApiFile) => void
-}
-
-type CalendarViewMode = 'month' | 'week'
-type CalendarSourceFilter = 'all' | 'root' | 'folders'
-type CalendarKindFilter = 'all' | FileKind
-
-type CalendarDropdownId = 'period' | 'kind' | 'source' | 'reminder' | 'file' | null
-
-type CalendarEntry = {
-    id: string
-    kind: CalendarEntryKind
-    date: string
-    time: string
-    title: string
-    note: string
-    reminder: string
-    fileId: string | null
-}
-
-type CalendarDay = {
-    date: Date
-    key: string
-    inMonth: boolean
-    isToday: boolean
-    files: ApiFile[]
-    entries: CalendarEntry[]
-}
-
-const DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
-const CALENDAR_ENTRIES_STORAGE_KEY = 'calendar_entries'
-const KIND_OPTIONS: CalendarKindFilter[] = [
-    'all',
-    'image',
-    'document',
-    'pdf',
-    'sheet',
-    'presentation',
-    'archive',
-    'video',
-    'audio',
-    'text',
-    'code',
-    'file',
-]
-const SOURCE_OPTIONS: Array<{ value: CalendarSourceFilter; label: string }> = [
-    { value: 'all', label: 'All file locations' },
-    { value: 'root', label: 'Root files' },
-    { value: 'folders', label: 'Files in folders' },
-]
-const REMINDER_OPTIONS = [
-    { value: '', label: 'None' },
-    { value: 'at-time', label: 'At time' },
-    { value: '15m', label: '15 min before' },
-    { value: '1h', label: '1 hour before' },
-    { value: '1d', label: '1 day before' },
-    { value: '1w', label: '1 week before' },
-]
-const MONTH_LABELS = Array.from({ length: 12 }, (_, month) =>
-    new Intl.DateTimeFormat(undefined, { month: 'short' }).format(new Date(2026, month, 1)),
-)
-
-function toDateKey(date: Date) {
-    const year = date.getFullYear()
-    const month = String(date.getMonth() + 1).padStart(2, '0')
-    const day = String(date.getDate()).padStart(2, '0')
-    return `${year}-${month}-${day}`
-}
-
-function startOfDay(date: Date) {
-    return new Date(date.getFullYear(), date.getMonth(), date.getDate())
-}
-
-function startOfWeek(date: Date) {
-    const start = startOfDay(date)
-    start.setDate(start.getDate() - ((start.getDay() + 6) % 7))
-    return start
-}
-
-function formatPeriod(date: Date, mode: CalendarViewMode) {
-    if (mode === 'month') {
-        return new Intl.DateTimeFormat(undefined, { month: 'long', year: 'numeric' }).format(date)
-    }
-
-    const start = startOfWeek(date)
-    const end = new Date(start)
-    end.setDate(start.getDate() + 6)
-    const formatter = new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' })
-    return `${formatter.format(start)} - ${formatter.format(end)}, ${end.getFullYear()}`
-}
-
-function formatFullDate(date: Date) {
-    return new Intl.DateTimeFormat(undefined, { weekday: 'long', month: 'long', day: 'numeric' }).format(date)
-}
-
-function formatTime(value: string) {
-    return new Intl.DateTimeFormat(undefined, { hour: '2-digit', minute: '2-digit' }).format(new Date(value))
-}
-
-function parseDateKey(value: string) {
-    const [year, month, day] = value.split('-').map(Number)
-    return new Date(year, month - 1, day)
-}
-
-function loadCalendarEntries(): CalendarEntry[] {
-    try {
-        const raw = localStorage.getItem(CALENDAR_ENTRIES_STORAGE_KEY)
-        if (!raw) return []
-        const parsed = JSON.parse(raw) as Partial<CalendarEntry>[]
-
-        return parsed
-            .filter((entry): entry is CalendarEntry => {
-                return (
-                    typeof entry.id === 'string' &&
-                    (entry.kind === 'event' || entry.kind === 'deadline') &&
-                    typeof entry.date === 'string' &&
-                    typeof entry.time === 'string' &&
-                    typeof entry.title === 'string' &&
-                    typeof entry.note === 'string' &&
-                    typeof entry.reminder === 'string'
-                )
-            })
-            .map((entry) => ({ ...entry, fileId: typeof entry.fileId === 'string' ? entry.fileId : null }))
-    } catch {
-        return []
-    }
-}
-
-function fromApiEntry(entry: {
-    id: string
-    kind: CalendarEntryKind
-    date: string
-    time: string
-    title: string
-    note: string
-    reminder: string
-    file_id: string | null
-}): CalendarEntry {
-    return {
-        id: entry.id,
-        kind: entry.kind,
-        date: entry.date,
-        time: entry.time.slice(0, 5),
-        title: entry.title,
-        note: entry.note,
-        reminder: entry.reminder,
-        fileId: entry.file_id,
-    }
-}
-
-function entryKey(entry: { kind: string; date: string; time: string; title: string; note: string; reminder: string; file_id?: string | null; fileId?: string | null }) {
-    return [
-        entry.kind,
-        entry.date,
-        entry.time.slice(0, 5),
-        entry.title,
-        entry.note,
-        entry.reminder,
-        entry.file_id ?? entry.fileId ?? '',
-    ].join('\u001f')
-}
-
-type CalendarDropdownProps<T extends string> = {
-    id: Exclude<CalendarDropdownId, null>
-    label: string
-    value: T
-    options: Array<{ value: T; label: string; meta?: string }>
-    openDropdown: CalendarDropdownId
-    onOpenChange: (id: CalendarDropdownId) => void
-    onChange: (value: T) => void
-    emptyLabel?: string
-    icon?: ReactNode
-}
-
-function CalendarDropdown<T extends string>({
-    id,
-    label,
-    value,
-    options,
-    openDropdown,
-    onOpenChange,
-    onChange,
-    emptyLabel = 'Select',
-    icon,
-}: CalendarDropdownProps<T>) {
-    const selected = options.find((option) => option.value === value)
-    const isOpen = openDropdown === id
-
-    return (
-        <div className="calendar-dropdown">
-            <span className="calendar-dropdown__label">{label}</span>
-            <button
-                className={`calendar-dropdown__trigger ${isOpen ? 'is-open' : ''}`}
-                type="button"
-                onClick={() => onOpenChange(isOpen ? null : id)}
-                aria-haspopup="listbox"
-                aria-expanded={isOpen}
-            >
-                <span className="calendar-dropdown__icon" aria-hidden="true">
-                    {icon ?? (
-                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none">
-                            <path d="M5 7h14M7 12h10M9 17h6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-                        </svg>
-                    )}
-                </span>
-                <span className="calendar-dropdown__value">{selected?.label ?? emptyLabel}</span>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                    <path d="m7 10 5 5 5-5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-            </button>
-
-            {isOpen && (
-                <div className="calendar-dropdown__menu" role="listbox" aria-label={label}>
-                    {options.map((option) => (
-                        <button
-                            className={`calendar-dropdown__option ${option.value === value ? 'is-selected' : ''}`}
-                            key={option.value || 'empty'}
-                            type="button"
-                            role="option"
-                            aria-selected={option.value === value}
-                            onClick={() => {
-                                onChange(option.value)
-                                onOpenChange(null)
-                            }}
-                        >
-                            <span>
-                                <strong>{option.label}</strong>
-                                {option.meta && <em>{option.meta}</em>}
-                            </span>
-                            {option.value === value && (
-                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                                    <path d="M5 12.5 9.3 17 19 7" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
-                                </svg>
-                            )}
-                        </button>
-                    ))}
-                </div>
-            )}
-        </div>
-    )
 }
 
 export function CalendarPanel({ files, onPreview, onDownload }: CalendarPanelProps) {

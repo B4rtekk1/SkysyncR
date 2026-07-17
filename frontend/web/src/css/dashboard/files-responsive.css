@@ -1,0 +1,5 @@
+@media (max-width: 560px) {
+    .note-editor-shell__labels {
+        grid-template-columns: 1fr;
+    }
+}

@@ -1,0 +1,75 @@
+.file-card__action {
+    margin-top: 12px;
+    background: transparent;
+    border: none;
+    padding: 0;
+    font-size: 0.78rem;
+    font-family: inherit;
+    color: var(--mist);
+    cursor: pointer;
+    transition: color 0.15s ease;
+}
+
+.file-card__actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 12px;
+}
+
+.file-card__actions .file-card__action {
+    margin-top: 0;
+}
+
+.file-card__action:hover {
+    color: var(--signal);
+}
+
+.file-card__action--download,
+.file-card__action--rename,
+.file-card__action--share,
+.file-card__action--note,
+.file-card__action--info,
+.file-card__action--confirm,
+.file-card__action--cancel {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    color: var(--mist);
+}
+
+.file-card__action--download:hover,
+.file-card__action--download:focus-visible,
+.file-card__action--rename:hover,
+.file-card__action--rename:focus-visible,
+.file-card__action--share:hover,
+.file-card__action--share:focus-visible,
+.file-card__action--note:hover,
+.file-card__action--note:focus-visible,
+.file-card__action--info:hover,
+.file-card__action--info:focus-visible,
+.file-card__action--info.is-active,
+.file-card__action--confirm:hover,
+.file-card__action--confirm:focus-visible {
+    color: var(--signal);
+    background: rgba(var(--signal-rgb), 0.08);
+    transform: translateY(-1px);
+}
+
+.file-card__action--confirm {
+    color: var(--signal);
+}
+
+.file-card__action--share.is-active {
+    color: var(--signal);
+    background: rgba(var(--signal-rgb), 0.08);
+}
+
+.file-card__action--note.is-active {
+    color: var(--amber);
+    background: rgba(255, 176, 76, 0.08);
+}
+

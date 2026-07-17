@@ -1,0 +1,107 @@
+/* Groups listing: align with the files page tile rhythm. */
+.groups-panel--listing-view {
+    max-width: none;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+}
+
+.groups-panel--listing-view::before {
+    content: none;
+}
+
+.groups-panel--listing-view .groups-panel__head--listing {
+    margin-bottom: 16px;
+    padding-bottom: 0;
+    border-bottom: 0;
+}
+
+.groups-panel--listing-view .groups-panel__title {
+    margin: 0;
+    font-size: 1.5rem;
+    letter-spacing: 0;
+}
+
+.groups-panel--listing-view .groups-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 16px;
+    margin-top: 0;
+}
+
+.groups-panel--listing-view .groups-list__item {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    align-content: space-between;
+    min-height: 150px;
+    padding: 16px;
+    border-radius: 12px;
+    background: var(--panel);
+}
+
+.groups-panel--listing-view .groups-list__item::after {
+    content: none;
+}
+
+.groups-panel--listing-view .groups-list__mark {
+    grid-column: 1 / -1;
+    width: 42px;
+    height: 42px;
+    margin-bottom: 16px;
+    border-radius: 11px;
+}
+
+.groups-panel--listing-view .groups-list__body {
+    min-width: 0;
+}
+
+.groups-panel--listing-view .groups-list__title-row {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.groups-panel--listing-view .groups-list__title-row strong {
+    max-width: 100%;
+    font-family: var(--font-mono), monospace;
+    font-size: 0.86rem;
+    letter-spacing: 0;
+}
+
+.groups-panel--listing-view .groups-list__meta {
+    gap: 3px;
+    margin-top: 8px;
+}
+
+.groups-panel--listing-view .groups-list__chevron {
+    align-self: end;
+    width: 30px;
+    height: 30px;
+    background: transparent;
+    color: var(--mist);
+}
+
+.groups-panel--listing-view .groups-empty {
+    margin-top: 0;
+    border-radius: 12px;
+    background: var(--panel);
+}
+
+@media (max-width: 560px) {
+    .groups-panel--listing-view {
+        padding: 0;
+        border-radius: 0;
+    }
+
+    .groups-panel--listing-view .groups-list {
+        grid-template-columns: 1fr;
+    }
+
+    .groups-panel--listing-view .groups-list__item {
+        grid-template-columns: 1fr auto;
+        min-height: 142px;
+    }
+}
+

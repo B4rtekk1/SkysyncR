@@ -1,0 +1,23 @@
+.note-editor-shell {
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr);
+    gap: 8px;
+}
+
+.note-editor-shell__labels {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 10px;
+}
+
+.note-editor-shell__labels span {
+    min-width: 0;
+    color: var(--mist);
+    font-family: var(--font-mono), monospace;
+    font-size: 0.68rem;
+    text-transform: uppercase;
+}
+

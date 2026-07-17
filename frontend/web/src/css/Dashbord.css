@@ -6,6 +6,14 @@
 @import './dashboard/file-filter-controls.css';
 @import './dashboard/view-toggle.css';
 @import './dashboard/files.css';
+@import './dashboard/folder-cards.css';
+@import './dashboard/file-card-actions.css';
+@import './dashboard/file-card-info.css';
+@import './dashboard/file-card-icons.css';
+@import './dashboard/file-list-layout.css';
+@import './dashboard/file-loading.css';
+@import './dashboard/note-editor.css';
+@import './dashboard/files-responsive.css';
 @import './dashboard/groups.css';
 @import './dashboard/calendar.css';
 @import './dashboard/share.css';
@@ -18,3 +26,6 @@
 @import './dashboard/markdown-preview.css';
 @import './dashboard/preview-responsive.css';
 @import './dashboard/groups-overrides.css';
+@import './dashboard/groups-visual-polish.css';
+@import './dashboard/groups-listing-overrides.css';
+@import './dashboard/groups-final-alignment.css';
