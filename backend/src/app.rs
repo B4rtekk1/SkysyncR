@@ -4,6 +4,7 @@ use crate::routes::folders::folders_routes;
 use crate::routes::groups::groups_routes;
 use crate::routes::storage::storage_routes;
 use crate::routes::users::{auth_limited_routes, users_routes};
+use crate::services::storage_consistency::spawn_storage_consistency_worker;
 use crate::services::trash::spawn_trash_purge_worker;
 use crate::state::{AppConfig, AppState};
 use axum::http::{HeaderName, HeaderValue, Method, header};
@@ -111,6 +112,11 @@ pub async fn run_server() {
     spawn_trash_purge_worker(
         pool.clone(),
         config.trash_retention_days,
+        config.trash_purge_interval_hours,
+    );
+    spawn_storage_consistency_worker(
+        pool.clone(),
+        config.upload_dir.clone(),
         config.trash_purge_interval_hours,
     );
 

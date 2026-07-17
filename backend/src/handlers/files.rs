@@ -11,7 +11,7 @@ use base64::{Engine as _, engine::general_purpose};
 use chrono::{Duration, Utc};
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
-use std::path::PathBuf;
+use std::path::{Path as FsPath, PathBuf};
 use tokio::fs;
 use uuid::Uuid;
 
@@ -19,13 +19,13 @@ use crate::auth::AuthUser;
 use crate::db::files::{
     FileRecord, FileShareRecord, NewFileRecord, NewFileShare, ShareRecipientRecord,
     SharedFileRecord, add_user_file_favourite, create_file_record, delete_user_file_share,
-    folder_belongs_to_user, get_file_share_recipient, get_user_file_for_content_update,
+    folder_belongs_to_user, get_file_share_recipient, get_user_file_for_content_update_in_tx,
     get_user_file_for_download, list_files_shared_with_user, list_user_file_shares,
     list_user_files, remove_user_file_favourite, rename_user_file, restore_user_file,
     soft_delete_user_file, update_user_file_content, update_user_file_note, update_user_file_share,
     upsert_user_file_share, user_file_exists,
 };
-use crate::db::storage::get_storage_quota;
+use crate::db::storage::try_apply_storage_delta;
 use crate::services::trash::permanently_delete_user_file;
 use crate::state::AppState;
 use crate::utils::errors::{ApiError, internal_error};
@@ -109,13 +109,6 @@ pub async fn upload_file(
     let file_size = i64::try_from(payload.bytes.len())
         .map_err(|_| ApiError::BadRequest("File is too large".into()))?;
 
-    let quota = get_storage_quota(&state.db_pool, auth.user_id)
-        .await
-        .map_err(|e| internal_error("get storage quota", e))?;
-    if quota.used_bytes.saturating_add(file_size) > quota.total_bytes {
-        return Err(ApiError::BadRequest("Storage quota exceeded".into()));
-    }
-
     if let Some(folder_id) = payload.folder_id {
         let folder_exists = folder_belongs_to_user(&state.db_pool, auth.user_id, folder_id)
             .await
@@ -127,20 +120,35 @@ pub async fn upload_file(
 
     let file_id = Uuid::new_v4();
     let storage_path = storage_path_for(&state.config.upload_dir, auth.user_id, file_id);
+    let temp_path = temp_storage_path_for(&state.config.upload_dir, auth.user_id, file_id);
     if let Some(parent) = storage_path.parent() {
         fs::create_dir_all(parent)
             .await
             .map_err(|e| internal_error("create upload directory", e))?;
     }
 
-    fs::write(&storage_path, &payload.bytes)
+    fs::write(&temp_path, &payload.bytes)
         .await
         .map_err(|e| internal_error("write uploaded file", e))?;
 
     let checksum = hex::encode(Sha256::digest(&payload.bytes));
     let storage_path_string = storage_path.to_string_lossy().into_owned();
+    let mut tx = state
+        .db_pool
+        .begin()
+        .await
+        .map_err(|e| internal_error("begin upload transaction", e))?;
+
+    let quota_reserved = try_apply_storage_delta(&mut tx, auth.user_id, file_size)
+        .await
+        .map_err(|e| internal_error("reserve upload storage", e))?;
+    if !quota_reserved {
+        let _ = fs::remove_file(&temp_path).await;
+        return Err(ApiError::BadRequest("Storage quota exceeded".into()));
+    }
+
     let record = match create_file_record(
-        &state.db_pool,
+        &mut tx,
         NewFileRecord {
             owner_id: auth.user_id,
             filename: payload.filename,
@@ -157,10 +165,20 @@ pub async fn upload_file(
     {
         Ok(record) => record,
         Err(err) => {
-            let _ = fs::remove_file(&storage_path).await;
+            let _ = fs::remove_file(&temp_path).await;
             return Err(internal_error("create file record", err));
         }
     };
+
+    if let Err(err) = fs::rename(&temp_path, &storage_path).await {
+        let _ = fs::remove_file(&temp_path).await;
+        return Err(internal_error("promote uploaded file", err));
+    }
+
+    if let Err(err) = tx.commit().await {
+        let _ = fs::remove_file(&storage_path).await;
+        return Err(internal_error("commit upload transaction", err));
+    }
 
     Ok((StatusCode::CREATED, Json(record)))
 }
@@ -238,26 +256,48 @@ pub async fn update_file_content(
     let file_size = i64::try_from(payload.bytes.len())
         .map_err(|_| ApiError::BadRequest("File is too large".into()))?;
 
-    let target = get_user_file_for_content_update(&state.db_pool, auth.user_id, file_id)
-        .await
-        .map_err(|e| internal_error("get file for content update", e))?
-        .ok_or_else(|| ApiError::BadRequest("File not found".into()))?;
-
-    let quota = get_storage_quota(&state.db_pool, auth.user_id)
-        .await
-        .map_err(|e| internal_error("get storage quota", e))?;
-    let size_delta = file_size.saturating_sub(target.size_bytes);
-    if quota.used_bytes.saturating_add(size_delta) > quota.total_bytes {
-        return Err(ApiError::BadRequest("Storage quota exceeded".into()));
+    let temp_path = temp_storage_path_for(&state.config.upload_dir, auth.user_id, file_id);
+    if let Some(parent) = temp_path.parent() {
+        fs::create_dir_all(parent)
+            .await
+            .map_err(|e| internal_error("create upload directory", e))?;
     }
-
-    fs::write(&target.storage_path, &payload.bytes)
+    fs::write(&temp_path, &payload.bytes)
         .await
         .map_err(|e| internal_error("write updated file", e))?;
 
+    let mut tx = state
+        .db_pool
+        .begin()
+        .await
+        .map_err(|e| internal_error("begin file update transaction", e))?;
+
+    let target = match get_user_file_for_content_update_in_tx(&mut tx, auth.user_id, file_id).await
+    {
+        Ok(Some(target)) => target,
+        Ok(None) => {
+            let _ = fs::remove_file(&temp_path).await;
+            return Err(ApiError::BadRequest("File not found".into()));
+        }
+        Err(err) => {
+            let _ = fs::remove_file(&temp_path).await;
+            return Err(internal_error("get file for content update", err));
+        }
+    };
+
+    let size_delta =
+        file_size.saturating_sub(target.size_bytes) - target.size_bytes.saturating_sub(file_size);
+    let quota_reserved = try_apply_storage_delta(&mut tx, auth.user_id, size_delta)
+        .await
+        .map_err(|e| internal_error("reserve updated file storage", e))?;
+    if !quota_reserved {
+        let _ = fs::remove_file(&temp_path).await;
+        return Err(ApiError::BadRequest("Storage quota exceeded".into()));
+    }
+
     let checksum = hex::encode(Sha256::digest(&payload.bytes));
     let file = update_user_file_content(
-        &state.db_pool,
+        &mut tx,
         auth.user_id,
         file_id,
         file_size,
@@ -266,8 +306,25 @@ pub async fn update_file_content(
         checksum,
     )
     .await
-    .map_err(|e| internal_error("update file content", e))?
-    .ok_or_else(|| ApiError::BadRequest("File not found".into()))?;
+    .map_err(|e| {
+        let _ = std::fs::remove_file(&temp_path);
+        internal_error("update file content", e)
+    })?
+    .ok_or_else(|| {
+        let _ = std::fs::remove_file(&temp_path);
+        ApiError::BadRequest("File not found".into())
+    })?;
+
+    if let Err(err) =
+        replace_file_atomically(&temp_path, &PathBuf::from(&target.storage_path)).await
+    {
+        let _ = fs::remove_file(&temp_path).await;
+        return Err(internal_error("replace updated file", err));
+    }
+
+    if let Err(err) = tx.commit().await {
+        return Err(internal_error("commit file update transaction", err));
+    }
 
     Ok(Json(file))
 }
@@ -703,6 +760,62 @@ fn storage_path_for(upload_dir: &PathBuf, user_id: Uuid, file_id: Uuid) -> PathB
     upload_dir
         .join(user_id.to_string())
         .join(format!("{file_id}.bin"))
+}
+
+fn temp_storage_path_for(upload_dir: &PathBuf, user_id: Uuid, file_id: Uuid) -> PathBuf {
+    upload_dir
+        .join(user_id.to_string())
+        .join(format!("{file_id}.{}.tmp", Uuid::new_v4()))
+}
+
+async fn replace_file_atomically(source: &FsPath, target: &FsPath) -> std::io::Result<()> {
+    let source = source.to_owned();
+    let target = target.to_owned();
+    tokio::task::spawn_blocking(move || replace_file_atomically_blocking(&source, &target))
+        .await
+        .map_err(std::io::Error::other)?
+}
+
+#[cfg(not(windows))]
+fn replace_file_atomically_blocking(source: &FsPath, target: &FsPath) -> std::io::Result<()> {
+    std::fs::rename(source, target)
+}
+
+#[cfg(windows)]
+fn replace_file_atomically_blocking(source: &FsPath, target: &FsPath) -> std::io::Result<()> {
+    use std::ffi::OsStr;
+    use std::os::windows::ffi::OsStrExt;
+
+    const MOVEFILE_REPLACE_EXISTING: u32 = 0x1;
+    const MOVEFILE_WRITE_THROUGH: u32 = 0x8;
+
+    unsafe extern "system" {
+        fn MoveFileExW(
+            lpExistingFileName: *const u16,
+            lpNewFileName: *const u16,
+            dwFlags: u32,
+        ) -> i32;
+    }
+
+    fn wide(path: &OsStr) -> Vec<u16> {
+        path.encode_wide().chain(std::iter::once(0)).collect()
+    }
+
+    let source = wide(source.as_os_str());
+    let target = wide(target.as_os_str());
+    let replaced = unsafe {
+        MoveFileExW(
+            source.as_ptr(),
+            target.as_ptr(),
+            MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH,
+        )
+    };
+
+    if replaced == 0 {
+        Err(std::io::Error::last_os_error())
+    } else {
+        Ok(())
+    }
 }
 
 fn validate_upload_metadata(field_name: &str, value: &str) -> Result<String, ApiError> {

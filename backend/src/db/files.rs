@@ -1,5 +1,5 @@
 use chrono::{DateTime, Utc};
-use sqlx::PgPool;
+use sqlx::{PgPool, Postgres, Row, Transaction};
 use uuid::Uuid;
 
 use super::file_records::SharedFileRow;
@@ -8,6 +8,7 @@ pub use super::file_records::{
     ShareRecipientRecord, SharedFileRecord, UpdateFileContentTarget,
 };
 pub use super::file_share_schema::ensure_file_shares_table;
+use super::storage::try_apply_storage_delta;
 
 pub async fn list_user_files(
     pool: &PgPool,
@@ -57,7 +58,7 @@ pub async fn list_user_files(
 }
 
 pub async fn create_file_record(
-    pool: &PgPool,
+    tx: &mut Transaction<'_, Postgres>,
     file: NewFileRecord,
 ) -> Result<FileRecord, sqlx::Error> {
     sqlx::query_as::<_, FileRecord>(
@@ -105,7 +106,7 @@ pub async fn create_file_record(
     .bind(file.encryption_nonce)
     .bind(file.checksum)
     .bind(file.folder_id)
-    .fetch_one(pool)
+    .fetch_one(&mut **tx)
     .await
 }
 
@@ -137,8 +138,8 @@ pub async fn get_user_file_for_download(
     .await
 }
 
-pub async fn get_user_file_for_content_update(
-    pool: &PgPool,
+pub async fn get_user_file_for_content_update_in_tx(
+    tx: &mut Transaction<'_, Postgres>,
     user_id: Uuid,
     file_id: Uuid,
 ) -> Result<Option<UpdateFileContentTarget>, sqlx::Error> {
@@ -149,11 +150,12 @@ pub async fn get_user_file_for_content_update(
         WHERE id = $1
           AND owner_id = $2
           AND is_deleted = FALSE
+        FOR UPDATE
         "#,
     )
     .bind(file_id)
     .bind(user_id)
-    .fetch_optional(pool)
+    .fetch_optional(&mut **tx)
     .await
 }
 
@@ -393,6 +395,8 @@ pub async fn soft_delete_user_file(
     user_id: Uuid,
     file_id: Uuid,
 ) -> Result<u64, sqlx::Error> {
+    let mut tx = pool.begin().await?;
+
     let result = sqlx::query(
         r#"
         UPDATE files
@@ -402,14 +406,24 @@ pub async fn soft_delete_user_file(
         WHERE id = $1
           AND owner_id = $2
           AND is_deleted = FALSE
+        RETURNING size_bytes
         "#,
     )
     .bind(file_id)
     .bind(user_id)
-    .execute(pool)
+    .fetch_optional(&mut *tx)
     .await?;
 
-    Ok(result.rows_affected())
+    let Some(row) = result else {
+        tx.commit().await?;
+        return Ok(0);
+    };
+
+    let size_bytes: i64 = row.try_get("size_bytes")?;
+    try_apply_storage_delta(&mut tx, user_id, -size_bytes).await?;
+    tx.commit().await?;
+
+    Ok(1)
 }
 
 pub async fn restore_user_file(
@@ -417,6 +431,34 @@ pub async fn restore_user_file(
     user_id: Uuid,
     file_id: Uuid,
 ) -> Result<u64, sqlx::Error> {
+    let mut tx = pool.begin().await?;
+
+    let target = sqlx::query(
+        r#"
+        SELECT size_bytes
+        FROM files
+        WHERE id = $1
+          AND owner_id = $2
+          AND is_deleted = TRUE
+        FOR UPDATE
+        "#,
+    )
+    .bind(file_id)
+    .bind(user_id)
+    .fetch_optional(&mut *tx)
+    .await?;
+
+    let Some(target) = target else {
+        tx.commit().await?;
+        return Ok(0);
+    };
+
+    let size_bytes: i64 = target.try_get("size_bytes")?;
+    if !try_apply_storage_delta(&mut tx, user_id, size_bytes).await? {
+        tx.commit().await?;
+        return Ok(0);
+    }
+
     let result = sqlx::query(
         r#"
         UPDATE files
@@ -430,8 +472,10 @@ pub async fn restore_user_file(
     )
     .bind(file_id)
     .bind(user_id)
-    .execute(pool)
+    .execute(&mut *tx)
     .await?;
+
+    tx.commit().await?;
 
     Ok(result.rows_affected())
 }
@@ -543,7 +587,7 @@ pub async fn rename_user_file(
 }
 
 pub async fn update_user_file_content(
-    pool: &PgPool,
+    tx: &mut Transaction<'_, Postgres>,
     user_id: Uuid,
     file_id: Uuid,
     size_bytes: i64,
@@ -595,7 +639,7 @@ pub async fn update_user_file_content(
     .bind(checksum)
     .bind(file_id)
     .bind(user_id)
-    .fetch_optional(pool)
+    .fetch_optional(&mut **tx)
     .await
 }
 

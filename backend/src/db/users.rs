@@ -52,6 +52,8 @@ pub async fn create_user(
 ) -> Result<(Uuid, String), sqlx::Error> {
     let token = generate_verification_token();
     let token_hash = hash_verification_token(&token);
+    let mut tx = pool.begin().await?;
+
     let user_id = sqlx::query!(
         r#"
         INSERT INTO users (
@@ -68,7 +70,7 @@ pub async fn create_user(
         token_hash,
         verification_ttl_hours as i32
     )
-    .fetch_one(pool)
+    .fetch_one(&mut *tx)
     .await?
     .id;
 
@@ -80,8 +82,10 @@ pub async fn create_user(
         "#,
         user_id
     )
-    .execute(pool)
+    .execute(&mut *tx)
     .await?;
+
+    tx.commit().await?;
 
     Ok((user_id, token))
 }
