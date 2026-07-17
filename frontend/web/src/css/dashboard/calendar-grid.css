@@ -1,0 +1,105 @@
+.calendar-panel__layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(300px, 380px);
+    gap: 16px;
+    align-items: start;
+}
+
+.calendar-panel__grid {
+    display: grid;
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    gap: 6px;
+}
+
+.calendar-panel__weekday {
+    padding: 0 4px 6px;
+    color: var(--mist);
+    font-family: var(--font-mono), monospace;
+    font-size: 0.68rem;
+    text-align: center;
+    text-transform: uppercase;
+}
+
+.calendar-panel__day {
+    position: relative;
+    display: grid;
+    min-height: 96px;
+    align-content: start;
+    justify-items: start;
+    gap: 8px;
+    padding: 10px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--panel);
+    color: var(--paper);
+    cursor: pointer;
+    font: inherit;
+    text-align: left;
+    transition: border-color 0.15s ease, background 0.15s ease, transform 0.15s ease;
+}
+
+.calendar-panel__grid--week .calendar-panel__day {
+    min-height: 220px;
+}
+
+.calendar-panel__day:hover,
+.calendar-panel__day:focus-visible {
+    border-color: rgba(var(--signal-rgb), 0.44);
+    background: color-mix(in srgb, var(--panel-2) 82%, var(--signal));
+    outline: none;
+}
+
+.calendar-panel__day.is-muted {
+    color: var(--mist);
+    opacity: 0.56;
+}
+
+.calendar-panel__day.is-today {
+    border-color: rgba(var(--signal-rgb), 0.54);
+}
+
+.calendar-panel__day.is-selected {
+    border-color: var(--signal);
+    background: rgba(var(--signal-rgb), 0.1);
+    transform: translateY(-1px);
+}
+
+.calendar-panel__day-number {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    font-family: var(--font-mono), monospace;
+    font-size: 0.78rem;
+}
+
+.calendar-panel__day.is-today .calendar-panel__day-number {
+    background: var(--signal);
+    color: var(--panel);
+}
+
+.calendar-panel__badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+}
+
+.calendar-panel__day-count {
+    display: inline-flex;
+    align-items: center;
+    min-height: 22px;
+    padding: 0 8px;
+    border-radius: 999px;
+    background: rgba(var(--signal-rgb), 0.12);
+    color: var(--signal);
+    font-family: var(--font-mono), monospace;
+    font-size: 0.68rem;
+}
+
+.calendar-panel__day-count--entry {
+    background: rgba(255, 176, 76, 0.12);
+    color: var(--amber);
+}
+

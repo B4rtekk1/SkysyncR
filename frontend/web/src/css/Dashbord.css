@@ -16,6 +16,10 @@
 @import './dashboard/files-responsive.css';
 @import './dashboard/groups.css';
 @import './dashboard/calendar.css';
+@import './dashboard/calendar-dropdown.css';
+@import './dashboard/calendar-grid.css';
+@import './dashboard/calendar-agenda.css';
+@import './dashboard/calendar-responsive.css';
 @import './dashboard/share.css';
 @import './dashboard/states.css';
 @import './dashboard/responsive.css';
