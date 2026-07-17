@@ -137,7 +137,8 @@
 }
 
 .calendar-dropdown__option strong,
-.calendar-dropdown__option em {
+.calendar-dropdown__option em,
+.calendar-dropdown__option small {
     display: block;
     min-width: 0;
     overflow: hidden;
@@ -151,7 +152,8 @@
     font-weight: 500;
 }
 
-.calendar-dropdown__option em {
+.calendar-dropdown__option em,
+.calendar-dropdown__option small {
     margin-top: 2px;
     color: var(--mist);
     font-family: var(--font-mono), monospace;

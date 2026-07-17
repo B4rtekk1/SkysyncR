@@ -54,7 +54,7 @@ export function CalendarDropdown<T extends string>({
                 <div className="calendar-dropdown__menu" role="listbox">
                     {options.map((option) => (
                         <button
-                            className={option.value === value ? 'is-selected' : ''}
+                            className={`calendar-dropdown__option ${option.value === value ? 'is-selected' : ''}`}
                             key={option.value}
                             type="button"
                             role="option"
