@@ -1,7 +1,6 @@
 import React, {
     useCallback,
     useEffect,
-    useLayoutEffect,
     useMemo,
     useRef,
     useState,
@@ -41,38 +40,27 @@ import { DashboardSidebar } from './dashboard/DashboardSidebar'
 import { DashboardTopbar } from './dashboard/DashboardTopbar'
 import { hasFileExtension, mimeTypeForCreatedFile } from './dashboard/createdFile'
 import {
-    formatSizeValue,
-    getFilterSummary,
-    hasActiveFileFilters,
-    matchesFileFilters,
-    parseSizeInputToMb,
-    parseSizeMb,
-    sortFiles,
-} from './dashboard/fileFilters'
-import {
     applySavedOrder,
     clearLegacyLocalFileMetadata,
     loadActiveView,
-    loadFileFilter,
-    loadFileSort,
     loadFavouriteIds,
     saveActiveView,
-    saveFileFilter,
-    saveFileSort,
-    saveOrderIds,
 } from './dashboard/storage'
 import { migratePlaintextFileMetadata } from './dashboard/metadataMigration'
 import { useAnimatedItems } from './dashboard/hooks/useAnimatedItems'
 import { useFileActions } from './dashboard/hooks/useFileActions'
 import { useDashboardGroups } from './dashboard/hooks/useDashboardGroups'
 import { useFilePreview } from './dashboard/hooks/useFilePreview'
+import { useFileFilterControls } from './dashboard/hooks/useFileFilterControls'
 import { useFileUpload } from './dashboard/hooks/useFileUpload'
 import { useLayoutModeSwitch } from './dashboard/hooks/useLayoutModeSwitch'
+import { useManualCardOrdering } from './dashboard/hooks/useManualCardOrdering'
+import { useNavIndicator } from './dashboard/hooks/useNavIndicator'
 import { useNavOrdering } from './dashboard/hooks/useNavOrdering'
 import { useSidebarState } from './dashboard/hooks/useSidebarState'
 import { useStorageSummary } from './dashboard/hooks/useStorageSummary'
 import { decryptFilesMetadata, decryptFoldersMetadata } from './dashboard/encryptedMetadata'
-import type { FileFilters, FileSortKey, FileTypeFilterKey, FileVisibilityFilterKey, Item, NavIndicator, ShareableItem, ViewKey } from './dashboard/types'
+import type { Item, ShareableItem, ViewKey } from './dashboard/types'
 
 function Dashboard() {
     const navigate = useNavigate()
@@ -81,8 +69,6 @@ function Dashboard() {
     const [folders, setFolders] = useState<ApiFolder[]>([])
     const [activeFolderId, setActiveFolderId] = useState<string | null>(null)
     const [folderTrail, setFolderTrail] = useState<ApiFolder[]>([])
-    const [sortKey, setSortKey] = useState<FileSortKey>(() => loadFileSort())
-    const [fileFilters, setFileFilters] = useState<FileFilters>(() => loadFileFilter())
     const [pendingIds, setPendingIds] = useState<Set<string>>(new Set())
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState<string | null>(null)
@@ -96,8 +82,6 @@ function Dashboard() {
     const [filterMenuClosing, setFilterMenuClosing] = useState(false)
     const [dragActive, setDragActive] = useState(false)
     const [favouriteIds, setFavouriteIds] = useState<Set<string>>(() => loadFavouriteIds())
-    const [draggedCardId, setDraggedCardId] = useState<string | null>(null)
-    const [dropTargetId, setDropTargetId] = useState<string | null>(null)
     const [settingsOpen, setSettingsOpen] = useState(false)
     const [currentUser, setCurrentUser] = useState<CurrentUserResponse | null>(null)
     const [displayName, setDisplayName] = useState('You')
@@ -116,24 +100,12 @@ function Dashboard() {
     const [publicKey, setPublicKey] = useState<string | null>(null)
     const [privateKey, setPrivateKey] = useState<CryptoKey | null>(null)
     const normalizedQuery = query.trim().toLowerCase()
-    const hasActiveFilter = hasActiveFileFilters(fileFilters)
-    const filterSummary = getFilterSummary(fileFilters)
     const menuRef = useRef<HTMLDivElement>(null)
     const sortMenuRef = useRef<HTMLDivElement>(null)
     const sortMenuCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
     const filterMenuRef = useRef<HTMLDivElement>(null)
     const filterMenuCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
     const searchInputRef = useRef<HTMLInputElement>(null)
-    const navListRef = useRef<HTMLElement>(null)
-    const navItemRefs = useRef<Partial<Record<ViewKey, HTMLButtonElement>>>({})
-    const [navIndicator, setNavIndicator] = useState<NavIndicator>({
-        x: 0,
-        y: 0,
-        width: 0,
-        height: 0,
-        visible: false,
-    })
-    const [navIndicatorPulling, setNavIndicatorPulling] = useState(false)
     const {
         navOrder,
         draggedNavKey,
@@ -151,6 +123,12 @@ function Dashboard() {
         setSidebarHidden,
         startSidebarResize,
     } = useSidebarState()
+    const {
+        navListRef,
+        navItemRefs,
+        navIndicator,
+        navIndicatorPulling,
+    } = useNavIndicator(view, navOrder, sidebarWidth, sidebarHidden)
     const { layoutMode, layoutSwitchTarget, changeLayoutMode } = useLayoutModeSwitch()
     const {
         groups,
@@ -197,17 +175,33 @@ function Dashboard() {
         setError,
         handleFileUpdated,
     )
-    const filteredItems = useMemo(
-        () => items.filter((item) => matchesFileFilters(item, fileFilters)),
-        [fileFilters, items],
-    )
     const visibleFolders = useMemo(() => {
         if (view !== 'all') return []
         return folders.filter((folder) =>
             [folder.name, folder.description ?? ''].some((value) => value.toLowerCase().includes(normalizedQuery)),
         )
     }, [folders, normalizedQuery, view])
-    const sortedItems = useMemo(() => sortFiles(filteredItems, sortKey), [filteredItems, sortKey])
+    const {
+        sortKey,
+        setSortKey,
+        fileFilters,
+        hasActiveFilter,
+        filterSummary,
+        sortedItems,
+        sizeSliderMax,
+        sizeSliderMinValue,
+        sizeSliderMaxValue,
+        sizeSliderMinPct,
+        sizeSliderMaxPct,
+        clearFileTypes,
+        toggleFileTypeFilter,
+        updateVisibilityFilter,
+        updateSizeFilter,
+        updateSizeSlider,
+        updateExcludedExtensions,
+        updateModifiedDateFilter,
+        clearFileFilters,
+    } = useFileFilterControls(items)
     const { visibleItems, renderedItems, animatedFiles } = useAnimatedItems({
         items: sortedItems,
         view,
@@ -221,19 +215,6 @@ function Dashboard() {
         storageBreakdown,
         storageBreakdownTotal,
     } = useStorageSummary(quota, storageItems)
-    const sizeSliderMax = useMemo(() => {
-        const largestItemKb = Math.ceil(Math.max(0, ...items.map((item) => item.size_bytes)) / 1024)
-        const configuredMaxKb = (parseSizeMb(fileFilters.maxSizeMb) ?? 0) * 1024
-        return Math.max(1, largestItemKb, Math.ceil(configuredMaxKb))
-    }, [fileFilters.maxSizeMb, items])
-    const sizeSliderMinValue = Math.min((parseSizeMb(fileFilters.minSizeMb) ?? 0) * 1024, sizeSliderMax)
-    const sizeSliderMaxValue = Math.min(
-        (parseSizeMb(fileFilters.maxSizeMb) ?? sizeSliderMax / 1024) * 1024,
-        sizeSliderMax,
-    )
-    const sizeSliderMinPct = (sizeSliderMinValue / sizeSliderMax) * 100
-    const sizeSliderMaxPct = (sizeSliderMaxValue / sizeSliderMax) * 100
-
     const refreshQuota = useCallback(async () => {
         try {
             const [quotaData, fileData] = await Promise.all([getStorageQuota(), listFiles()])
@@ -274,6 +255,15 @@ function Dashboard() {
         refreshQuota,
         privateKey,
     })
+    const {
+        draggedCardId,
+        dropTargetId,
+        handleCardDragStart,
+        handleCardDragEnter,
+        handleCardDragLeave,
+        handleCardDrop,
+        handleCardDragEnd,
+    } = useManualCardOrdering({ sortKey, view, setItems })
 
     useEffect(() => {
         clearLegacyLocalFileMetadata()
@@ -315,57 +305,9 @@ function Dashboard() {
         }
     }, [navigate])
 
-    useLayoutEffect(() => {
-        function updateNavIndicator() {
-            const nav = navListRef.current
-            const activeItem = navItemRefs.current[view]
-            if (!nav || !activeItem || sidebarHidden) {
-                setNavIndicator((prev) => ({ ...prev, visible: false }))
-                return
-            }
-
-            const navRect = nav.getBoundingClientRect()
-            const itemRect = activeItem.getBoundingClientRect()
-            setNavIndicator({
-                x: itemRect.left - navRect.left,
-                y: itemRect.top - navRect.top,
-                width: itemRect.width,
-                height: itemRect.height,
-                visible: true,
-            })
-        }
-
-        updateNavIndicator()
-        window.addEventListener('resize', updateNavIndicator)
-        return () => window.removeEventListener('resize', updateNavIndicator)
-    }, [view, navOrder, sidebarWidth, sidebarHidden])
-
-    useEffect(() => {
-        let pullFrame: number | undefined
-        const frame = requestAnimationFrame(() => {
-            setNavIndicatorPulling(false)
-            pullFrame = requestAnimationFrame(() => setNavIndicatorPulling(true))
-        })
-        const timeout = window.setTimeout(() => setNavIndicatorPulling(false), 540)
-
-        return () => {
-            cancelAnimationFrame(frame)
-            if (pullFrame) cancelAnimationFrame(pullFrame)
-            window.clearTimeout(timeout)
-        }
-    }, [view])
-
     useEffect(() => {
         saveActiveView(view)
     }, [view])
-
-    useEffect(() => {
-        saveFileSort(sortKey)
-    }, [sortKey])
-
-    useEffect(() => {
-        saveFileFilter(fileFilters)
-    }, [fileFilters])
 
     useEffect(() => {
         let active = true
@@ -733,63 +675,6 @@ function Dashboard() {
         }
     }
 
-    function toggleFileTypeFilter(type: FileTypeFilterKey) {
-        setFileFilters((current) => ({
-            ...current,
-            types: current.types.includes(type)
-                ? current.types.filter((currentType) => currentType !== type)
-                : [...current.types, type],
-        }))
-    }
-
-    function updateVisibilityFilter(visibility: FileVisibilityFilterKey) {
-        setFileFilters((current) => ({ ...current, visibility }))
-    }
-
-    function updateSizeFilter(field: 'minSizeMb' | 'maxSizeMb', value: string) {
-        const nextSizeMb = parseSizeInputToMb(value)
-        if (nextSizeMb === null) return
-        setFileFilters((current) => ({ ...current, [field]: nextSizeMb }))
-    }
-
-    function updateSizeSlider(field: 'minSizeMb' | 'maxSizeMb', value: string) {
-        const nextValueKb = Math.round(Number(value))
-        if (!Number.isFinite(nextValueKb)) return
-
-        setFileFilters((current) => {
-            const currentMinKb = (parseSizeMb(current.minSizeMb) ?? 0) * 1024
-            const currentMaxKb = (parseSizeMb(current.maxSizeMb) ?? sizeSliderMax / 1024) * 1024
-
-            if (field === 'minSizeMb') {
-                const nextMinKb = Math.min(nextValueKb, currentMaxKb)
-                return { ...current, minSizeMb: nextMinKb > 0 ? formatSizeValue(nextMinKb / 1024) : '' }
-            }
-
-            const nextMaxKb = Math.max(nextValueKb, currentMinKb)
-            return { ...current, maxSizeMb: nextMaxKb < sizeSliderMax ? formatSizeValue(nextMaxKb / 1024) : '' }
-        })
-    }
-
-    function updateExcludedExtensions(value: string) {
-        setFileFilters((current) => ({ ...current, excludedExtensions: value }))
-    }
-
-    function updateModifiedDateFilter(field: 'modifiedFrom' | 'modifiedTo', value: string) {
-        setFileFilters((current) => ({ ...current, [field]: value }))
-    }
-
-    function clearFileFilters() {
-        setFileFilters({
-            types: [],
-            visibility: 'any',
-            minSizeMb: '',
-            maxSizeMb: '',
-            excludedExtensions: '',
-            modifiedFrom: '',
-            modifiedTo: '',
-        })
-    }
-
     function openSortMenu() {
         if (sortMenuCloseTimerRef.current) {
             clearTimeout(sortMenuCloseTimerRef.current)
@@ -816,44 +701,6 @@ function Dashboard() {
     function toggleFilterMenu() {
         const toggleMenu = filterMenuOpen ? closeFilterMenu : openFilterMenu
         toggleMenu()
-    }
-
-    function handleCardDragStart(id: string, e: DragEvent<HTMLElement>) {
-        e.dataTransfer.effectAllowed = 'move'
-        e.dataTransfer.setData('text/plain', id)
-        setDraggedCardId(id)
-    }
-
-    function handleCardDragEnter(id: string) {
-        if (id !== draggedCardId) setDropTargetId(id)
-    }
-
-    function handleCardDragLeave(id: string) {
-        setDropTargetId((prev) => (prev === id ? null : prev))
-    }
-
-    function handleCardDrop(targetId: string, e: DragEvent<HTMLElement>) {
-        const sourceId = e.dataTransfer.getData('text/plain') || draggedCardId
-        setDraggedCardId(null)
-        setDropTargetId(null)
-        if (sortKey !== 'manual') return
-        if (!sourceId || sourceId === targetId) return
-
-        setItems((prev) => {
-            const arr = [...prev]
-            const fromIdx = arr.findIndex((i) => i.id === sourceId)
-            const toIdx = arr.findIndex((i) => i.id === targetId)
-            if (fromIdx === -1 || toIdx === -1) return prev
-            const [moved] = arr.splice(fromIdx, 1)
-            arr.splice(toIdx, 0, moved)
-            saveOrderIds(view, arr.map((i) => i.id))
-            return arr
-        })
-    }
-
-    function handleCardDragEnd() {
-        setDraggedCardId(null)
-        setDropTargetId(null)
     }
 
     async function signOut() {
@@ -959,7 +806,7 @@ function Dashboard() {
                     onToggleFilterMenu={toggleFilterMenu}
                     onCloseFilterMenu={closeFilterMenu}
                     onQueryChange={setQuery}
-                    onClearFileTypes={() => setFileFilters((current) => ({ ...current, types: [] }))}
+                    onClearFileTypes={clearFileTypes}
                     onToggleFileType={toggleFileTypeFilter}
                     onVisibilityChange={updateVisibilityFilter}
                     onSizeInputChange={updateSizeFilter}
