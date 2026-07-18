@@ -387,6 +387,19 @@
     gap: 12px;
 }
 
+.settings-password-form {
+    display: grid;
+    gap: 12px;
+}
+
+.settings-password-form .password-requirements {
+    margin: 0;
+}
+
+.settings-password-form .btn {
+    justify-self: start;
+}
+
 .settings-toggle {
     justify-content: space-between;
     border: 1px solid var(--line);

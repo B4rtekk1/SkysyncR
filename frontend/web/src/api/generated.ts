@@ -18,6 +18,11 @@ export type LoginRequest = {
   "remember"?: boolean
 }
 
+export type ChangePasswordRequest = {
+  "current_password": string
+  "new_password": string
+}
+
 export type RegisterResponse = {
   "id": string
 }

@@ -40,6 +40,17 @@ test('legacy encrypted private key records remain decryptable', async () => {
   assert.equal(decrypted.type, 'private')
 })
 
+test('private keys can be decrypted as exportable for password rewrap', async () => {
+  const keyPair = await generateKeyPair()
+  const encrypted = await encryptPrivateKey(keyPair.privateKey, 'correct horse battery staple')
+
+  const decrypted = await decryptPrivateKey(encrypted, 'correct horse battery staple', true)
+  const rewrapped = await encryptPrivateKey(decrypted, 'new correct horse battery staple!')
+
+  await assert.rejects(() => decryptPrivateKey(rewrapped, 'correct horse battery staple'))
+  assert.equal((await decryptPrivateKey(rewrapped, 'new correct horse battery staple!')).type, 'private')
+})
+
 test('file keys can be wrapped for a user public key and unwrapped with the private key', async () => {
   const keyPair = await generateKeyPair()
   const fileKey = await generateFileKey()

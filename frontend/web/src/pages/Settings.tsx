@@ -5,7 +5,14 @@ import '../css/Settings.css'
 import ThemeToggle from '../components/ThemeToggle'
 import { useTheme, type ThemePreference } from '../hooks/UseTheme'
 import { logout } from '../api/auth'
-import { updateUserSettings, type CurrentUserResponse } from '../api/users'
+import {
+    ApiRequestError,
+    changePassword,
+    updateUserSettings,
+    type CurrentUserResponse,
+} from '../api/users'
+import { decryptPrivateKey, encryptPrivateKey } from '../crypto/keys'
+import { loadEncryptedPrivateKey, storeEncryptedPrivateKey } from '../crypto/storage'
 import { NAV_ICONS } from './dashboard/icons'
 import {
     NAV_LABELS,
@@ -19,6 +26,8 @@ import {
     loadUserSettings,
     type SettingsState,
 } from './settingsPreferences'
+import PasswordRequirements from './register/PasswordRequirements'
+import { getPasswordRequirements } from './register/passwordRules'
 
 const SETTINGS_ANIMATION_MS = 220
 const MAX_AVATAR_BYTES = 2 * 1024 * 1024
@@ -42,6 +51,12 @@ function SettingsModalContent({ currentUser, onClose, onSave }: SettingsModalPro
     const [closing, setClosing] = useState(false)
     const [avatarError, setAvatarError] = useState<string | null>(null)
     const [saveError, setSaveError] = useState<string | null>(null)
+    const [currentPassword, setCurrentPassword] = useState('')
+    const [newPassword, setNewPassword] = useState('')
+    const [confirmNewPassword, setConfirmNewPassword] = useState('')
+    const [passwordSaving, setPasswordSaving] = useState(false)
+    const [passwordSaved, setPasswordSaved] = useState(false)
+    const [passwordError, setPasswordError] = useState<string | null>(null)
     const { theme, themePreference, setThemePreference } = useTheme()
     const initials = useMemo(() => {
         const source = settings.displayName || currentUser?.email || 'S'
@@ -158,6 +173,70 @@ function SettingsModalContent({ currentUser, onClose, onSave }: SettingsModalPro
         }
     }
 
+    async function savePassword() {
+        setPasswordError(null)
+        setPasswordSaved(false)
+
+        if (!currentUser) {
+            setPasswordError('Sign in again before changing your password.')
+            return
+        }
+        if (!currentPassword || !newPassword || !confirmNewPassword) {
+            setPasswordError('Fill in all password fields.')
+            return
+        }
+        if (newPassword !== confirmNewPassword) {
+            setPasswordError('New passwords do not match.')
+            return
+        }
+        if (currentPassword === newPassword) {
+            setPasswordError('Choose a password different from the current one.')
+            return
+        }
+        if (getPasswordRequirements(newPassword).some((requirement) => !requirement.met)) {
+            setPasswordError('New password does not meet the password policy.')
+            return
+        }
+
+        setPasswordSaving(true)
+        try {
+            const previousEncryptedPrivateKey = await loadEncryptedPrivateKey(currentUser.id)
+            if (!previousEncryptedPrivateKey) {
+                setPasswordError('This browser does not have the encrypted private key for this account.')
+                return
+            }
+
+            const exportablePrivateKey = await decryptPrivateKey(previousEncryptedPrivateKey, currentPassword, true)
+            const nextEncryptedPrivateKey = await encryptPrivateKey(exportablePrivateKey, newPassword)
+            await storeEncryptedPrivateKey(currentUser.id, nextEncryptedPrivateKey)
+
+            try {
+                await changePassword({
+                    current_password: currentPassword,
+                    new_password: newPassword,
+                })
+            } catch (err) {
+                await storeEncryptedPrivateKey(currentUser.id, previousEncryptedPrivateKey)
+                throw err
+            }
+
+            setCurrentPassword('')
+            setNewPassword('')
+            setConfirmNewPassword('')
+            setPasswordSaved(true)
+        } catch (err) {
+            if (err instanceof ApiRequestError && err.status === 401) {
+                setPasswordError('Current password is incorrect.')
+            } else if (err instanceof ApiRequestError) {
+                setPasswordError(err.message)
+            } else {
+                setPasswordError('Could not change password. Check the current password and try again.')
+            }
+        } finally {
+            setPasswordSaving(false)
+        }
+    }
+
     async function signOut() {
         await logout()
         window.location.href = '/login'
@@ -239,6 +318,67 @@ function SettingsModalContent({ currentUser, onClose, onSave }: SettingsModalPro
                                         <input value={currentUser?.email ?? 'Unavailable'} readOnly />
                                     </label>
                                 </div>
+                            </div>
+                        </section>
+
+                        <section className="settings-panel settings-panel--wide">
+                            <div className="settings-panel__head">
+                                <div>
+                                    <p className="settings-kicker">Password</p>
+                                    <h2>Change password</h2>
+                                </div>
+                                {passwordSaved && <span className="settings-badge">Updated</span>}
+                            </div>
+                            <div className="settings-password-form">
+                                <label className="settings-field">
+                                    <span>Current password</span>
+                                    <input
+                                        type="password"
+                                        autoComplete="current-password"
+                                        value={currentPassword}
+                                        onChange={(e) => {
+                                            setCurrentPassword(e.target.value)
+                                            setPasswordError(null)
+                                            setPasswordSaved(false)
+                                        }}
+                                    />
+                                </label>
+                                <label className="settings-field">
+                                    <span>New password</span>
+                                    <input
+                                        type="password"
+                                        autoComplete="new-password"
+                                        value={newPassword}
+                                        onChange={(e) => {
+                                            setNewPassword(e.target.value)
+                                            setPasswordError(null)
+                                            setPasswordSaved(false)
+                                        }}
+                                    />
+                                </label>
+                                {newPassword.length > 0 && <PasswordRequirements password={newPassword} />}
+                                <label className="settings-field">
+                                    <span>Confirm new password</span>
+                                    <input
+                                        type="password"
+                                        autoComplete="new-password"
+                                        value={confirmNewPassword}
+                                        onChange={(e) => {
+                                            setConfirmNewPassword(e.target.value)
+                                            setPasswordError(null)
+                                            setPasswordSaved(false)
+                                        }}
+                                    />
+                                </label>
+                                {passwordError && <p className="settings-error">{passwordError}</p>}
+                                <button
+                                    className="btn btn--outline"
+                                    type="button"
+                                    onClick={savePassword}
+                                    disabled={passwordSaving}
+                                >
+                                    {passwordSaving ? 'Changing...' : 'Change password'}
+                                </button>
                             </div>
                         </section>
 

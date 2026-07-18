@@ -7,8 +7,8 @@ use crate::db::refresh_tokens::{
 };
 use crate::db::users::*;
 use crate::models::users::{
-    CurrentUserResponse, LoginRequest, LoginResponse, RefreshResponse, RegisterRequest,
-    RegisterResponse, UpdateUserSettingsRequest, UserSettingsResponse,
+    ChangePasswordRequest, CurrentUserResponse, LoginRequest, LoginResponse, RefreshResponse,
+    RegisterRequest, RegisterResponse, UpdateUserSettingsRequest, UserSettingsResponse,
 };
 use crate::state::AppState;
 use crate::utils::errors::{ApiError, internal_error, map_db_error};
@@ -202,6 +202,71 @@ pub async fn update_user_settings(
         sync_on_metered: settings.sync_on_metered,
         trash_retention_days: settings.trash_retention_days,
     }))
+}
+
+pub async fn change_password(
+    headers: HeaderMap,
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Json(payload): Json<ChangePasswordRequest>,
+) -> Result<Response, ApiError> {
+    if payload.current_password.len() > 128 {
+        return Err(ApiError::BadRequest("Current password is too long".into()));
+    }
+    validate_password(&payload.new_password).map_err(|msg| ApiError::BadRequest(msg.into()))?;
+
+    let password_hash = get_password_hash_by_id(&state.db_pool, auth.user_id)
+        .await
+        .map_err(|e| internal_error("get password hash", e))?
+        .ok_or_else(|| ApiError::Unauthorized("User not found".into()))?;
+
+    if !verify(&payload.current_password, &password_hash).unwrap_or(false) {
+        return Err(ApiError::Unauthorized(
+            "Current password is incorrect".into(),
+        ));
+    }
+
+    let new_hash = hash(&payload.new_password, DEFAULT_COST)
+        .map_err(|e| internal_error("password hash", e))?;
+
+    let updated = update_user_password_hash(&state.db_pool, auth.user_id, &new_hash)
+        .await
+        .map_err(|e| internal_error("update password", e))?;
+    if !updated {
+        return Err(ApiError::Unauthorized("User not found".into()));
+    }
+
+    revoke_all_user_refresh_tokens(&state.db_pool, auth.user_id)
+        .await
+        .map_err(|e| internal_error("revoke sessions after password change", e))?;
+
+    let (access_token, refresh_token, expires_in, session_expires_at) =
+        issue_token_pair(&state, auth.user_id).await?;
+
+    let persistent = has_cookie(&headers, REFRESH_PERSISTENCE_COOKIE);
+    let mut response_headers = HeaderMap::new();
+    response_headers.append(
+        header::SET_COOKIE,
+        refresh_token_cookie(
+            &refresh_token,
+            session_expires_at,
+            state.config.is_dev,
+            persistent,
+        )?,
+    );
+    response_headers.append(
+        header::SET_COOKIE,
+        refresh_persistence_cookie(state.config.is_dev, persistent)?,
+    );
+
+    Ok((
+        response_headers,
+        Json(LoginResponse {
+            access_token,
+            expires_in,
+        }),
+    )
+        .into_response())
 }
 
 fn validate_optional_display_name(value: &str) -> Result<Option<String>, ApiError> {

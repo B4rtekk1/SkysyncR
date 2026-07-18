@@ -162,6 +162,7 @@ export async function encryptPrivateKey(
 export async function decryptPrivateKey(
   encrypted: EncryptedPrivateKey,
   password: string,
+  extractable = false,
 ): Promise<CryptoKey> {
   const params = getPrivateKeyEncryptionParams(encrypted)
   const salt = new Uint8Array(base64ToBuffer(params.salt))
@@ -178,7 +179,7 @@ export async function decryptPrivateKey(
     'pkcs8',
     decrypted,
     { name: 'RSA-OAEP', hash: 'SHA-256' },
-    false,
+    extractable,
     ['decrypt'],
   )
 }

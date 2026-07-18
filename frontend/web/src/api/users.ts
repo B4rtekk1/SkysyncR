@@ -3,6 +3,7 @@ const url = import.meta.env.VITE_API_BASE ?? 'http://localhost:3000/'
 import { authenticatedFetch, saveTokens } from './auth'
 import { apiFetch } from './http'
 import type {
+  ChangePasswordRequest as ChangePasswordPayload,
   CurrentUser as CurrentUserResponse,
   LoginRequest as LoginPayload,
   RegisterRequest as RegisterPayload,
@@ -28,6 +29,7 @@ export type {
   RegisterResponse,
   UserSettingsPayload,
   UserSettingsResponse,
+  ChangePasswordPayload,
 }
 
 export class ApiRequestError extends Error {
@@ -149,4 +151,20 @@ export async function updateUserSettings(payload: UserSettingsPayload): Promise<
   }
 
   return readJson(res, userSettings, 'UserSettingsResponse')
+}
+
+export async function changePassword(payload: ChangePasswordPayload): Promise<LoginResponse> {
+  const res = await authenticatedFetch(`${url}users/change-password`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+
+  if (!res.ok) {
+    await throwApiError(res, 'Could not change password')
+  }
+
+  const tokens = await readJson(res, tokenPair, 'ChangePasswordResponse')
+  saveTokens(tokens)
+  return tokens
 }

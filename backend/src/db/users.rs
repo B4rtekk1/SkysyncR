@@ -431,6 +431,47 @@ pub async fn reset_failed_login(pool: &PgPool, email: &str) -> Result<(), sqlx::
     Ok(())
 }
 
+pub async fn get_password_hash_by_id(
+    pool: &PgPool,
+    user_id: Uuid,
+) -> Result<Option<String>, sqlx::Error> {
+    sqlx::query_scalar::<_, String>(
+        r#"
+        SELECT password_hash
+        FROM users
+        WHERE id = $1
+          AND is_active = TRUE
+        "#,
+    )
+    .bind(user_id)
+    .fetch_optional(pool)
+    .await
+}
+
+pub async fn update_user_password_hash(
+    pool: &PgPool,
+    user_id: Uuid,
+    password_hash: &str,
+) -> Result<bool, sqlx::Error> {
+    let result = sqlx::query(
+        r#"
+        UPDATE users
+        SET password_hash = $2,
+            failed_login_attempts = 0,
+            locked_until = NULL,
+            updated_at = NOW()
+        WHERE id = $1
+          AND is_active = TRUE
+        "#,
+    )
+    .bind(user_id)
+    .bind(password_hash)
+    .execute(pool)
+    .await?;
+
+    Ok(result.rows_affected() == 1)
+}
+
 #[cfg(test)]
 mod tests {
     use super::DUMMY_PASSWORD_HASH;

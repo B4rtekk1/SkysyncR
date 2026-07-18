@@ -35,6 +35,12 @@ pub struct LoginRequest {
     pub remember: Option<bool>,
 }
 
+#[derive(Debug, Deserialize)]
+pub struct ChangePasswordRequest {
+    pub current_password: String,
+    pub new_password: String,
+}
+
 #[derive(Serialize)]
 pub struct RegisterResponse {
     pub id: String,
