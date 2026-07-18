@@ -2,6 +2,9 @@ use crate::crypto::email::{generate_verification_token, hash_verification_token}
 use sqlx::PgPool;
 use uuid::Uuid;
 
+pub const DUMMY_PASSWORD_HASH: &str =
+    "$2b$12$KIXS5zJhFq5hJ2iP6TLmA.UK5dt2rceoLI04AmYwrPkaEkoNgRuPK";
+
 pub struct NewUser<'a> {
     pub email: &'a str,
     pub display_name: &'a str,
@@ -63,14 +66,53 @@ pub async fn compare_passwords(
         .fetch_optional(pool)
         .await?;
 
-    let fake_hash = "$2b$12$aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
-
     let hash = user
         .map(|u| u.password_hash)
-        .unwrap_or(fake_hash.to_string());
+        .unwrap_or(DUMMY_PASSWORD_HASH.to_string());
 
     let is_valid = bcrypt::verify(password, &hash).unwrap_or(false);
     Ok(is_valid)
+}
+
+pub struct LoginAuthRecord {
+    pub id: Uuid,
+    pub password_hash: String,
+    pub email_verified: bool,
+    pub login_allowed: bool,
+}
+
+pub async fn get_login_auth_record(
+    pool: &PgPool,
+    email: &str,
+) -> Result<Option<LoginAuthRecord>, sqlx::Error> {
+    let result = sqlx::query_as::<_, (Uuid, String, bool, bool)>(
+        r#"
+        SELECT
+            id,
+            password_hash,
+            email_verified,
+            CASE
+                WHEN locked_until IS NULL THEN TRUE
+                WHEN locked_until <= NOW() THEN TRUE
+                ELSE FALSE
+            END AS login_allowed
+        FROM users
+        WHERE email = $1
+          AND is_active = TRUE
+        "#,
+    )
+    .bind(email)
+    .fetch_optional(pool)
+    .await?;
+
+    Ok(result.map(
+        |(id, password_hash, email_verified, login_allowed)| LoginAuthRecord {
+            id,
+            password_hash,
+            email_verified,
+            login_allowed,
+        },
+    ))
 }
 
 pub async fn verify_email_token(pool: &PgPool, token: &str) -> Result<bool, sqlx::Error> {
@@ -387,4 +429,14 @@ pub async fn reset_failed_login(pool: &PgPool, email: &str) -> Result<(), sqlx::
     .await?;
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::DUMMY_PASSWORD_HASH;
+
+    #[test]
+    fn dummy_password_hash_is_valid_bcrypt() {
+        assert!(bcrypt::verify("not-the-login-password", DUMMY_PASSWORD_HASH).is_ok());
+    }
 }

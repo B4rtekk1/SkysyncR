@@ -54,12 +54,6 @@ function handleUserActivity() {
   resetIdleTimeout()
 }
 
-function handlePageHidden() {
-  if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
-    void clearActivePrivateKeys()
-  }
-}
-
 function installLifecycleListeners() {
   if (lifecycleListenersInstalled || typeof window === 'undefined') return
   lifecycleListenersInstalled = true
@@ -70,10 +64,6 @@ function installLifecycleListeners() {
 
   window.addEventListener('pagehide', () => void clearActivePrivateKeys())
   window.addEventListener('freeze', () => void clearActivePrivateKeys())
-
-  if (typeof document !== 'undefined') {
-    document.addEventListener('visibilitychange', handlePageHidden)
-  }
 }
 
 async function clearLegacyPersistedActivePrivateKeys(): Promise<void> {

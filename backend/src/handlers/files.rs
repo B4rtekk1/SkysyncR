@@ -319,10 +319,19 @@ pub async fn update_file_content(
         return Err(ApiError::BadRequest("Storage quota exceeded".into()));
     }
 
+    let new_storage_path =
+        updated_storage_path_for(&state.config.upload_dir, auth.user_id, file_id);
+    let new_storage_path_string = new_storage_path.to_string_lossy().into_owned();
+    if let Err(err) = fs::rename(&temp_path, &new_storage_path).await {
+        let _ = fs::remove_file(&temp_path).await;
+        return Err(internal_error("promote updated file", err));
+    }
+
     let file = update_user_file_content(
         &mut tx,
         auth.user_id,
         file_id,
+        new_storage_path_string,
         file_size,
         payload.encrypted_key,
         payload.encryption_nonce,
@@ -330,23 +339,28 @@ pub async fn update_file_content(
     )
     .await
     .map_err(|e| {
-        let _ = std::fs::remove_file(&temp_path);
+        let _ = std::fs::remove_file(&new_storage_path);
         internal_error("update file content", e)
     })?
     .ok_or_else(|| {
-        let _ = std::fs::remove_file(&temp_path);
+        let _ = std::fs::remove_file(&new_storage_path);
         ApiError::BadRequest("File not found".into())
     })?;
 
-    if let Err(err) =
-        replace_file_atomically(&temp_path, &PathBuf::from(&target.storage_path)).await
-    {
-        let _ = fs::remove_file(&temp_path).await;
-        return Err(internal_error("replace updated file", err));
+    if let Err(err) = tx.commit().await {
+        let _ = fs::remove_file(&new_storage_path).await;
+        return Err(internal_error("commit file update transaction", err));
     }
 
-    if let Err(err) = tx.commit().await {
-        return Err(internal_error("commit file update transaction", err));
+    if let Err(err) = fs::remove_file(&target.storage_path).await {
+        if err.kind() != std::io::ErrorKind::NotFound {
+            tracing::warn!(
+                error = %err,
+                storage_path = %target.storage_path,
+                file_id = %file.id,
+                "failed to remove previous file blob after content update"
+            );
+        }
     }
 
     tracing::info!(
@@ -850,54 +864,10 @@ fn temp_storage_path_for(upload_dir: &FsPath, user_id: Uuid, file_id: Uuid) -> P
         .join(format!("{file_id}.{}.tmp", Uuid::new_v4()))
 }
 
-async fn replace_file_atomically(source: &FsPath, target: &FsPath) -> std::io::Result<()> {
-    let source = source.to_owned();
-    let target = target.to_owned();
-    tokio::task::spawn_blocking(move || replace_file_atomically_blocking(&source, &target))
-        .await
-        .map_err(std::io::Error::other)?
-}
-
-#[cfg(not(windows))]
-fn replace_file_atomically_blocking(source: &FsPath, target: &FsPath) -> std::io::Result<()> {
-    std::fs::rename(source, target)
-}
-
-#[cfg(windows)]
-fn replace_file_atomically_blocking(source: &FsPath, target: &FsPath) -> std::io::Result<()> {
-    use std::ffi::OsStr;
-    use std::os::windows::ffi::OsStrExt;
-
-    const MOVEFILE_REPLACE_EXISTING: u32 = 0x1;
-    const MOVEFILE_WRITE_THROUGH: u32 = 0x8;
-
-    unsafe extern "system" {
-        fn MoveFileExW(
-            lp_existing_file_name: *const u16,
-            lp_new_file_name: *const u16,
-            dw_flags: u32,
-        ) -> i32;
-    }
-
-    fn wide(path: &OsStr) -> Vec<u16> {
-        path.encode_wide().chain(std::iter::once(0)).collect()
-    }
-
-    let source = wide(source.as_os_str());
-    let target = wide(target.as_os_str());
-    let replaced = unsafe {
-        MoveFileExW(
-            source.as_ptr(),
-            target.as_ptr(),
-            MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH,
-        )
-    };
-
-    if replaced == 0 {
-        Err(std::io::Error::last_os_error())
-    } else {
-        Ok(())
-    }
+fn updated_storage_path_for(upload_dir: &FsPath, user_id: Uuid, file_id: Uuid) -> PathBuf {
+    upload_dir
+        .join(user_id.to_string())
+        .join(format!("{file_id}.{}.bin", Uuid::new_v4()))
 }
 
 fn validate_upload_metadata(field_name: &str, value: &str) -> Result<String, ApiError> {

@@ -589,6 +589,7 @@ pub async fn update_user_file_content(
     tx: &mut Transaction<'_, Postgres>,
     user_id: Uuid,
     file_id: Uuid,
+    storage_path: String,
     size_bytes: i64,
     encrypted_key: Vec<u8>,
     encryption_nonce: Vec<u8>,
@@ -597,13 +598,14 @@ pub async fn update_user_file_content(
     sqlx::query_as::<_, FileRecord>(
         r#"
         UPDATE files
-        SET size_bytes = $1,
-            encrypted_key = $2,
-            encryption_nonce = $3,
-            checksum = $4,
+        SET storage_path = $1,
+            size_bytes = $2,
+            encrypted_key = $3,
+            encryption_nonce = $4,
+            checksum = $5,
             updated_at = NOW()
-        WHERE id = $5
-          AND owner_id = $6
+        WHERE id = $6
+          AND owner_id = $7
           AND is_deleted = FALSE
         RETURNING
             id,
@@ -632,6 +634,7 @@ pub async fn update_user_file_content(
             deleted_at
         "#,
     )
+    .bind(storage_path)
     .bind(size_bytes)
     .bind(encrypted_key)
     .bind(encryption_nonce)

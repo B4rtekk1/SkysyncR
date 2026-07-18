@@ -21,7 +21,7 @@ use axum::{
     http::{HeaderMap, HeaderValue, header},
     response::{IntoResponse, Response},
 };
-use bcrypt::{DEFAULT_COST, hash};
+use bcrypt::{DEFAULT_COST, hash, verify};
 use chrono::Utc;
 use serde::Deserialize;
 
@@ -34,6 +34,7 @@ pub struct VerifyParams {
 
 const REFRESH_TOKEN_COOKIE: &str = "skysyncr_refresh_token";
 const REFRESH_PERSISTENCE_COOKIE: &str = "skysyncr_refresh_persistent";
+const INVALID_LOGIN_MESSAGE: &str = "Invalid email or password";
 
 fn refresh_token_cookie(
     token: &str,
@@ -344,52 +345,48 @@ pub async fn login_user(
         return Err(ApiError::BadRequest("Password is too long".into()));
     }
 
-    let login_allowed = is_login_allowed(&state.db_pool, &email)
+    let auth_record = get_login_auth_record(&state.db_pool, &email)
         .await
-        .map_err(|e| internal_error("check login lockout", e))?;
+        .map_err(|e| internal_error("get login auth record", e))?;
 
-    if !login_allowed {
-        return Err(ApiError::TooManyRequests(
-            "Too many failed login attempts. Try again later.".into(),
-        ));
+    let password_hash = auth_record
+        .as_ref()
+        .map(|record| record.password_hash.as_str())
+        .unwrap_or(DUMMY_PASSWORD_HASH);
+    let password_valid = verify(&payload.password, password_hash).unwrap_or(false);
+
+    if !password_valid {
+        if auth_record
+            .as_ref()
+            .is_some_and(|record| record.login_allowed)
+        {
+            record_failed_login(
+                &state.db_pool,
+                &email,
+                state.config.max_failed_login_attempts,
+                state.config.lockout_duration_minutes,
+            )
+            .await
+            .map_err(|e| internal_error("record failed login", e))?;
+        }
+
+        return Err(ApiError::Unauthorized(INVALID_LOGIN_MESSAGE.into()));
     }
 
-    let user_verified = is_user_verified(&state.db_pool, &email)
-        .await
-        .map_err(|e| internal_error("check email verification", e))?;
+    let Some(auth_record) = auth_record else {
+        return Err(ApiError::Unauthorized(INVALID_LOGIN_MESSAGE.into()));
+    };
 
-    if !user_verified {
-        return Err(ApiError::Forbidden("Email not verified".into()));
+    if !auth_record.email_verified || !auth_record.login_allowed {
+        return Err(ApiError::Unauthorized(INVALID_LOGIN_MESSAGE.into()));
     }
-
-    let is_valid = compare_passwords(&state.db_pool, &email, &payload.password)
-        .await
-        .map_err(|e| internal_error("compare passwords", e))?;
-
-    if !is_valid {
-        record_failed_login(
-            &state.db_pool,
-            &email,
-            state.config.max_failed_login_attempts,
-            state.config.lockout_duration_minutes,
-        )
-        .await
-        .map_err(|e| internal_error("record failed login", e))?;
-
-        return Err(ApiError::Unauthorized("Invalid email or password".into()));
-    }
-
-    let user_id = get_user_id_by_email(&state.db_pool, &email)
-        .await
-        .map_err(|e| internal_error("get user id", e))?
-        .ok_or_else(|| ApiError::Unauthorized("Invalid email or password".into()))?;
 
     reset_failed_login(&state.db_pool, &email)
         .await
         .map_err(|e| internal_error("reset failed login", e))?;
 
     let (access_token, refresh_token, expires_in, session_expires_at) =
-        issue_token_pair(&state, user_id).await?;
+        issue_token_pair(&state, auth_record.id).await?;
 
     update_last_login(&state.db_pool, &email)
         .await

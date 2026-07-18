@@ -73,7 +73,7 @@ jobs:
         run: cargo install sqlx-cli --version 0.9.0 --no-default-features --features postgres --locked
 
       - name: Apply database schema
-        run: psql "$DATABASE_URL" -f ../infra/docker/init.sql
+        run: cargo run --bin migrate
 
       - run: cargo fmt --check
       - run: cargo clippy --all-targets -- -D warnings

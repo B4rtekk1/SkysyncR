@@ -3,8 +3,11 @@ export type Requirement = {
   met: boolean
 }
 
+export const PASSWORD_MIN_LENGTH = 12
+export const PASSWORD_MAX_LENGTH = 128
+
 const COMMON_PASSWORDS = new Set([
-  'password', 'password123', '12345678', '123456789', 'qwerty123',
+  'password', 'password123', 'password123!', '12345678', '123456789', 'qwerty123',
   'letmein', 'welcome123', 'admin123', 'iloveyou', 'monkey123',
   'dragon123', 'football', 'baseball', 'trustno1', 'sunshine',
   'princess', 'qwertyuiop', 'password1', 'abc123456', '1q2w3e4r',
@@ -40,7 +43,8 @@ function isCommonPassword(password: string): boolean {
 
 export function getPasswordRequirements(password: string): Requirement[] {
   return [
-    { label: 'At least 12 characters', met: password.length >= 12 },
+    { label: `At least ${PASSWORD_MIN_LENGTH} characters`, met: password.length >= PASSWORD_MIN_LENGTH },
+    { label: `No more than ${PASSWORD_MAX_LENGTH} characters`, met: password.length <= PASSWORD_MAX_LENGTH },
     { label: 'One uppercase letter', met: /[A-Z]/.test(password) },
     { label: 'One lowercase letter', met: /[a-z]/.test(password) },
     { label: 'One number', met: /\d/.test(password) },
@@ -56,7 +60,7 @@ export function getPasswordScore(password: string): number {
 
   let score = 0
 
-  if (password.length >= 12) score += 2
+  if (password.length >= PASSWORD_MIN_LENGTH) score += 2
   if (password.length >= 16) score += 1
   if (password.length >= 20) score += 1
 

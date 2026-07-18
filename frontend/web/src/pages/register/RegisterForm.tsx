@@ -5,7 +5,7 @@ import { generateKeyPair, exportPublicKey, encryptPrivateKey, decryptPrivateKey 
 import { storeActivePrivateKey, storeEncryptedPrivateKey } from '../../crypto/storage'
 import EyeIcon from '../login/EyeIcon'
 import PasswordRequirements from './PasswordRequirements'
-import { getPasswordRequirements, suggestNameFromEmail } from './passwordRules'
+import { suggestNameFromEmail } from './passwordRules'
 
 function RegisterForm() {
   const navigate = useNavigate()
@@ -20,17 +20,9 @@ function RegisterForm() {
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
 
-  const passwordRequirements = getPasswordRequirements(password)
-  const allRequirementsMet = passwordRequirements.every((r) => r.met)
-
   async function handleSubmit(e: SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
     setError(null)
-
-    if (!allRequirementsMet) {
-      setError('Password does not meet all security requirements')
-      return
-    }
 
     if (password !== confirmPassword) {
       setError('Passwords do not match')
@@ -130,7 +122,6 @@ function RegisterForm() {
                   type={showPassword ? 'text' : 'password'}
                   autoComplete="new-password"
                   required
-                  minLength={12}
                   value={password}
                   onFocus={() => setPasswordFocused(true)}
                   onChange={(e) => setPassword(e.target.value)}
@@ -160,7 +151,6 @@ function RegisterForm() {
                   type={showConfirmPassword ? 'text' : 'password'}
                   autoComplete="new-password"
                   required
-                  minLength={12}
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   placeholder="••••••••••••"
