@@ -54,6 +54,12 @@ function handleUserActivity() {
   resetIdleTimeout()
 }
 
+function handleVisibilityChange() {
+  if (document.visibilityState === 'hidden') {
+    void clearActivePrivateKeys()
+  }
+}
+
 function installLifecycleListeners() {
   if (lifecycleListenersInstalled || typeof window === 'undefined') return
   lifecycleListenersInstalled = true
@@ -62,6 +68,7 @@ function installLifecycleListeners() {
     window.addEventListener(eventName, handleUserActivity, { passive: true })
   }
 
+  document.addEventListener('visibilitychange', handleVisibilityChange)
   window.addEventListener('pagehide', () => void clearActivePrivateKeys())
   window.addEventListener('freeze', () => void clearActivePrivateKeys())
 }
@@ -147,7 +154,12 @@ export async function storeActivePrivateKey(
 export async function loadActivePrivateKey(
   userId: string,
 ): Promise<CryptoKey | undefined> {
-  if (activePrivateKeySession?.userId !== userId) return undefined
+  if (!activePrivateKeySession) return undefined
+  if (activePrivateKeySession.userId !== userId) {
+    await clearActivePrivateKeys()
+    return undefined
+  }
+
   resetIdleTimeout()
   return activePrivateKeySession.privateKey
 }

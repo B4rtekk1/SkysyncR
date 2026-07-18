@@ -7,10 +7,37 @@ test('private keys decrypt only with the original password', async () => {
   const keyPair = await generateKeyPair()
   const encrypted = await encryptPrivateKey(keyPair.privateKey, 'correct horse battery staple')
 
+  assert.equal(encrypted.version, 1)
+  assert.deepEqual(encrypted.kdf, {
+    name: 'PBKDF2',
+    hash: 'SHA-256',
+    iterations: 250_000,
+    salt: encrypted.kdf?.salt,
+  })
+  assert.deepEqual(encrypted.algorithm, {
+    name: 'AES-GCM',
+    length: 256,
+    iv: encrypted.algorithm?.iv,
+  })
+
   const decrypted = await decryptPrivateKey(encrypted, 'correct horse battery staple')
   assert.equal(decrypted.type, 'private')
 
   await assert.rejects(() => decryptPrivateKey(encrypted, 'wrong password'))
+})
+
+test('legacy encrypted private key records remain decryptable', async () => {
+  const keyPair = await generateKeyPair()
+  const encrypted = await encryptPrivateKey(keyPair.privateKey, 'correct horse battery staple')
+
+  const legacyEncrypted = {
+    ciphertext: encrypted.ciphertext,
+    salt: encrypted.kdf?.salt ?? '',
+    iv: encrypted.algorithm?.iv ?? '',
+  }
+
+  const decrypted = await decryptPrivateKey(legacyEncrypted, 'correct horse battery staple')
+  assert.equal(decrypted.type, 'private')
 })
 
 test('file keys can be wrapped for a user public key and unwrapped with the private key', async () => {

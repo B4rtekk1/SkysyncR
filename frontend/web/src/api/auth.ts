@@ -1,9 +1,9 @@
-const API_BASE = import.meta.env.VITE_API_BASE ?? 'http://localhost:3000/'
+const API_BASE = import.meta.env?.VITE_API_BASE ?? 'http://localhost:3000/'
 
-import { apiFetch } from './http'
-import { clearActivePrivateKeys } from '../crypto/storage'
-import type { TokenPair } from './generated'
-import { readJson, tokenPair } from './validators'
+import { apiFetch } from './http.ts'
+import { clearActivePrivateKeys } from '../crypto/storage.ts'
+import type { TokenPair } from './generated.ts'
+import { readJson, tokenPair } from './validators.ts'
 
 const ACCESS_TOKEN_KEY = 'access_token'
 const REFRESH_TOKEN_KEY = 'refresh_token'
