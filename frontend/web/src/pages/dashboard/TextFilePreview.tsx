@@ -1,10 +1,17 @@
-import { lazy, Suspense, useEffect, useRef, useState } from 'react'
+import { lazy, Suspense, useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { COPY_ICON } from './icons'
+import {
+    applyPythonCompletion,
+    getPythonKeywordCompletion,
+    type PythonCompletion,
+    type PythonCompletionItem,
+} from './pythonCompletion'
 import { highlightPython } from './pythonHighlight'
 import type { Item } from './types'
 import type { TextPreviewMode } from './useTextFilePreview'
 
 const MarkdownPreview = lazy(() => import('./MarkdownPreview').then((module) => ({ default: module.MarkdownPreview })))
+const INDENT_WIDTH = 4
 
 function MarkdownFallback() {
     return (
@@ -13,6 +20,159 @@ function MarkdownFallback() {
             Loading Markdown preview...
         </div>
     )
+}
+
+function getCompletionPosition(textarea: HTMLTextAreaElement) {
+    const style = window.getComputedStyle(textarea)
+    const mirror = document.createElement('div')
+    const span = document.createElement('span')
+    const properties = [
+        'borderBottomWidth',
+        'borderLeftWidth',
+        'borderRightWidth',
+        'borderTopWidth',
+        'boxSizing',
+        'fontFamily',
+        'fontSize',
+        'fontWeight',
+        'height',
+        'letterSpacing',
+        'lineHeight',
+        'overflowWrap',
+        'paddingBottom',
+        'paddingLeft',
+        'paddingRight',
+        'paddingTop',
+        'tabSize',
+        'textTransform',
+        'whiteSpace',
+        'width',
+        'wordBreak',
+    ] as const
+
+    mirror.style.position = 'absolute'
+    mirror.style.visibility = 'hidden'
+    mirror.style.whiteSpace = 'pre-wrap'
+    mirror.style.overflowWrap = 'anywhere'
+    properties.forEach((property) => {
+        mirror.style[property] = style[property]
+    })
+
+    mirror.textContent = textarea.value.slice(0, textarea.selectionStart)
+    span.textContent = textarea.value.slice(textarea.selectionStart, textarea.selectionStart + 1) || ' '
+    mirror.append(span)
+    textarea.parentElement?.append(mirror)
+
+    const left = Math.min(Math.max(span.offsetLeft - textarea.scrollLeft, 12), textarea.clientWidth - 210)
+    const top = Math.min(Math.max(span.offsetTop - textarea.scrollTop + parseFloat(style.lineHeight), 12), textarea.clientHeight - 190)
+    mirror.remove()
+
+    return { left, top }
+}
+
+function renderPythonHighlight(text: string) {
+    const lines = text.split('\n')
+    const indentLevels = lines.map((line) => {
+        const indentText = line.match(/^[\t ]*/)?.[0] ?? ''
+        return Math.floor(
+            Array.from(indentText).reduce(
+                (level, character) => level + (character === '\t' ? 1 : 1 / INDENT_WIDTH),
+                0,
+            ),
+        )
+    })
+
+    return lines.map((line, lineIndex) => {
+        const guideLevel = indentLevels[lineIndex] ?? 0
+        const guides = Array.from({ length: guideLevel }, (_, index) => {
+            const level = index + 1
+
+            return (
+                <span
+                    className="syntax-indent-guide"
+                    key={`guide-${level}`}
+                    style={{ '--indent-guide-level': level.toString() } as CSSProperties}
+                />
+            )
+        })
+        const lineNodes: ReactNode[] = highlightPython(line).map((token, tokenIndex) => (
+            <span className={`syntax-token syntax-token--${token.type}`} key={tokenIndex}>
+                {token.text}
+            </span>
+        ))
+
+        return (
+            <span
+                className="syntax-line"
+                key={lineIndex}
+                style={{ '--indent-level': guideLevel.toString() } as CSSProperties}
+            >
+                {guides}
+                {lineNodes.length > 0 ? lineNodes : ' '}
+            </span>
+        )
+    })
+}
+
+function indentSelection(text: string, selectionStart: number, selectionEnd: number) {
+    if (selectionStart === selectionEnd) {
+        return {
+            nextSelectionEnd: selectionStart + 1,
+            nextSelectionStart: selectionStart + 1,
+            nextText: `${text.slice(0, selectionStart)}\t${text.slice(selectionEnd)}`,
+        }
+    }
+
+    const lineStart = text.lastIndexOf('\n', selectionStart - 1) + 1
+    const selectedText = text.slice(lineStart, selectionEnd)
+    const nextSelectedText = selectedText.replace(/^/gm, '\t')
+    const added = nextSelectedText.length - selectedText.length
+
+    return {
+        nextSelectionEnd: selectionEnd + added,
+        nextSelectionStart: selectionStart + 1,
+        nextText: `${text.slice(0, lineStart)}${nextSelectedText}${text.slice(selectionEnd)}`,
+    }
+}
+
+function outdentSelection(text: string, selectionStart: number, selectionEnd: number) {
+    const lineStart = text.lastIndexOf('\n', selectionStart - 1) + 1
+    const selectedText = text.slice(lineStart, selectionEnd)
+    let removedBeforeSelection = 0
+    let totalRemoved = 0
+    let cursor = lineStart
+    const nextSelectedText = selectedText.replace(/^( {1,4}|\t)/gm, (indent) => {
+        if (cursor < selectionStart) {
+            removedBeforeSelection += indent.length
+        }
+        totalRemoved += indent.length
+        cursor += indent.length
+        return ''
+    })
+
+    return {
+        nextSelectionEnd: Math.max(lineStart, selectionEnd - totalRemoved),
+        nextSelectionStart: Math.max(lineStart, selectionStart - removedBeforeSelection),
+        nextText: `${text.slice(0, lineStart)}${nextSelectedText}${text.slice(selectionEnd)}`,
+    }
+}
+
+function continuePythonIndent(text: string, selectionStart: number, selectionEnd: number) {
+    const lineStart = text.lastIndexOf('\n', selectionStart - 1) + 1
+    const line = text.slice(lineStart, selectionStart)
+    const baseIndent = line.match(/^[ \t]*/)?.[0] ?? ''
+    const trimmedLine = line.trimEnd()
+    const shouldDedent = /^return\b/.test(trimmedLine.trimStart())
+    const nextBaseIndent = shouldDedent ? baseIndent.replace(/(?: {1,4}|\t)$/, '') : baseIndent
+    const extraIndent = !shouldDedent && trimmedLine.endsWith(':') ? '\t' : ''
+    const insertion = `\n${nextBaseIndent}${extraIndent}`
+    const nextCaret = selectionStart + insertion.length
+
+    return {
+        nextSelectionEnd: nextCaret,
+        nextSelectionStart: nextCaret,
+        nextText: `${text.slice(0, selectionStart)}${insertion}${text.slice(selectionEnd)}`,
+    }
 }
 
 export function TextFilePreviewModeToggle({
@@ -101,13 +261,7 @@ export function TextFilePreview({
     if (canHighlightPython) {
         return (
             <pre className="image-preview__text image-preview__text--highlight" tabIndex={0}>
-                {text
-                    ? highlightPython(text).map((token, index) => (
-                          <span className={`syntax-token syntax-token--${token.type}`} key={`${token.type}-${index}`}>
-                              {token.text}
-                          </span>
-                      ))
-                    : 'This file is empty.'}
+                {text ? renderPythonHighlight(text) : 'This file is empty.'}
             </pre>
         )
     }
@@ -137,14 +291,60 @@ export function TextFileEditor({
     text: string
 }) {
     const highlightRef = useRef<HTMLPreElement>(null)
-    const renderHighlightedText = (value: string) =>
-        value
-            ? highlightPython(value).map((token, index) => (
-                  <span className={`syntax-token syntax-token--${token.type}`} key={`${token.type}-${index}`}>
-                      {token.text}
-                  </span>
-              ))
-            : null
+    const textareaRef = useRef<HTMLTextAreaElement>(null)
+    const [completion, setCompletion] = useState<(PythonCompletion & { left: number; selected: number; top: number }) | null>(null)
+    const renderHighlightedText = (value: string) => (value ? renderPythonHighlight(value) : null)
+    const updateCompletion = (textarea: HTMLTextAreaElement, value: string = textarea.value) => {
+        if (!canHighlightPython) {
+            setCompletion(null)
+            return
+        }
+
+        const nextCompletion = getPythonKeywordCompletion(value, textarea.selectionStart)
+        if (!nextCompletion) {
+            setCompletion(null)
+            return
+        }
+
+        setCompletion({ ...nextCompletion, ...getCompletionPosition(textarea), selected: 0 })
+    }
+
+    const insertCompletion = (item: PythonCompletionItem) => {
+        if (!completion || !textareaRef.current) {
+            return
+        }
+
+        const nextText = applyPythonCompletion(text, completion, item)
+        const nextCaret = completion.start + item.label.length
+        onChange(nextText)
+        setCompletion(null)
+        window.requestAnimationFrame(() => {
+            textareaRef.current?.focus()
+            textareaRef.current?.setSelectionRange(nextCaret, nextCaret)
+        })
+    }
+    const applyIndent = (textarea: HTMLTextAreaElement, outdent: boolean) => {
+        const next = outdent
+            ? outdentSelection(text, textarea.selectionStart, textarea.selectionEnd)
+            : indentSelection(text, textarea.selectionStart, textarea.selectionEnd)
+
+        onChange(next.nextText)
+        setCompletion(null)
+        window.requestAnimationFrame(() => {
+            textarea.focus()
+            textarea.setSelectionRange(next.nextSelectionStart, next.nextSelectionEnd)
+        })
+    }
+    const applyNewLine = (textarea: HTMLTextAreaElement) => {
+        const next = continuePythonIndent(text, textarea.selectionStart, textarea.selectionEnd)
+
+        onChange(next.nextText)
+        setCompletion(null)
+        window.requestAnimationFrame(() => {
+            textarea.focus()
+            textarea.setSelectionRange(next.nextSelectionStart, next.nextSelectionEnd)
+        })
+    }
 
     return (
         <div
@@ -159,9 +359,14 @@ export function TextFileEditor({
                     </pre>
                 )}
                 <textarea
+                    ref={textareaRef}
                     className={`image-preview__editor ${canHighlightPython ? 'image-preview__editor--highlight' : ''}`}
                     value={text}
-                    onChange={(e) => onChange(e.target.value)}
+                    onChange={(e) => {
+                        onChange(e.target.value)
+                        updateCompletion(e.currentTarget, e.target.value)
+                    }}
+                    onClick={(e) => updateCompletion(e.currentTarget)}
                     onScroll={(e) => {
                         if (!highlightRef.current) {
                             return
@@ -169,17 +374,84 @@ export function TextFileEditor({
 
                         highlightRef.current.scrollTop = e.currentTarget.scrollTop
                         highlightRef.current.scrollLeft = e.currentTarget.scrollLeft
+                        setCompletion((current) =>
+                            current ? { ...current, ...getCompletionPosition(e.currentTarget) } : null,
+                        )
                     }}
                     onKeyDown={(e) => {
+                        if (completion && ['ArrowDown', 'ArrowUp', 'Tab', 'Escape'].includes(e.key)) {
+                            e.preventDefault()
+                            if (e.key === 'Escape') {
+                                setCompletion(null)
+                            } else if (e.key === 'ArrowDown') {
+                                setCompletion({ ...completion, selected: (completion.selected + 1) % completion.items.length })
+                            } else if (e.key === 'ArrowUp') {
+                                setCompletion({
+                                    ...completion,
+                                    selected: (completion.selected - 1 + completion.items.length) % completion.items.length,
+                                })
+                            } else {
+                                const selectedItem = completion.items[completion.selected] ?? completion.items[0]
+                                if (selectedItem) {
+                                    insertCompletion(selectedItem)
+                                }
+                            }
+                            return
+                        }
+
+                        if (canHighlightPython && e.key === 'Enter') {
+                            e.preventDefault()
+                            applyNewLine(e.currentTarget)
+                            return
+                        }
+
+                        if (e.key === 'Tab') {
+                            e.preventDefault()
+                            applyIndent(e.currentTarget, e.shiftKey)
+                            return
+                        }
+
                         if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
                             e.preventDefault()
                             onSave()
                         }
                     }}
+                    onKeyUp={(e) => {
+                        if (['ArrowDown', 'ArrowUp', 'Tab', 'Escape'].includes(e.key)) {
+                            return
+                        }
+
+                        updateCompletion(e.currentTarget)
+                    }}
+                    onBlur={() => window.setTimeout(() => setCompletion(null), 120)}
                     disabled={saving}
                     autoFocus
                     spellCheck={false}
                 />
+                {completion && (
+                    <div
+                        className="image-preview__completion"
+                        style={{ left: `${completion.left}px`, top: `${completion.top}px` }}
+                        role="listbox"
+                    >
+                        {completion.items.map((item, index) => (
+                            <button
+                                className={`image-preview__completion-item ${
+                                    index === completion.selected ? 'is-active' : ''
+                                }`}
+                                key={`${item.type}-${item.label}`}
+                                type="button"
+                                role="option"
+                                aria-selected={index === completion.selected}
+                                onMouseDown={(e) => e.preventDefault()}
+                                onClick={() => insertCompletion(item)}
+                            >
+                                <span>{item.label}</span>
+                                <small>{item.type}</small>
+                            </button>
+                        ))}
+                    </div>
+                )}
             </div>
             {canRenderMarkdown && (
                 <div className="image-preview__editor-pane image-preview__editor-pane--preview" aria-live="polite">

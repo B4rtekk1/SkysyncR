@@ -13,13 +13,35 @@
     font-family: var(--font-mono), ui-monospace, SFMono-Regular, Consolas, 'Liberation Mono', monospace;
     font-size: 0.84rem;
     line-height: 1.55;
+    tab-size: 4;
     white-space: pre-wrap;
     overflow-wrap: anywhere;
 }
 
 .image-preview__text--highlight {
-    background: #1e1e1e;
+    background-color: #1e1e1e;
     color: #d4d4d4;
+}
+
+.syntax-line {
+    position: relative;
+    display: block;
+    min-height: 1.55em;
+}
+
+.syntax-indent-guide {
+    --indent-guide-level: 0;
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: calc(var(--indent-guide-level, 0) * 4ch - 1px);
+    width: 1px;
+    background: rgba(255, 255, 255, 0.16);
+    pointer-events: none;
+}
+
+.syntax-line .syntax-token {
+    position: relative;
 }
 
 .syntax-token--builtin {
@@ -110,6 +132,7 @@
     font-family: var(--font-mono), ui-monospace, SFMono-Regular, Consolas, 'Liberation Mono', monospace;
     font-size: 0.84rem;
     line-height: 1.55;
+    tab-size: 4;
 }
 
 .image-preview__editor-highlight {
@@ -124,12 +147,13 @@
     overflow: hidden;
     border: 1px solid var(--line);
     border-radius: 8px;
-    background: #1e1e1e;
+    background-color: #1e1e1e;
     color: #d4d4d4;
     box-shadow: 0 20px 60px -34px rgba(0, 0, 0, 0.75);
     font-family: var(--font-mono), ui-monospace, SFMono-Regular, Consolas, 'Liberation Mono', monospace;
     font-size: 0.84rem;
     line-height: 1.55;
+    tab-size: 4;
     pointer-events: none;
     white-space: pre-wrap;
     overflow-wrap: anywhere;
@@ -146,6 +170,53 @@
     background: rgba(38, 79, 120, 0.75);
     color: transparent;
     -webkit-text-fill-color: transparent;
+}
+
+.image-preview__completion {
+    position: absolute;
+    z-index: 3;
+    display: grid;
+    width: min(210px, calc(100% - 24px));
+    max-height: 188px;
+    overflow: auto;
+    border: 1px solid #454545;
+    border-radius: 6px;
+    background: #252526;
+    box-shadow: 0 18px 40px -22px rgba(0, 0, 0, 0.85);
+    padding: 3px;
+}
+
+.image-preview__completion-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    min-height: 26px;
+    padding: 4px 8px;
+    border: 0;
+    border-radius: 4px;
+    background: transparent;
+    color: #d4d4d4;
+    font-family: var(--font-mono), ui-monospace, SFMono-Regular, Consolas, 'Liberation Mono', monospace;
+    font-size: 0.78rem;
+    text-align: left;
+}
+
+.image-preview__completion-item small {
+    color: #8f8f8f;
+    font-family: inherit;
+    font-size: 0.68rem;
+}
+
+.image-preview__completion-item:hover,
+.image-preview__completion-item.is-active {
+    background: #04395e;
+    color: #ffffff;
+}
+
+.image-preview__completion-item:hover small,
+.image-preview__completion-item.is-active small {
+    color: #c7dff4;
 }
 
 .image-preview__editor:focus {
