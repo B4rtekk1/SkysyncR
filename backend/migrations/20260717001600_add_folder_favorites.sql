@@ -6,6 +6,9 @@ ALTER TABLE favorites
     ADD COLUMN IF NOT EXISTS folder_id UUID REFERENCES folders (id) ON DELETE CASCADE;
 
 ALTER TABLE favorites
+    DROP CONSTRAINT IF EXISTS favorites_one_target;
+
+ALTER TABLE favorites
     ADD CONSTRAINT favorites_one_target CHECK (
         (file_id IS NOT NULL AND folder_id IS NULL)
         OR (file_id IS NULL AND folder_id IS NOT NULL)

@@ -164,23 +164,23 @@ test('active private key is cleared after browser inactivity', async () => {
   assert.equal(await loadActivePrivateKey('user-1'), undefined)
 })
 
-test('active private key is cleared when the page is hidden', async () => {
+test('active private key remains available when the page is hidden', async () => {
   const privateKey = await createActivePrivateKey()
   await storeActivePrivateKey('user-1', privateKey)
 
   fakeDocument.visibilityState = 'hidden'
   fakeDocument.dispatchEvent(new Event('visibilitychange'))
 
-  assert.equal(await loadActivePrivateKey('user-1'), undefined)
+  assert.equal(await loadActivePrivateKey('user-1'), privateKey)
 })
 
-test('active private key is cleared on pagehide', async () => {
+test('active private key remains available after pagehide for reload restore', async () => {
   const privateKey = await createActivePrivateKey()
   await storeActivePrivateKey('user-1', privateKey)
 
   fakeWindow.dispatchEvent(new Event('pagehide'))
 
-  assert.equal(await loadActivePrivateKey('user-1'), undefined)
+  assert.equal(await loadActivePrivateKey('user-1'), privateKey)
 })
 
 test('active private key is cleared on logout', async () => {

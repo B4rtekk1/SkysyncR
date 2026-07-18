@@ -11,9 +11,17 @@ type ActivePrivateKeySession = {
   privateKey: CryptoKey
 }
 
+type PersistedActivePrivateKeySession = ActivePrivateKeySession & {
+  expiresAt: number
+}
+
 let activePrivateKeySession: ActivePrivateKeySession | null = null
 let idleTimeoutId: ReturnType<typeof setTimeout> | null = null
 let lifecycleListenersInstalled = false
+
+function activePrivateKeyStorageKey(userId: string): string {
+  return `${ACTIVE_PRIVATE_KEY_PREFIX}${userId}`
+}
 
 function openDb(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
@@ -45,6 +53,8 @@ function resetIdleTimeout() {
   clearIdleTimeout()
   if (!activePrivateKeySession || typeof window === 'undefined') return
 
+  void persistActivePrivateKeySession(activePrivateKeySession)
+
   idleTimeoutId = window.setTimeout(() => {
     void clearActivePrivateKeys()
   }, ACTIVE_PRIVATE_KEY_IDLE_TIMEOUT_MS)
@@ -54,12 +64,6 @@ function handleUserActivity() {
   resetIdleTimeout()
 }
 
-function handleVisibilityChange() {
-  if (document.visibilityState === 'hidden') {
-    void clearActivePrivateKeys()
-  }
-}
-
 function installLifecycleListeners() {
   if (lifecycleListenersInstalled || typeof window === 'undefined') return
   lifecycleListenersInstalled = true
@@ -67,13 +71,48 @@ function installLifecycleListeners() {
   for (const eventName of ['pointerdown', 'keydown', 'wheel', 'touchstart']) {
     window.addEventListener(eventName, handleUserActivity, { passive: true })
   }
-
-  document.addEventListener('visibilitychange', handleVisibilityChange)
-  window.addEventListener('pagehide', () => void clearActivePrivateKeys())
-  window.addEventListener('freeze', () => void clearActivePrivateKeys())
 }
 
-async function clearLegacyPersistedActivePrivateKeys(): Promise<void> {
+async function persistActivePrivateKeySession(session: ActivePrivateKeySession): Promise<void> {
+  const db = await openDb()
+  await new Promise<void>((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, 'readwrite')
+    tx.objectStore(STORE_NAME).put(
+      {
+        ...session,
+        expiresAt: Date.now() + ACTIVE_PRIVATE_KEY_IDLE_TIMEOUT_MS,
+      } satisfies PersistedActivePrivateKeySession,
+      activePrivateKeyStorageKey(session.userId),
+    )
+    tx.oncomplete = () => resolve()
+    tx.onerror = () => reject(tx.error)
+  })
+}
+
+async function loadPersistedActivePrivateKeySession(
+  userId: string,
+): Promise<ActivePrivateKeySession | undefined> {
+  const db = await openDb()
+  const stored = await new Promise<PersistedActivePrivateKeySession | undefined>((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, 'readonly')
+    const req = tx.objectStore(STORE_NAME).get(activePrivateKeyStorageKey(userId))
+    req.onsuccess = () => resolve(req.result as PersistedActivePrivateKeySession | undefined)
+    req.onerror = () => reject(req.error)
+  })
+
+  if (!stored || stored.userId !== userId || !stored.privateKey) return undefined
+  if (stored.expiresAt <= Date.now()) {
+    await clearActivePrivateKeys()
+    return undefined
+  }
+
+  return {
+    userId: stored.userId,
+    privateKey: stored.privateKey,
+  }
+}
+
+async function clearPersistedActivePrivateKeys(): Promise<void> {
   const db = await openDb()
   await new Promise<void>((resolve, reject) => {
     const tx = db.transaction(STORE_NAME, 'readwrite')
@@ -146,15 +185,24 @@ export async function storeActivePrivateKey(
   activePrivateKeySession = { userId, privateKey }
   installLifecycleListeners()
   resetIdleTimeout()
-  await clearLegacyPersistedActivePrivateKeys().catch(() => {
-    // Legacy cleanup is best-effort; the active key itself is memory-only.
+  await persistActivePrivateKeySession(activePrivateKeySession).catch(() => {
+    // The in-memory session still works if persistence is unavailable.
   })
 }
 
 export async function loadActivePrivateKey(
   userId: string,
 ): Promise<CryptoKey | undefined> {
-  if (!activePrivateKeySession) return undefined
+  if (!activePrivateKeySession) {
+    const persistedSession = await loadPersistedActivePrivateKeySession(userId)
+    if (!persistedSession) return undefined
+
+    activePrivateKeySession = persistedSession
+    installLifecycleListeners()
+    resetIdleTimeout()
+    return persistedSession.privateKey
+  }
+
   if (activePrivateKeySession.userId !== userId) {
     await clearActivePrivateKeys()
     return undefined
@@ -169,7 +217,7 @@ export async function clearActivePrivateKeys(): Promise<void> {
   activePrivateKeySession = null
   clearIdleTimeout()
   notifyActivePrivateKeyCleared(clearedUserId)
-  await clearLegacyPersistedActivePrivateKeys().catch(() => {
+  await clearPersistedActivePrivateKeys().catch(() => {
     // Do not let IndexedDB cleanup failures keep a key alive in memory.
   })
 }
