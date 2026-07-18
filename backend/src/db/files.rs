@@ -807,7 +807,7 @@ pub async fn add_user_file_favourite(
         r#"
         INSERT INTO favorites (user_id, file_id)
         VALUES ($1, $2)
-        ON CONFLICT (user_id, file_id) DO NOTHING
+        ON CONFLICT DO NOTHING
         "#,
     )
     .bind(user_id)

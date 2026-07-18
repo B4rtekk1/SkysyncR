@@ -30,6 +30,7 @@ pub struct FolderRecord {
     pub is_deleted: bool,
     pub deleted_at: Option<DateTime<Utc>>,
     pub file_count: i64,
+    pub is_favourite: bool,
     #[serde(serialize_with = "serialize_optional_bytes_base64")]
     pub encrypted_key: Option<Vec<u8>>,
 }
@@ -61,6 +62,12 @@ pub async fn list_user_folders(
             FALSE AS is_deleted,
             NULL::timestamptz AS deleted_at,
             COUNT(files.id)::bigint AS file_count,
+            EXISTS (
+                SELECT 1
+                FROM favorites fav
+                WHERE fav.user_id = $1
+                  AND fav.folder_id = f.id
+            ) AS is_favourite,
             f.encrypted_key
         FROM folders f
         LEFT JOIN files
@@ -91,6 +98,53 @@ pub async fn list_user_folders(
     .await
 }
 
+pub async fn list_user_favourite_folders(
+    pool: &PgPool,
+    user_id: Uuid,
+) -> Result<Vec<FolderRecord>, sqlx::Error> {
+    sqlx::query_as::<_, FolderRecord>(
+        r#"
+        SELECT
+            f.id,
+            f.name,
+            f.description,
+            f.parent_folder_id,
+            f.is_public,
+            f.share_token,
+            f.created_at,
+            f.updated_at,
+            FALSE AS is_deleted,
+            NULL::timestamptz AS deleted_at,
+            COUNT(files.id)::bigint AS file_count,
+            TRUE AS is_favourite,
+            f.encrypted_key
+        FROM favorites fav
+        JOIN folders f ON f.id = fav.folder_id
+        LEFT JOIN files
+          ON files.folder_id = f.id
+         AND files.owner_id = f.owner_id
+         AND files.is_deleted = FALSE
+        WHERE fav.user_id = $1
+          AND f.owner_id = $1
+          AND f.is_deleted = FALSE
+        GROUP BY
+            f.id,
+            f.name,
+            f.description,
+            f.parent_folder_id,
+            f.is_public,
+            f.share_token,
+            f.created_at,
+            f.updated_at,
+            f.encrypted_key
+        ORDER BY f.name
+        "#,
+    )
+    .bind(user_id)
+    .fetch_all(pool)
+    .await
+}
+
 pub async fn create_folder_record(
     pool: &PgPool,
     folder: NewFolderRecord,
@@ -117,6 +171,7 @@ pub async fn create_folder_record(
             FALSE AS is_deleted,
             NULL::timestamptz AS deleted_at,
             0::bigint AS file_count,
+            FALSE AS is_favourite,
             encrypted_key
         "#,
     )
@@ -186,6 +241,12 @@ pub async fn update_user_folder_share(
                   AND files.owner_id = folders.owner_id
                   AND files.is_deleted = FALSE
             ) AS file_count,
+            EXISTS (
+                SELECT 1
+                FROM favorites fav
+                WHERE fav.user_id = $4
+                  AND fav.folder_id = folders.id
+            ) AS is_favourite,
             encrypted_key
         "#,
     )
@@ -231,6 +292,12 @@ pub async fn rename_user_folder(
                   AND files.owner_id = folders.owner_id
                   AND files.is_deleted = FALSE
             ) AS file_count,
+            EXISTS (
+                SELECT 1
+                FROM favorites fav
+                WHERE fav.user_id = $4
+                  AND fav.folder_id = folders.id
+            ) AS is_favourite,
             encrypted_key
         "#,
     )
@@ -240,4 +307,68 @@ pub async fn rename_user_folder(
     .bind(user_id)
     .fetch_optional(pool)
     .await
+}
+
+pub async fn user_folder_exists(
+    pool: &PgPool,
+    user_id: Uuid,
+    folder_id: Uuid,
+) -> Result<bool, sqlx::Error> {
+    let exists = sqlx::query_scalar::<_, bool>(
+        r#"
+        SELECT EXISTS (
+            SELECT 1
+            FROM folders
+            WHERE id = $1
+              AND owner_id = $2
+              AND is_deleted = FALSE
+        )
+        "#,
+    )
+    .bind(folder_id)
+    .bind(user_id)
+    .fetch_one(pool)
+    .await?;
+
+    Ok(exists)
+}
+
+pub async fn add_user_folder_favourite(
+    pool: &PgPool,
+    user_id: Uuid,
+    folder_id: Uuid,
+) -> Result<(), sqlx::Error> {
+    sqlx::query(
+        r#"
+        INSERT INTO favorites (user_id, folder_id)
+        VALUES ($1, $2)
+        ON CONFLICT DO NOTHING
+        "#,
+    )
+    .bind(user_id)
+    .bind(folder_id)
+    .execute(pool)
+    .await?;
+
+    Ok(())
+}
+
+pub async fn remove_user_folder_favourite(
+    pool: &PgPool,
+    user_id: Uuid,
+    folder_id: Uuid,
+) -> Result<(), sqlx::Error> {
+    sqlx::query(
+        r#"
+        DELETE FROM favorites
+        WHERE user_id = $1
+          AND folder_id = $2
+        "#,
+    )
+    .bind(user_id)
+    .bind(folder_id)
+    .execute(pool)
+    .await?;
+
+    Ok(())
 }

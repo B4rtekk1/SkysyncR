@@ -9,8 +9,9 @@ use uuid::Uuid;
 
 use crate::auth::AuthUser;
 use crate::db::folders::{
-    FolderRecord, NewFolderRecord, create_folder_record, folder_belongs_to_user, list_user_folders,
-    rename_user_folder, update_user_folder_share,
+    FolderRecord, NewFolderRecord, add_user_folder_favourite, create_folder_record,
+    folder_belongs_to_user, list_user_favourite_folders, list_user_folders,
+    remove_user_folder_favourite, rename_user_folder, update_user_folder_share, user_folder_exists,
 };
 use crate::state::AppState;
 use crate::utils::errors::{ApiError, internal_error};
@@ -18,6 +19,8 @@ use crate::utils::errors::{ApiError, internal_error};
 #[derive(Deserialize)]
 pub struct ListFoldersQuery {
     pub parent_folder_id: Option<String>,
+    #[serde(default)]
+    pub favourite: bool,
 }
 
 #[derive(Deserialize)]
@@ -44,12 +47,17 @@ pub async fn list_folders(
     auth: AuthUser,
     Query(query): Query<ListFoldersQuery>,
 ) -> Result<Json<Vec<FolderRecord>>, ApiError> {
-    let parent_folder_id =
-        parse_optional_uuid(query.parent_folder_id.as_deref(), "parent_folder_id")?;
-
-    let folders = list_user_folders(&state.db_pool, auth.user_id, parent_folder_id)
-        .await
-        .map_err(|e| internal_error("list folders", e))?;
+    let folders = if query.favourite {
+        list_user_favourite_folders(&state.db_pool, auth.user_id)
+            .await
+            .map_err(|e| internal_error("list favourite folders", e))?
+    } else {
+        let parent_folder_id =
+            parse_optional_uuid(query.parent_folder_id.as_deref(), "parent_folder_id")?;
+        list_user_folders(&state.db_pool, auth.user_id, parent_folder_id)
+            .await
+            .map_err(|e| internal_error("list folders", e))?
+    };
 
     Ok(Json(folders))
 }
@@ -125,6 +133,50 @@ pub async fn rename_folder(
         .ok_or_else(|| ApiError::BadRequest("Folder not found".into()))?;
 
     Ok(Json(folder))
+}
+
+pub async fn add_folder_favourite(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Path(folder_id): Path<Uuid>,
+) -> Result<StatusCode, ApiError> {
+    ensure_user_folder_exists(&state, auth.user_id, folder_id).await?;
+
+    add_user_folder_favourite(&state.db_pool, auth.user_id, folder_id)
+        .await
+        .map_err(|e| internal_error("add folder favourite", e))?;
+
+    Ok(StatusCode::NO_CONTENT)
+}
+
+pub async fn remove_folder_favourite(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Path(folder_id): Path<Uuid>,
+) -> Result<StatusCode, ApiError> {
+    ensure_user_folder_exists(&state, auth.user_id, folder_id).await?;
+
+    remove_user_folder_favourite(&state.db_pool, auth.user_id, folder_id)
+        .await
+        .map_err(|e| internal_error("remove folder favourite", e))?;
+
+    Ok(StatusCode::NO_CONTENT)
+}
+
+async fn ensure_user_folder_exists(
+    state: &AppState,
+    user_id: Uuid,
+    folder_id: Uuid,
+) -> Result<(), ApiError> {
+    let exists = user_folder_exists(&state.db_pool, user_id, folder_id)
+        .await
+        .map_err(|e| internal_error("check favourite folder", e))?;
+
+    if exists {
+        Ok(())
+    } else {
+        Err(ApiError::BadRequest("Folder not found".into()))
+    }
 }
 
 fn parse_optional_uuid(value: Option<&str>, field_name: &str) -> Result<Option<Uuid>, ApiError> {

@@ -645,6 +645,13 @@
               "type": "string",
               "format": "uuid"
             }
+          },
+          {
+            "name": "favourite",
+            "in": "query",
+            "schema": {
+              "type": "boolean"
+            }
           }
         ],
         "responses": {
@@ -749,6 +756,34 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/folders/{folderId}/favorite": {
+      "put": {
+        "operationId": "addFolderFavourite",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/FolderId"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Added"
+          }
+        }
+      },
+      "delete": {
+        "operationId": "removeFolderFavourite",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/FolderId"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Removed"
           }
         }
       }
@@ -1611,7 +1646,8 @@
           "updated_at",
           "is_deleted",
           "deleted_at",
-          "file_count"
+          "file_count",
+          "is_favourite"
         ],
         "properties": {
           "id": {
@@ -1661,6 +1697,9 @@
           "file_count": {
             "type": "integer",
             "format": "int64"
+          },
+          "is_favourite": {
+            "type": "boolean"
           }
         }
       },

@@ -150,6 +150,7 @@ export type Folder = {
   "is_deleted": boolean
   "deleted_at": string | null
   "file_count": number
+  "is_favourite": boolean
 }
 
 export type StorageQuota = {

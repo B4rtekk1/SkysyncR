@@ -126,8 +126,11 @@ export async function deleteFileShare(fileId: string, shareId: string): Promise<
     if (!res.ok) throw new Error(await parseErrorMessage(res))
 }
 
-export async function listFolders(parentFolderId?: string): Promise<ApiFolder[]> {
-    const qs = parentFolderId ? `?parent_folder_id=${encodeURIComponent(parentFolderId)}` : '';
+export async function listFolders(parentFolderId?: string, favourite = false): Promise<ApiFolder[]> {
+    const params = new URLSearchParams()
+    if (parentFolderId) params.set('parent_folder_id', parentFolderId)
+    if (favourite) params.set('favourite', 'true')
+    const qs = params.toString() ? `?${params.toString()}` : ''
     const res = await authenticatedFetch(`${API_BASE}folders${qs}`, {
         method: 'GET',
         headers: {
@@ -295,6 +298,13 @@ export async function setFileFavourite(id: string, isFavourite: boolean): Promis
     if (!res.ok) throw new Error(await parseErrorMessage(res))
 }
 
+export async function setFolderFavourite(id: string, isFavourite: boolean): Promise<void> {
+    const res = await authenticatedFetch(`${API_BASE}folders/${id}/favorite`, {
+        method: isFavourite ? 'PUT' : 'DELETE',
+    })
+    if (!res.ok) throw new Error(await parseErrorMessage(res))
+}
+
 export async function shareFolder(id: string, isPublic: boolean): Promise<ApiFolder> {
     const res = await authenticatedFetch(`${API_BASE}folders/${id}/share`, {
         method: 'PUT',
@@ -359,8 +369,6 @@ type MultipartPart =
     | { kind: 'text'; name: string; value: string }
     | { kind: 'stream'; name: string; value: Blob | ReadableStream<Uint8Array>; filename: string; contentType: string }
 
-type StreamingRequestInit = RequestInit & { duplex?: 'half' }
-
 function textPart(name: string, value: string): MultipartPart {
     return { kind: 'text', name, value }
 }
@@ -386,59 +394,32 @@ async function authenticatedMultipartStream(
     parts: MultipartPart[],
     method = 'POST',
 ): Promise<Response> {
-    const boundary = `skysyncr-${crypto.randomUUID()}`
-    const headers = new Headers({ 'Content-Type': `multipart/form-data; boundary=${boundary}` })
-    const body = multipartStream(boundary, parts)
-    return authenticatedRequest(url, { method, headers, body, duplex: 'half' } as StreamingRequestInit)
-}
+    const body = new FormData()
 
-function multipartStream(boundary: string, parts: MultipartPart[]): ReadableStream<Uint8Array> {
-    const encoder = new TextEncoder()
-
-    async function* chunks() {
-        for (const part of parts) {
-            if (part.kind === 'text') {
-                yield encoder.encode(
-                    `--${boundary}\r\nContent-Disposition: form-data; name="${escapeMultipartValue(part.name)}"\r\n\r\n${part.value}\r\n`,
-                )
-                continue
-            }
-
-            yield encoder.encode(
-                `--${boundary}\r\nContent-Disposition: form-data; name="${escapeMultipartValue(part.name)}"; filename="${escapeMultipartValue(part.filename)}"\r\nContent-Type: ${part.contentType}\r\n\r\n`,
-            )
-            const stream = part.value instanceof Blob ? part.value.stream() : part.value
-            const reader = stream.getReader()
-            try {
-                while (true) {
-                    const { done, value } = await reader.read()
-                    if (done) break
-                    yield value
-                }
-            } finally {
-                reader.releaseLock()
-            }
-            yield encoder.encode('\r\n')
+    for (const part of parts) {
+        if (part.kind === 'text') {
+            body.append(part.name, part.value)
+            continue
         }
-        yield encoder.encode(`--${boundary}--\r\n`)
+
+        body.append(
+            part.name,
+            await multipartBlob(part.value, part.contentType),
+            part.filename,
+        )
     }
 
-    const iterator = chunks()
-    return new ReadableStream<Uint8Array>({
-        async pull(controller) {
-            const { done, value } = await iterator.next()
-            if (done) {
-                controller.close()
-            } else {
-                controller.enqueue(value)
-            }
-        },
-        async cancel() {
-            await iterator.return?.()
-        },
-    })
+    return authenticatedRequest(url, { method, body })
 }
 
-function escapeMultipartValue(value: string): string {
-    return value.replaceAll('\\', '\\\\').replaceAll('"', '\\"').replaceAll('\r', '').replaceAll('\n', '')
+async function multipartBlob(
+    value: Blob | ReadableStream<Uint8Array>,
+    contentType: string,
+): Promise<Blob> {
+    if (value instanceof Blob) {
+        return value.type === contentType ? value : value.slice(0, value.size, contentType)
+    }
+
+    const buffer = await new Response(value).arrayBuffer()
+    return new Blob([buffer], { type: contentType })
 }

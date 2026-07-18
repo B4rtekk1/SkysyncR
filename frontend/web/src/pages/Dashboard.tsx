@@ -19,6 +19,7 @@ import {
     listSharedFilesWithMe,
     getStorageQuota,
     renameFolder,
+    setFolderFavourite,
     shareFolder,
     updateFileNote,
     type ApiFile,
@@ -83,6 +84,7 @@ function Dashboard() {
     const [filterMenuClosing, setFilterMenuClosing] = useState(false)
     const [dragActive, setDragActive] = useState(false)
     const [favouriteIds, setFavouriteIds] = useState<Set<string>>(() => loadFavouriteIds())
+    const [folderFavouriteIds, setFolderFavouriteIds] = useState<Set<string>>(new Set())
     const [settingsOpen, setSettingsOpen] = useState(false)
     const [currentUser, setCurrentUser] = useState<CurrentUserResponse | null>(null)
     const [displayName, setDisplayName] = useState('You')
@@ -177,11 +179,13 @@ function Dashboard() {
         handleFileUpdated,
     )
     const visibleFolders = useMemo(() => {
-        if (view !== 'all') return []
-        return folders.filter((folder) =>
-            [folder.name, folder.description ?? ''].some((value) => value.toLowerCase().includes(normalizedQuery)),
-        )
-    }, [folders, normalizedQuery, view])
+        if (view !== 'all' && view !== 'favourites') return []
+        return folders
+            .filter((folder) => (view === 'favourites' ? folderFavouriteIds.has(folder.id) : true))
+            .filter((folder) =>
+                [folder.name, folder.description ?? ''].some((value) => value.toLowerCase().includes(normalizedQuery)),
+            )
+    }, [folderFavouriteIds, folders, normalizedQuery, view])
     const {
         sortKey,
         setSortKey,
@@ -347,8 +351,12 @@ function Dashboard() {
                     fileData = files
                     folderData = foldersData
                 } else if (view === 'favourites') {
-                    fileData = await listFiles()
-                    setFolders([])
+                    const [files, foldersData] = await Promise.all([
+                        listFiles(),
+                        listFolders(undefined, true),
+                    ])
+                    fileData = files
+                    folderData = foldersData
                 } else if (view === 'trash') {
                     fileData = await listTrash()
                     setFolders([])
@@ -368,6 +376,7 @@ function Dashboard() {
                     if (view === 'all' || view === 'favourites') {
                         setStorageItems(visibleFileData as ApiFile[])
                         setFavouriteIds(new Set(fileData.filter((file) => file.is_favourite).map((file) => file.id)))
+                        setFolderFavouriteIds(new Set(folderData.filter((folder) => folder.is_favourite).map((folder) => folder.id)))
                     }
                 }
             } catch (e) {
@@ -540,6 +549,7 @@ function Dashboard() {
     }
 
     function openFolder(folder: ApiFolder) {
+        setView('all')
         setActiveFolderId(folder.id)
         setFolderTrail((current) => [...current, folder])
         setQuery('')
@@ -682,6 +692,46 @@ function Dashboard() {
             throw e
         } finally {
             setShareLoading(false)
+        }
+    }
+
+    async function toggleFolderFavourite(id: string) {
+        const nextIsFavourite = !folderFavouriteIds.has(id)
+        setFolderFavouriteIds((prev) => {
+            const next = new Set(prev)
+            if (nextIsFavourite) {
+                next.add(id)
+            } else {
+                next.delete(id)
+            }
+            return next
+        })
+        setFolders((current) =>
+            current.map((folder) => (folder.id === id ? { ...folder, is_favourite: nextIsFavourite } : folder)),
+        )
+        setFolderTrail((current) =>
+            current.map((folder) => (folder.id === id ? { ...folder, is_favourite: nextIsFavourite } : folder)),
+        )
+
+        try {
+            await setFolderFavourite(id, nextIsFavourite)
+        } catch (e) {
+            setFolderFavouriteIds((prev) => {
+                const next = new Set(prev)
+                if (nextIsFavourite) {
+                    next.delete(id)
+                } else {
+                    next.add(id)
+                }
+                return next
+            })
+            setFolders((current) =>
+                current.map((folder) => (folder.id === id ? { ...folder, is_favourite: !nextIsFavourite } : folder)),
+            )
+            setFolderTrail((current) =>
+                current.map((folder) => (folder.id === id ? { ...folder, is_favourite: !nextIsFavourite } : folder)),
+            )
+            setError(e instanceof Error ? e.message : 'Could not update favourite folder.')
         }
     }
 
@@ -846,6 +896,7 @@ function Dashboard() {
                     exitingIds={animatedFiles.exitingIds}
                     pendingIds={pendingIds}
                     favouriteIds={favouriteIds}
+                    folderFavouriteIds={folderFavouriteIds}
                     currentUser={currentUser}
                     groups={groups}
                     groupError={groupError}
@@ -874,6 +925,7 @@ function Dashboard() {
                     onOpenFolder={openFolder}
                     onShareFolder={handleShareFolder}
                     onRenameFolder={handleRenameFolder}
+                    onToggleFolderFavourite={toggleFolderFavourite}
                     onDelete={handleDelete}
                     onRestore={handleRestore}
                     onPermanentDelete={handlePermanentDelete}

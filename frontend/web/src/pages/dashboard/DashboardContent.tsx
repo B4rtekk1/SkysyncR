@@ -73,6 +73,7 @@ type DashboardContentProps = {
     exitingIds: Set<string>
     pendingIds: Set<string>
     favouriteIds: Set<string>
+    folderFavouriteIds: Set<string>
     currentUser: CurrentUserResponse | null
     groups: Group[]
     groupError: string | null
@@ -95,6 +96,7 @@ type DashboardContentProps = {
     onOpenFolder: (folder: ApiFolder) => void
     onShareFolder: (folder: ApiFolder) => void
     onRenameFolder: (folder: ApiFolder, name: string, description: string | null) => Promise<void>
+    onToggleFolderFavourite: (id: string) => void | Promise<void>
     onDelete: (id: string) => void | Promise<void>
     onRestore: (id: string) => void | Promise<void>
     onPermanentDelete: (id: string) => void | Promise<void>
@@ -178,6 +180,7 @@ export function DashboardContent({
     exitingIds,
     pendingIds,
     favouriteIds,
+    folderFavouriteIds,
     currentUser,
     groups,
     groupError,
@@ -200,6 +203,7 @@ export function DashboardContent({
     onOpenFolder,
     onShareFolder,
     onRenameFolder,
+    onToggleFolderFavourite,
     onDelete,
     onRestore,
     onPermanentDelete,
@@ -215,7 +219,7 @@ export function DashboardContent({
     onDropCard,
     onDragEndCard,
 }: DashboardContentProps) {
-    const isEmpty = visibleItems.length === 0 && renderedItems.length === 0
+    const isEmpty = visibleItems.length === 0 && renderedItems.length === 0 && visibleFolders.length === 0
 
     return (
         <div
@@ -374,6 +378,7 @@ export function DashboardContent({
                     exitingIds={exitingIds}
                     pendingIds={pendingIds}
                     favouriteIds={favouriteIds}
+                    folderFavouriteIds={folderFavouriteIds}
                     view={view}
                     layoutMode={layoutMode}
                     layoutSwitchTarget={layoutSwitchTarget}
@@ -383,6 +388,7 @@ export function DashboardContent({
                     onOpenFolder={onOpenFolder}
                     onShareFolder={onShareFolder}
                     onRenameFolder={onRenameFolder}
+                    onToggleFolderFavourite={onToggleFolderFavourite}
                     onDelete={onDelete}
                     onRestore={onRestore}
                     onPermanentDelete={onPermanentDelete}

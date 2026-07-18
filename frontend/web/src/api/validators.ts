@@ -252,6 +252,7 @@ export const folder: Validator<Folder> = (value, path) => {
     is_deleted: boolean(prop(item, 'is_deleted', path), `${path}.is_deleted`),
     deleted_at: nullableString(prop(item, 'deleted_at', path), `${path}.deleted_at`),
     file_count: number(prop(item, 'file_count', path), `${path}.file_count`),
+    is_favourite: boolean(prop(item, 'is_favourite', path), `${path}.is_favourite`),
   }
 }
 

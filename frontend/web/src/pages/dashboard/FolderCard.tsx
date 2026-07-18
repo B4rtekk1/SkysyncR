@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react'
 import type { ApiFolder } from '../../api/files'
 import { formatRelative } from './fileUtils'
-import { CANCEL_ICON, CHECK_ICON, INFO_ICON, RENAME_ICON, SHARE_ICON } from './icons'
+import { CANCEL_ICON, CHECK_ICON, INFO_ICON, RENAME_ICON, SHARE_ICON, STAR_ICON_FILLED, STAR_ICON_OUTLINE } from './icons'
 import { FileRenameInput } from './FileRenameInput'
 import { FileInfoPopover, type InfoPopoverPosition } from './FileInfoPopover'
 
@@ -11,14 +11,19 @@ export function FolderCard({
     onOpen,
     onShare,
     onRename,
+    isFavourite,
+    onToggleFavourite,
 }: {
     folder: ApiFolder
     index: number
     onOpen: (folder: ApiFolder) => void
     onShare?: (folder: ApiFolder) => void | Promise<void>
     onRename?: (folder: ApiFolder, name: string, description: string | null) => Promise<void>
+    isFavourite?: boolean
+    onToggleFavourite?: ((id: string) => void | Promise<void>) | undefined
 }) {
     const fileCountLabel = folder.file_count === 1 ? '1 file' : `${folder.file_count} files`
+    const [favouriteTouched, setFavouriteTouched] = useState(false)
     const [isRenaming, setIsRenaming] = useState(false)
     const [renameDraft, setRenameDraft] = useState(folder.name)
     const [descriptionDraft, setDescriptionDraft] = useState(folder.description ?? '')
@@ -132,7 +137,7 @@ export function FolderCard({
     return (
         <article
             ref={cardRef}
-            className="file-card folder-card file-card--can-preview"
+            className={`file-card folder-card file-card--can-preview ${onToggleFavourite ? 'file-card--has-favourite' : ''}`}
             style={{ '--file-index': index } as CSSProperties}
             role="button"
             tabIndex={0}
@@ -147,6 +152,23 @@ export function FolderCard({
                 onOpen(folder)
             }}
         >
+            {onToggleFavourite && (
+                <button
+                    className={`file-card__fav ${isFavourite ? 'is-active' : ''} ${
+                        favouriteTouched ? 'has-favourite-motion' : ''
+                    }`}
+                    onClick={(event) => {
+                        event.stopPropagation()
+                        setFavouriteTouched(true)
+                        void onToggleFavourite(folder.id)
+                    }}
+                    aria-label={isFavourite ? 'Remove folder from favourites' : 'Add folder to favourites'}
+                    aria-pressed={isFavourite}
+                    type="button"
+                >
+                    {isFavourite ? STAR_ICON_FILLED : STAR_ICON_OUTLINE}
+                </button>
+            )}
             <div className="file-card__top">
                 <span className="file-card__badge folder-card__badge">
                     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
