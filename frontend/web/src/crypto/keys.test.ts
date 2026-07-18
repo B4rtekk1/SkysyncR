@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { generateFileKey, unwrapFileKeyForUser, wrapFileKeyForUser } from './fileEncryption.ts'
-import { decryptPrivateKey, encryptPrivateKey, exportPublicKey, generateKeyPair } from './keys.ts'
+import { decryptPrivateKey, encryptPrivateKey, exportPublicKey, generateKeyPair, generateRecoveryKey } from './keys.ts'
 
 test('private keys decrypt only with the original password', async () => {
   const keyPair = await generateKeyPair()
@@ -49,6 +49,18 @@ test('private keys can be decrypted as exportable for password rewrap', async ()
 
   await assert.rejects(() => decryptPrivateKey(rewrapped, 'correct horse battery staple'))
   assert.equal((await decryptPrivateKey(rewrapped, 'new correct horse battery staple!')).type, 'private')
+})
+
+test('recovery keys decrypt recovery backups for password reset rewrap', async () => {
+  const keyPair = await generateKeyPair()
+  const recoveryKey = generateRecoveryKey()
+  const recoveryBackup = await encryptPrivateKey(keyPair.privateKey, recoveryKey)
+
+  const recoveredPrivateKey = await decryptPrivateKey(recoveryBackup, recoveryKey, true)
+  const passwordBackup = await encryptPrivateKey(recoveredPrivateKey, 'Reset!Password92')
+
+  await assert.rejects(() => decryptPrivateKey(recoveryBackup, 'wrong recovery key'))
+  assert.equal((await decryptPrivateKey(passwordBackup, 'Reset!Password92')).type, 'private')
 })
 
 test('file keys can be wrapped for a user public key and unwrapped with the private key', async () => {

@@ -1,7 +1,7 @@
 import { type SubmitEvent, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { registerUser } from '../../api/users'
-import { generateKeyPair, exportPublicKey, encryptPrivateKey, decryptPrivateKey } from '../../crypto/keys'
+import { generateKeyPair, exportPublicKey, encryptPrivateKey, decryptPrivateKey, generateRecoveryKey } from '../../crypto/keys'
 import { storeActivePrivateKey, storeEncryptedPrivateKey } from '../../crypto/storage'
 import EyeIcon from '../login/EyeIcon'
 import PasswordRequirements from './PasswordRequirements'
@@ -19,6 +19,8 @@ function RegisterForm() {
   const [passwordFocused, setPasswordFocused] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
+  const [recoveryKey, setRecoveryKey] = useState<string | null>(null)
+  const [verificationEmail, setVerificationEmail] = useState('')
 
   async function handleSubmit(e: SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -36,9 +38,14 @@ function RegisterForm() {
 
       const keyPair = await generateKeyPair()
       const publicKeyBase64 = await exportPublicKey(keyPair.publicKey)
+      const nextRecoveryKey = generateRecoveryKey()
       const encryptedPrivateKey = await encryptPrivateKey(
           keyPair.privateKey,
           password,
+      )
+      const encryptedPrivateKeyRecovery = await encryptPrivateKey(
+          keyPair.privateKey,
+          nextRecoveryKey,
       )
 
       const displayName = name.trim() || suggestNameFromEmail(email)
@@ -50,17 +57,15 @@ function RegisterForm() {
         display_name: displayName,
         password,
         public_key: publicKeyBase64,
+        encrypted_private_key_recovery: JSON.stringify(encryptedPrivateKeyRecovery),
       })
 
       await storeEncryptedPrivateKey(userId, encryptedPrivateKey)
       const activePrivateKey = await decryptPrivateKey(encryptedPrivateKey, password)
       await storeActivePrivateKey(userId, activePrivateKey)
 
-      navigate('/', {
-        state: {
-          verificationPromptEmail: email.trim().toLowerCase(),
-        },
-      })
+      setRecoveryKey(nextRecoveryKey)
+      setVerificationEmail(email.trim().toLowerCase())
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong.')
     } finally {
@@ -75,6 +80,35 @@ function RegisterForm() {
           : step === 'sending'
               ? 'Creating account…'
               : 'Create account'
+
+  if (recoveryKey) {
+    return (
+        <div className="auth__form-card">
+          <p className="eyebrow">
+            <span className="eyebrow__dot" /> recovery key
+          </p>
+          <h1 className="auth__title">Save your recovery key</h1>
+          <p className="auth__subtitle">
+            You need this key to reset your password without losing access to encrypted files.
+          </p>
+          <div className="auth-form__error" role="status">
+            <strong>{recoveryKey}</strong>
+            <span>Store it somewhere private. SkysyncR cannot show it again.</span>
+          </div>
+          <button
+              type="button"
+              className="btn btn--solid btn--lg auth-form__submit"
+              onClick={() => navigate('/', {
+                state: {
+                  verificationPromptEmail: verificationEmail,
+                },
+              })}
+          >
+            I saved it
+          </button>
+        </div>
+    )
+  }
 
   return (
       <div className="auth__form-card">

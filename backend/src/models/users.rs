@@ -26,6 +26,7 @@ pub struct RegisterRequest {
     pub display_name: String,
     pub password: String,
     pub public_key: String,
+    pub encrypted_private_key_recovery: String,
 }
 
 #[derive(Debug, Deserialize)]

@@ -349,6 +349,13 @@ pub async fn register_user(
     validate_password(&payload.password).map_err(|msg| ApiError::BadRequest(msg.into()))?;
     validate_display_name(&payload.display_name).map_err(|msg| ApiError::BadRequest(msg.into()))?;
     validate_public_key(&payload.public_key).map_err(|msg| ApiError::BadRequest(msg.into()))?;
+    if payload.encrypted_private_key_recovery.len() < 64
+        || payload.encrypted_private_key_recovery.len() > 20_000
+    {
+        return Err(ApiError::BadRequest(
+            "Invalid recovery private key backup".into(),
+        ));
+    }
 
     let hashed =
         hash(&payload.password, DEFAULT_COST).map_err(|e| internal_error("password hash", e))?;
@@ -362,6 +369,7 @@ pub async fn register_user(
             display_name,
             password_hash: &hashed,
             public_key: &payload.public_key,
+            encrypted_private_key_recovery: &payload.encrypted_private_key_recovery,
         },
         state.config.verification_token_ttl_hours,
     )

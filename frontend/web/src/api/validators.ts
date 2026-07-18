@@ -10,6 +10,7 @@ import type {
   GroupRole,
   GroupShareRecipient,
   RegisterResponse,
+  RecoveryBlob,
   ShareRecipient,
   SharedFile,
   StorageQuota,
@@ -134,6 +135,17 @@ export const registerResponse: Validator<RegisterResponse> = (value, path) => {
   const item = object(value, path)
   return {
     id: string(prop(item, 'id', path), `${path}.id`),
+  }
+}
+
+export const recoveryBlob: Validator<RecoveryBlob> = (value, path) => {
+  const item = object(value, path)
+  return {
+    user_id: string(prop(item, 'user_id', path), `${path}.user_id`),
+    encrypted_private_key_recovery: string(
+      prop(item, 'encrypted_private_key_recovery', path),
+      `${path}.encrypted_private_key_recovery`,
+    ),
   }
 }
 

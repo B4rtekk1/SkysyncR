@@ -3,6 +3,8 @@ import {Routes, Route, useNavigate} from 'react-router-dom'
 import Landing from './pages/Landing'
 import Login from './pages/Login'
 import Register from './pages/Register'
+import ForgotPassword from './pages/ForgotPassword'
+import ResetPassword from './pages/ResetPassword'
 import VerifyEmail from "./pages/VerifyUser";
 import Dashboard from './pages/Dashboard'
 import NotFound from './pages/NotFound'
@@ -38,6 +40,8 @@ function App() {
             <Route path="/" element={<LandingRoute/>}/>
             <Route path="/login" element={<Login/>}/>
             <Route path="/register" element={<Register/>}/>
+            <Route path="/forgot-password" element={<ForgotPassword/>}/>
+            <Route path="/reset-password" element={<ResetPassword/>}/>
             <Route path="/verify" element={<VerifyEmail/>}/>
             <Route path="/dashboard" element={<Dashboard/>}/>
             <Route path="*" element={<NotFound/>}/>

@@ -20,7 +20,12 @@ pub fn users_routes() -> Router<AppState> {
 }
 
 pub fn auth_limited_routes() -> Router<AppState> {
+    use crate::handlers::password_reset::{forgot_password, get_recovery_blob, reset_password};
+
     Router::new()
         .route("/users/register", post(register_user))
         .route("/users/login", post(login_user))
+        .route("/users/forgot-password", post(forgot_password))
+        .route("/users/recovery-blob", get(get_recovery_blob))
+        .route("/users/reset-password", post(reset_password))
 }

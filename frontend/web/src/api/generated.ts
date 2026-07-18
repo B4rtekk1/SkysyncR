@@ -10,6 +10,7 @@ export type RegisterRequest = {
   "display_name": string
   "password": string
   "public_key": string
+  "encrypted_private_key_recovery": string
 }
 
 export type LoginRequest = {
@@ -20,6 +21,20 @@ export type LoginRequest = {
 
 export type ChangePasswordRequest = {
   "current_password": string
+  "new_password": string
+}
+
+export type ForgotPasswordRequest = {
+  "email": string
+}
+
+export type RecoveryBlob = {
+  "user_id": string
+  "encrypted_private_key_recovery": string
+}
+
+export type ResetPasswordRequest = {
+  "token": string
   "new_password": string
 }
 

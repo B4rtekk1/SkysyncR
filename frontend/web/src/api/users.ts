@@ -5,9 +5,12 @@ import { apiFetch } from './http'
 import type {
   ChangePasswordRequest as ChangePasswordPayload,
   CurrentUser as CurrentUserResponse,
+  ForgotPasswordRequest as ForgotPasswordPayload,
   LoginRequest as LoginPayload,
   RegisterRequest as RegisterPayload,
   RegisterResponse,
+  RecoveryBlob,
+  ResetPasswordRequest as ResetPasswordPayload,
   TokenPair as LoginResponse,
   UserSettings as UserSettingsResponse,
   UserSettingsRequest as UserSettingsPayload,
@@ -16,6 +19,7 @@ import {
   currentUser,
   parseApiErrorBody,
   readJson,
+  recoveryBlob,
   registerResponse,
   tokenPair,
   userSettings,
@@ -30,6 +34,9 @@ export type {
   UserSettingsPayload,
   UserSettingsResponse,
   ChangePasswordPayload,
+  ForgotPasswordPayload,
+  RecoveryBlob,
+  ResetPasswordPayload,
 }
 
 export class ApiRequestError extends Error {
@@ -167,4 +174,41 @@ export async function changePassword(payload: ChangePasswordPayload): Promise<Lo
   const tokens = await readJson(res, tokenPair, 'ChangePasswordResponse')
   saveTokens(tokens)
   return tokens
+}
+
+export async function forgotPassword(payload: ForgotPasswordPayload): Promise<void> {
+  const res = await apiFetch(`${url}users/forgot-password`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+
+  if (!res.ok) {
+    await throwApiError(res, 'Could not request password reset')
+  }
+}
+
+export async function getRecoveryBlob(token: string): Promise<RecoveryBlob> {
+  const params = new URLSearchParams({ token })
+  const res = await apiFetch(`${url}users/recovery-blob?${params.toString()}`, {
+    method: 'GET',
+  })
+
+  if (!res.ok) {
+    await throwApiError(res, 'Could not load recovery data')
+  }
+
+  return readJson(res, recoveryBlob, 'RecoveryBlob')
+}
+
+export async function resetPassword(payload: ResetPasswordPayload): Promise<void> {
+  const res = await apiFetch(`${url}users/reset-password`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+
+  if (!res.ok) {
+    await throwApiError(res, 'Could not reset password')
+  }
 }

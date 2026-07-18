@@ -64,6 +64,73 @@
         }
       }
     },
+    "/users/forgot-password": {
+      "post": {
+        "operationId": "forgotPassword",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ForgotPasswordRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Reset email sent when possible"
+          }
+        }
+      }
+    },
+    "/users/recovery-blob": {
+      "get": {
+        "operationId": "getRecoveryBlob",
+        "parameters": [
+          {
+            "name": "token",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Recovery encrypted private key",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecoveryBlob"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/users/reset-password": {
+      "post": {
+        "operationId": "resetPassword",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResetPasswordRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Password reset and sessions revoked"
+          }
+        }
+      }
+    },
     "/users/refresh": {
       "post": {
         "operationId": "refreshTokens",
@@ -1004,7 +1071,8 @@
           "email",
           "display_name",
           "password",
-          "public_key"
+          "public_key",
+          "encrypted_private_key_recovery"
         ],
         "properties": {
           "email": {
@@ -1019,6 +1087,9 @@
             "format": "password"
           },
           "public_key": {
+            "type": "string"
+          },
+          "encrypted_private_key_recovery": {
             "type": "string"
           }
         }
@@ -1053,6 +1124,50 @@
           "current_password": {
             "type": "string",
             "format": "password"
+          },
+          "new_password": {
+            "type": "string",
+            "format": "password"
+          }
+        }
+      },
+      "ForgotPasswordRequest": {
+        "type": "object",
+        "required": [
+          "email"
+        ],
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email"
+          }
+        }
+      },
+      "RecoveryBlob": {
+        "type": "object",
+        "required": [
+          "user_id",
+          "encrypted_private_key_recovery"
+        ],
+        "properties": {
+          "user_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "encrypted_private_key_recovery": {
+            "type": "string"
+          }
+        }
+      },
+      "ResetPasswordRequest": {
+        "type": "object",
+        "required": [
+          "token",
+          "new_password"
+        ],
+        "properties": {
+          "token": {
+            "type": "string"
           },
           "new_password": {
             "type": "string",

@@ -53,3 +53,37 @@ pub async fn send_verification_email(
     mailer.send(email).await?;
     Ok(())
 }
+
+pub async fn send_password_reset_email(
+    to_email: &str,
+    token: &str,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let frontend_url =
+        std::env::var("FRONTEND_URL").unwrap_or_else(|_| "http://localhost:5173".to_string());
+    let link = format!("{}/reset-password#token={}", frontend_url, token);
+
+    let smtp_host = std::env::var("SMTP_HOST")?;
+    let smtp_username = std::env::var("SMTP_USERNAME")?;
+    let smtp_password = std::env::var("SMTP_PASSWORD")?;
+    let from_email = std::env::var("FROM_EMAIL")
+        .unwrap_or_else(|_| "Skysync <bartoszkasyna@gmail.com>".to_string());
+
+    let email = Message::builder()
+        .from(from_email.parse()?)
+        .to(to_email.parse()?)
+        .subject("Reset your SkysyncR password")
+        .header(ContentType::TEXT_HTML)
+        .body(format!(
+            "<p>Use the link below to reset your password:</p><p><a href=\"{}\">{}</a></p>",
+            link, link
+        ))?;
+    let creds = Credentials::new(smtp_username, smtp_password);
+
+    let mailer: AsyncSmtpTransport<Tokio1Executor> =
+        AsyncSmtpTransport::<Tokio1Executor>::relay(&smtp_host)?
+            .credentials(creds)
+            .build();
+
+    mailer.send(email).await?;
+    Ok(())
+}

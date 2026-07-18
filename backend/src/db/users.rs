@@ -10,6 +10,7 @@ pub struct NewUser<'a> {
     pub display_name: &'a str,
     pub password_hash: &'a str,
     pub public_key: &'a str,
+    pub encrypted_private_key_recovery: &'a str,
 }
 
 pub async fn create_user(
@@ -21,25 +22,26 @@ pub async fn create_user(
     let token_hash = hash_verification_token(&token);
     let mut tx = pool.begin().await?;
 
-    let user_id = sqlx::query!(
+    let (user_id,) = sqlx::query_as::<_, (Uuid,)>(
         r#"
         INSERT INTO users (
             email, password_hash, public_key, display_name,
-            verification_token, verification_token_expires_at
+            verification_token, verification_token_expires_at,
+            encrypted_private_key_recovery
         )
-        VALUES ($1, $2, $3, $4, $5, NOW() + ($6::int * interval '1 hour'))
+        VALUES ($1, $2, $3, $4, $5, NOW() + ($6::int * interval '1 hour'), $7)
         RETURNING id
         "#,
-        new_user.email,
-        new_user.password_hash,
-        new_user.public_key,
-        new_user.display_name,
-        token_hash,
-        verification_ttl_hours as i32
     )
+    .bind(new_user.email)
+    .bind(new_user.password_hash)
+    .bind(new_user.public_key)
+    .bind(new_user.display_name)
+    .bind(token_hash)
+    .bind(verification_ttl_hours as i32)
+    .bind(new_user.encrypted_private_key_recovery)
     .fetch_one(&mut *tx)
-    .await?
-    .id;
+    .await?;
 
     sqlx::query!(
         r#"
@@ -470,6 +472,97 @@ pub async fn update_user_password_hash(
     .await?;
 
     Ok(result.rows_affected() == 1)
+}
+
+pub async fn set_password_reset_token(
+    pool: &PgPool,
+    email: &str,
+    ttl_minutes: i32,
+) -> Result<Option<String>, sqlx::Error> {
+    let token = generate_verification_token();
+    let token_hash = hash_verification_token(&token);
+    let result = sqlx::query(
+        r#"
+        UPDATE users
+        SET password_reset_token = $2,
+            password_reset_token_expiration = NOW() + ($3::int * interval '1 minute'),
+            updated_at = NOW()
+        WHERE email = $1
+          AND is_active = TRUE
+          AND email_verified = TRUE
+        "#,
+    )
+    .bind(email)
+    .bind(token_hash)
+    .bind(ttl_minutes)
+    .execute(pool)
+    .await?;
+
+    Ok((result.rows_affected() == 1).then_some(token))
+}
+
+pub struct RecoveryBlobRecord {
+    pub user_id: Uuid,
+    pub encrypted_private_key_recovery: String,
+}
+
+pub async fn get_recovery_blob_by_token(
+    pool: &PgPool,
+    token: &str,
+) -> Result<Option<RecoveryBlobRecord>, sqlx::Error> {
+    let token_hash = hash_verification_token(token);
+
+    let result = sqlx::query_as::<_, (Uuid, String)>(
+        r#"
+        SELECT id, encrypted_private_key_recovery
+        FROM users
+        WHERE password_reset_token = $1
+          AND password_reset_token_expiration > NOW()
+          AND is_active = TRUE
+          AND email_verified = TRUE
+          AND encrypted_private_key_recovery <> ''
+        "#,
+    )
+    .bind(token_hash)
+    .fetch_optional(pool)
+    .await?;
+
+    Ok(result.map(
+        |(user_id, encrypted_private_key_recovery)| RecoveryBlobRecord {
+            user_id,
+            encrypted_private_key_recovery,
+        },
+    ))
+}
+
+pub async fn reset_password_with_token(
+    pool: &PgPool,
+    token: &str,
+    password_hash: &str,
+) -> Result<Option<Uuid>, sqlx::Error> {
+    let token_hash = hash_verification_token(token);
+    let result = sqlx::query_as::<_, (Uuid,)>(
+        r#"
+        UPDATE users
+        SET password_hash = $2,
+            password_reset_token = NULL,
+            password_reset_token_expiration = NULL,
+            failed_login_attempts = 0,
+            locked_until = NULL,
+            updated_at = NOW()
+        WHERE password_reset_token = $1
+          AND password_reset_token_expiration > NOW()
+          AND is_active = TRUE
+          AND email_verified = TRUE
+        RETURNING id
+        "#,
+    )
+    .bind(token_hash)
+    .bind(password_hash)
+    .fetch_optional(pool)
+    .await?;
+
+    Ok(result.map(|(user_id,)| user_id))
 }
 
 #[cfg(test)]

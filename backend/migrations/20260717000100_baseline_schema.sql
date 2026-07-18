@@ -23,6 +23,7 @@ CREATE TABLE IF NOT EXISTS users
     locked_until                    timestamptz,
     password_reset_token            TEXT,
     password_reset_token_expiration timestamptz,
+    encrypted_private_key_recovery  TEXT        NOT NULL DEFAULT '',
     created_at                      timestamptz NOT NULL DEFAULT NOW(),
     updated_at                      timestamptz NOT NULL DEFAULT NOW(),
     last_login_at                   timestamptz

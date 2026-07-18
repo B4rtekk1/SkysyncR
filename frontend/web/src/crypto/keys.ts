@@ -16,6 +16,17 @@ const WRAPPING_KDF_HASH = 'SHA-256'
 const WRAPPING_KDF_ITERATIONS = 250_000
 const WRAPPING_ALGORITHM = 'AES-GCM'
 const WRAPPING_ALGORITHM_LENGTH = 256
+const RECOVERY_KEY_BYTES = 32
+
+export function generateRecoveryKey(): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(RECOVERY_KEY_BYTES))
+  return bufferToBase64(bytes)
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/g, '')
+    .match(/.{1,4}/g)
+    ?.join('-') ?? ''
+}
 
 export async function generateKeyPair(): Promise<CryptoKeyPair> {
   return crypto.subtle.generateKey(
