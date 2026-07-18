@@ -126,6 +126,16 @@ function SettingsModalContent({ currentUser, onClose, onSave }: SettingsModalPro
         updateSetting('trashRetentionDays', nextValue)
     }
 
+    function showPasswordChangeError(err: unknown) {
+        if (err instanceof ApiRequestError && err.status === 401) {
+            setPasswordError('Current password is incorrect.')
+        } else if (err instanceof ApiRequestError) {
+            setPasswordError(err.message)
+        } else {
+            setPasswordError('Could not change password. Check the current password and try again.')
+        }
+    }
+
     async function saveSettings() {
         try {
             const settingsToSave = { ...settings }
@@ -217,7 +227,8 @@ function SettingsModalContent({ currentUser, onClose, onSave }: SettingsModalPro
                 })
             } catch (err) {
                 await storeEncryptedPrivateKey(currentUser.id, previousEncryptedPrivateKey)
-                throw err
+                showPasswordChangeError(err)
+                return
             }
 
             setCurrentPassword('')
@@ -225,13 +236,7 @@ function SettingsModalContent({ currentUser, onClose, onSave }: SettingsModalPro
             setConfirmNewPassword('')
             setPasswordSaved(true)
         } catch (err) {
-            if (err instanceof ApiRequestError && err.status === 401) {
-                setPasswordError('Current password is incorrect.')
-            } else if (err instanceof ApiRequestError) {
-                setPasswordError(err.message)
-            } else {
-                setPasswordError('Could not change password. Check the current password and try again.')
-            }
+            showPasswordChangeError(err)
         } finally {
             setPasswordSaving(false)
         }
