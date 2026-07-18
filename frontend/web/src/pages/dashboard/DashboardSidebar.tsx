@@ -19,7 +19,7 @@ type StorageBreakdownItem = {
 type DashboardSidebarProps = {
     sidebarHidden: boolean
     navListRef: RefObject<HTMLElement | null>
-    navItemRefs: React.MutableRefObject<Partial<Record<ViewKey, HTMLButtonElement>>>
+    navItemRefs: RefObject<Partial<Record<ViewKey, HTMLButtonElement>>>
     navIndicator: NavIndicator
     navIndicatorPulling: boolean
     navOrder: ViewKey[]
