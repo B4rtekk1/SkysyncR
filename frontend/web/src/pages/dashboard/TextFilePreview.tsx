@@ -1,5 +1,6 @@
-import { lazy, Suspense, useEffect, useState } from 'react'
+import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import { COPY_ICON } from './icons'
+import { highlightPython } from './pythonHighlight'
 import type { Item } from './types'
 import type { TextPreviewMode } from './useTextFilePreview'
 
@@ -79,10 +80,12 @@ export function TextFileCopyButton({ item, text }: { item: Item; text: string })
 }
 
 export function TextFilePreview({
+    canHighlightPython,
     canRenderMarkdown,
     text,
     textMode,
 }: {
+    canHighlightPython: boolean
     canRenderMarkdown: boolean
     text: string
     textMode: TextPreviewMode
@@ -95,6 +98,20 @@ export function TextFilePreview({
         )
     }
 
+    if (canHighlightPython) {
+        return (
+            <pre className="image-preview__text image-preview__text--highlight" tabIndex={0}>
+                {text
+                    ? highlightPython(text).map((token, index) => (
+                          <span className={`syntax-token syntax-token--${token.type}`} key={`${token.type}-${index}`}>
+                              {token.text}
+                          </span>
+                      ))
+                    : 'This file is empty.'}
+            </pre>
+        )
+    }
+
     return (
         <pre className="image-preview__text" tabIndex={0}>
             {text || 'This file is empty.'}
@@ -103,6 +120,7 @@ export function TextFilePreview({
 }
 
 export function TextFileEditor({
+    canHighlightPython,
     canRenderMarkdown,
     error,
     onChange,
@@ -110,6 +128,7 @@ export function TextFileEditor({
     saving,
     text,
 }: {
+    canHighlightPython: boolean
     canRenderMarkdown: boolean
     error: string | null
     onChange: (text: string) => void
@@ -117,13 +136,40 @@ export function TextFileEditor({
     saving: boolean
     text: string
 }) {
+    const highlightRef = useRef<HTMLPreElement>(null)
+    const renderHighlightedText = (value: string) =>
+        value
+            ? highlightPython(value).map((token, index) => (
+                  <span className={`syntax-token syntax-token--${token.type}`} key={`${token.type}-${index}`}>
+                      {token.text}
+                  </span>
+              ))
+            : null
+
     return (
-        <div className={`image-preview__editor-wrap ${canRenderMarkdown ? 'image-preview__editor-wrap--markdown' : ''}`}>
+        <div
+            className={`image-preview__editor-wrap ${
+                canRenderMarkdown ? 'image-preview__editor-wrap--markdown' : ''
+            } ${canHighlightPython ? 'image-preview__editor-wrap--highlight' : ''}`}
+        >
             <div className="image-preview__editor-pane">
+                {canHighlightPython && (
+                    <pre className="image-preview__editor-highlight" ref={highlightRef} aria-hidden="true">
+                        {renderHighlightedText(text)}
+                    </pre>
+                )}
                 <textarea
-                    className="image-preview__editor"
+                    className={`image-preview__editor ${canHighlightPython ? 'image-preview__editor--highlight' : ''}`}
                     value={text}
                     onChange={(e) => onChange(e.target.value)}
+                    onScroll={(e) => {
+                        if (!highlightRef.current) {
+                            return
+                        }
+
+                        highlightRef.current.scrollTop = e.currentTarget.scrollTop
+                        highlightRef.current.scrollLeft = e.currentTarget.scrollLeft
+                    }}
                     onKeyDown={(e) => {
                         if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
                             e.preventDefault()

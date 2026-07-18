@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { formatBytes, formatRelative, isMarkdownFile, kindFromFile, scramble } from './fileUtils.ts'
+import { formatBytes, formatRelative, isMarkdownFile, isPythonFile, kindFromFile, scramble } from './fileUtils.ts'
 
 test('kindFromFile prefers MIME families for common media files', () => {
   assert.equal(kindFromFile('download.bin', 'image/png'), 'image')
@@ -19,6 +19,7 @@ test('kindFromFile recognizes office, archive and code extensions', () => {
 test('kindFromFile treats text source files as code but plain text as text', () => {
   assert.equal(kindFromFile('readme.txt', 'text/plain'), 'text')
   assert.equal(kindFromFile('main.ts', 'text/plain'), 'code')
+  assert.equal(kindFromFile('types.pyi', 'text/plain'), 'code')
   assert.equal(kindFromFile('notes.md', 'text/markdown'), 'text')
 })
 
@@ -26,6 +27,13 @@ test('isMarkdownFile accepts markdown MIME types and extensions', () => {
   assert.equal(isMarkdownFile('notes.txt', 'text/markdown'), true)
   assert.equal(isMarkdownFile('notes.markdown', null), true)
   assert.equal(isMarkdownFile('notes.txt', 'text/plain'), false)
+})
+
+test('isPythonFile accepts python MIME types and extensions', () => {
+  assert.equal(isPythonFile('script.py', null), true)
+  assert.equal(isPythonFile('types.pyi', null), true)
+  assert.equal(isPythonFile('script.txt', 'text/x-python'), true)
+  assert.equal(isPythonFile('notes.txt', 'text/plain'), false)
 })
 
 test('formatBytes uses the smallest readable unit', () => {

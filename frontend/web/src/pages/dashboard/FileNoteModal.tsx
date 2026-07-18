@@ -87,9 +87,10 @@ export function FileNoteModal({ item, saving, onClose, onSave }: FileNoteModalPr
                             <span>Plain Markdown</span>
                             <span>Rendered Preview</span>
                         </div>
-                        <TextFileEditor
-                            canRenderMarkdown
-                            error={error}
+                <TextFileEditor
+                    canHighlightPython={false}
+                    canRenderMarkdown
+                    error={error}
                             saving={saving}
                             text={note}
                             onChange={setNote}

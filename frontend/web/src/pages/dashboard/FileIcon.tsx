@@ -1,9 +1,9 @@
 import type { FileKind } from './fileUtils'
-import { KIND_ACCENT } from './fileUtils'
+import { isPythonFile, KIND_ACCENT } from './fileUtils'
 const DOCUMENT_ICON_PATH = 'M6 2.5h8l4 4v14a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V3.5a1 1 0 0 1 1-1Z'
 const DOCUMENT_FOLD_PATH = 'M14 2.5V7a1 1 0 0 0 1 1h4.5'
 
-export function FileIcon({ kind }: { kind: FileKind }) {
+export function FileIcon({ filename, kind, mime }: { filename: string; kind: FileKind; mime: string | null }) {
     const accent = KIND_ACCENT[kind]
     const common = {
         stroke: accent,
@@ -72,6 +72,25 @@ export function FileIcon({ kind }: { kind: FileKind }) {
         )
     }
     if (kind === 'code') {
+        if (isPythonFile(filename, mime)) {
+            return (
+                <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true">
+                    <path
+                        d="M12.6 2.8h3.7a4 4 0 0 1 4 4v4.1a3.1 3.1 0 0 1-3.1 3.1H9.5a2 2 0 0 0-2 2v1.2H5.7a4 4 0 0 1-4-4V9.1a4 4 0 0 1 4-4h6.9V2.8Z"
+                        fill="#3776ab"
+                        transform="matrix(.9 0 0 1 1.2 0)"
+                    />
+                    <path
+                        d="M11.4 21.2H7.7a4 4 0 0 1-4-4v-4.1A3.1 3.1 0 0 1 6.8 10h7.7a2 2 0 0 0 2-2V6.8h1.8a4 4 0 0 1 4 4v4.1a4 4 0 0 1-4 4h-6.9v2.3Z"
+                        fill="#ffd43b"
+                        transform="matrix(.9 0 0 1 1.2 0)"
+                    />
+                    <circle cx="8.13" cy="8.4" r="1.05" fill="#f8fafc" />
+                    <circle cx="15.87" cy="15.6" r="1.05" fill="#1f2937" />
+                </svg>
+            )
+        }
+
         return (
             <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true">
                 <path d="M8.5 8L5 12l3.5 4M15.5 8L19 12l-3.5 4M13 6.5l-2 11" {...common} />

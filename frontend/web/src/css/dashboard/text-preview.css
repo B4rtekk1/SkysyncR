@@ -17,6 +17,56 @@
     overflow-wrap: anywhere;
 }
 
+.image-preview__text--highlight {
+    background: #1e1e1e;
+    color: #d4d4d4;
+}
+
+.syntax-token--builtin {
+    color: #4fc1ff;
+}
+
+.syntax-token--class-name {
+    color: #4ec9b0;
+}
+
+.syntax-token--comment {
+    color: #6a9955;
+    font-style: italic;
+}
+
+.syntax-token--decorator {
+    color: #c586c0;
+}
+
+.syntax-token--function {
+    color: #dcdcaa;
+}
+
+.syntax-token--keyword {
+    color: #569cd6;
+}
+
+.syntax-token--magic {
+    color: #dcdcaa;
+}
+
+.syntax-token--number {
+    color: #b5cea8;
+}
+
+.syntax-token--operator {
+    color: #d4d4d4;
+}
+
+.syntax-token--self {
+    color: #9cdcfe;
+}
+
+.syntax-token--string {
+    color: #ce9178;
+}
+
 .image-preview__editor-wrap {
     display: grid;
     grid-template-rows: minmax(0, 1fr) auto;
@@ -32,6 +82,7 @@
 }
 
 .image-preview__editor-pane {
+    position: relative;
     min-width: 0;
     min-height: 0;
 }
@@ -41,6 +92,8 @@
 }
 
 .image-preview__editor {
+    position: relative;
+    z-index: 1;
     width: 100%;
     height: 100%;
     min-height: 520px;
@@ -57,6 +110,42 @@
     font-family: var(--font-mono), ui-monospace, SFMono-Regular, Consolas, 'Liberation Mono', monospace;
     font-size: 0.84rem;
     line-height: 1.55;
+}
+
+.image-preview__editor-highlight {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    width: 100%;
+    height: 100%;
+    min-height: 520px;
+    margin: 0;
+    padding: 18px;
+    overflow: hidden;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: #1e1e1e;
+    color: #d4d4d4;
+    box-shadow: 0 20px 60px -34px rgba(0, 0, 0, 0.75);
+    font-family: var(--font-mono), ui-monospace, SFMono-Regular, Consolas, 'Liberation Mono', monospace;
+    font-size: 0.84rem;
+    line-height: 1.55;
+    pointer-events: none;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+.image-preview__editor--highlight {
+    background: transparent;
+    color: transparent;
+    caret-color: #d4d4d4;
+    -webkit-text-fill-color: transparent;
+}
+
+.image-preview__editor--highlight::selection {
+    background: rgba(38, 79, 120, 0.75);
+    color: transparent;
+    -webkit-text-fill-color: transparent;
 }
 
 .image-preview__editor:focus {

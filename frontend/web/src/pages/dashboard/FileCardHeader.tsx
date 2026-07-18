@@ -12,7 +12,7 @@ type FileCardHeaderProps = {
 export function FileCardHeader({ item, kind, pending }: FileCardHeaderProps) {
     return (
         <div className="file-card__top">
-            <FileIcon kind={kind} />
+            <FileIcon filename={item.filename} kind={kind} mime={item.mime_type} />
             {pending ? (
                 <span className="file-card__badge file-card__badge--pending">
                     <span className="spinner" /> Encrypting…

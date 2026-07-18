@@ -67,6 +67,8 @@ export function formatRelative(iso: string) {
 
 export type FileKind = 'sheet' | 'document' | 'presentation' | 'pdf' | 'archive' | 'video' | 'audio' | 'text' | 'image' | 'code' | 'file'
 
+const CODE_EXTENSIONS = ['js', 'jsx', 'ts', 'tsx', 'json', 'html', 'css', 'rs', 'py', 'pyw', 'pyi', 'java', 'go', 'xml', 'yaml', 'yml']
+
 export function kindFromFile(filename: string, mime: string | null): FileKind {
     const ext = filename.split('.').pop()?.toLowerCase() ?? ''
     const normalizedMime = mime?.toLowerCase() ?? ''
@@ -89,9 +91,9 @@ export function kindFromFile(filename: string, mime: string | null): FileKind {
         normalizedMime.startsWith('text/') ||
         ['txt', 'md', 'rtf'].includes(ext)
     ) {
-        return ['js', 'jsx', 'ts', 'tsx', 'json', 'html', 'css', 'rs', 'py', 'java', 'go'].includes(ext) ? 'code' : 'text'
+        return CODE_EXTENSIONS.includes(ext) ? 'code' : 'text'
     }
-    if (['js', 'jsx', 'ts', 'tsx', 'json', 'html', 'css', 'rs', 'py', 'java', 'go', 'xml', 'yaml', 'yml'].includes(ext)) return 'code'
+    if (CODE_EXTENSIONS.includes(ext)) return 'code'
     if (['doc', 'docx', 'odt'].includes(ext) || normalizedMime.includes('wordprocessingml')) return 'document'
     return 'file'
 }
@@ -100,6 +102,12 @@ export function isMarkdownFile(filename: string, mime: string | null) {
     const ext = filename.split('.').pop()?.toLowerCase() ?? ''
     const normalizedMime = mime?.toLowerCase() ?? ''
     return normalizedMime === 'text/markdown' || normalizedMime === 'text/x-markdown' || ['md', 'markdown', 'mdown'].includes(ext)
+}
+
+export function isPythonFile(filename: string, mime: string | null) {
+    const ext = filename.split('.').pop()?.toLowerCase() ?? ''
+    const normalizedMime = mime?.toLowerCase() ?? ''
+    return ['py', 'pyw', 'pyi'].includes(ext) || normalizedMime === 'text/x-python' || normalizedMime === 'application/x-python-code'
 }
 
 export const KIND_ACCENT: Record<FileKind, string> = {
