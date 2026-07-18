@@ -4,8 +4,9 @@ use uuid::Uuid;
 
 use super::file_records::SharedFileRow;
 pub use super::file_records::{
-    DownloadFileRecord, FilePurgeTarget, FileRecord, FileShareRecord, NewFileRecord, NewFileShare,
-    ShareRecipientRecord, SharedFileRecord, UpdateFileContentTarget,
+    DownloadFileRecord, FileAuditRecord, FilePurgeTarget, FileRecord, FileShareRecord,
+    FileVersionRecord, NewFileRecord, NewFileShare, ShareRecipientRecord, SharedFileRecord,
+    UpdateFileContentTarget,
 };
 use super::storage::try_apply_storage_delta;
 
@@ -116,7 +117,7 @@ pub async fn get_user_file_for_download(
 ) -> Result<Option<DownloadFileRecord>, sqlx::Error> {
     sqlx::query_as::<_, DownloadFileRecord>(
         r#"
-        SELECT filename, storage_path, size_bytes
+        SELECT filename, storage_path, size_bytes, checksum
         FROM files
         WHERE id = $1
           AND (
@@ -154,7 +155,7 @@ pub async fn consume_public_file_share_for_download(
               share_download_limit IS NULL
               OR share_download_count < share_download_limit
           )
-        RETURNING filename, storage_path, size_bytes
+        RETURNING filename, storage_path, size_bytes, checksum
         "#,
     )
     .bind(share_token)
@@ -169,7 +170,7 @@ pub async fn get_user_file_for_content_update_in_tx(
 ) -> Result<Option<UpdateFileContentTarget>, sqlx::Error> {
     sqlx::query_as::<_, UpdateFileContentTarget>(
         r#"
-        SELECT storage_path, size_bytes
+        SELECT storage_path, size_bytes, checksum, encrypted_key, encryption_nonce
         FROM files
         WHERE id = $1
           AND owner_id = $2
@@ -180,6 +181,196 @@ pub async fn get_user_file_for_content_update_in_tx(
     .bind(file_id)
     .bind(user_id)
     .fetch_optional(&mut **tx)
+    .await
+}
+
+pub async fn create_file_version_snapshot_in_tx(
+    tx: &mut Transaction<'_, Postgres>,
+    file_id: Uuid,
+    target: &UpdateFileContentTarget,
+    created_by_user_id: Uuid,
+    device_label: Option<&str>,
+    action: &str,
+) -> Result<FileVersionRecord, sqlx::Error> {
+    sqlx::query_as::<_, FileVersionRecord>(
+        r#"
+        WITH next_version AS (
+            SELECT COALESCE(MAX(version_number), 0) + 1 AS version_number
+            FROM file_versions
+            WHERE file_id = $1
+        )
+        INSERT INTO file_versions (
+            file_id,
+            version_number,
+            storage_path,
+            size_bytes,
+            checksum,
+            encrypted_key,
+            encryption_nonce,
+            created_by_user_id,
+            device_label,
+            action
+        )
+        SELECT
+            $1,
+            next_version.version_number,
+            $2,
+            $3,
+            $4,
+            $5,
+            $6,
+            $7,
+            $8,
+            $9
+        FROM next_version
+        RETURNING id, file_id, version_number, size_bytes, checksum, device_label, action, created_at
+        "#,
+    )
+    .bind(file_id)
+    .bind(&target.storage_path)
+    .bind(target.size_bytes)
+    .bind(&target.checksum)
+    .bind(&target.encrypted_key)
+    .bind(&target.encryption_nonce)
+    .bind(created_by_user_id)
+    .bind(device_label)
+    .bind(action)
+    .fetch_one(&mut **tx)
+    .await
+}
+
+pub async fn list_user_file_versions(
+    pool: &PgPool,
+    user_id: Uuid,
+    file_id: Uuid,
+) -> Result<Vec<FileVersionRecord>, sqlx::Error> {
+    sqlx::query_as::<_, FileVersionRecord>(
+        r#"
+        SELECT
+            fv.id,
+            fv.file_id,
+            fv.version_number,
+            fv.size_bytes,
+            fv.checksum,
+            fv.device_label,
+            fv.action,
+            fv.created_at
+        FROM file_versions fv
+        JOIN files f ON f.id = fv.file_id
+        WHERE fv.file_id = $1
+          AND f.owner_id = $2
+        ORDER BY fv.version_number DESC
+        "#,
+    )
+    .bind(file_id)
+    .bind(user_id)
+    .fetch_all(pool)
+    .await
+}
+
+pub async fn restore_user_file_version(
+    pool: &PgPool,
+    user_id: Uuid,
+    file_id: Uuid,
+    version_id: Uuid,
+    device_label: Option<&str>,
+) -> Result<Option<FileRecord>, sqlx::Error> {
+    let mut tx = pool.begin().await?;
+
+    let current = get_user_file_for_content_update_in_tx(&mut tx, user_id, file_id).await?;
+    let Some(current) = current else {
+        tx.commit().await?;
+        return Ok(None);
+    };
+
+    let version = sqlx::query_as::<_, UpdateFileContentTarget>(
+        r#"
+        SELECT storage_path, size_bytes, checksum, encrypted_key, encryption_nonce
+        FROM file_versions
+        WHERE id = $1
+          AND file_id = $2
+        FOR UPDATE
+        "#,
+    )
+    .bind(version_id)
+    .bind(file_id)
+    .fetch_optional(&mut *tx)
+    .await?;
+
+    let Some(version) = version else {
+        tx.commit().await?;
+        return Ok(None);
+    };
+
+    create_file_version_snapshot_in_tx(
+        &mut tx,
+        file_id,
+        &current,
+        user_id,
+        device_label,
+        "restore-snapshot",
+    )
+    .await?;
+
+    let restored = update_user_file_content(
+        &mut tx,
+        user_id,
+        file_id,
+        version.storage_path,
+        version.size_bytes,
+        version.encrypted_key,
+        version.encryption_nonce,
+        version.checksum,
+    )
+    .await?;
+
+    tx.commit().await?;
+
+    Ok(restored)
+}
+
+pub async fn insert_file_audit_log(
+    pool: &PgPool,
+    user_id: Uuid,
+    action: &str,
+    file_id: Uuid,
+    device_label: Option<&str>,
+) -> Result<(), sqlx::Error> {
+    sqlx::query(
+        r#"
+        INSERT INTO audit_logs (user_id, action, resource_id, resource_type, device_label)
+        VALUES ($1, $2, $3, 'file', $4)
+        "#,
+    )
+    .bind(user_id)
+    .bind(action)
+    .bind(file_id)
+    .bind(device_label)
+    .execute(pool)
+    .await?;
+
+    Ok(())
+}
+
+pub async fn list_user_file_audit_logs(
+    pool: &PgPool,
+    user_id: Uuid,
+    file_id: Uuid,
+) -> Result<Vec<FileAuditRecord>, sqlx::Error> {
+    sqlx::query_as::<_, FileAuditRecord>(
+        r#"
+        SELECT id, action, resource_id, resource_type, device_label, created_at
+        FROM audit_logs
+        WHERE user_id = $1
+          AND resource_type = 'file'
+          AND resource_id = $2
+        ORDER BY created_at DESC
+        LIMIT 100
+        "#,
+    )
+    .bind(user_id)
+    .bind(file_id)
+    .fetch_all(pool)
     .await
 }
 
@@ -547,6 +738,22 @@ pub async fn list_expired_deleted_files(
     .await
 }
 
+pub async fn list_file_version_storage_paths(
+    pool: &PgPool,
+    file_id: Uuid,
+) -> Result<Vec<String>, sqlx::Error> {
+    sqlx::query_scalar::<_, String>(
+        r#"
+        SELECT storage_path
+        FROM file_versions
+        WHERE file_id = $1
+        "#,
+    )
+    .bind(file_id)
+    .fetch_all(pool)
+    .await
+}
+
 pub async fn hard_delete_file_record(pool: &PgPool, file_id: Uuid) -> Result<u64, sqlx::Error> {
     let result = sqlx::query(
         r#"
@@ -618,7 +825,7 @@ pub async fn update_user_file_content(
     size_bytes: i64,
     encrypted_key: Vec<u8>,
     encryption_nonce: Vec<u8>,
-    checksum: String,
+    checksum: Option<String>,
 ) -> Result<Option<FileRecord>, sqlx::Error> {
     sqlx::query_as::<_, FileRecord>(
         r#"
@@ -649,7 +856,7 @@ pub async fn update_user_file_content(
             EXISTS (
                 SELECT 1
                 FROM favorites fav
-                WHERE fav.user_id = $6
+                WHERE fav.user_id = $7
                   AND fav.file_id = files.id
             ) AS is_favourite,
             encrypted_key,

@@ -2,8 +2,10 @@ import type {
   CalendarEntry,
   CurrentUser,
   File,
+  FileAudit,
   FileShare,
   FileSharePermission,
+  FileVersion,
   Folder,
   Group,
   GroupInvite,
@@ -237,6 +239,32 @@ export const fileShare: Validator<FileShare> = (value, path) => {
   }
 }
 
+export const fileVersion: Validator<FileVersion> = (value, path) => {
+  const item = object(value, path)
+  return {
+    id: string(prop(item, 'id', path), `${path}.id`),
+    file_id: string(prop(item, 'file_id', path), `${path}.file_id`),
+    version_number: number(prop(item, 'version_number', path), `${path}.version_number`),
+    size_bytes: number(prop(item, 'size_bytes', path), `${path}.size_bytes`),
+    checksum: nullableString(prop(item, 'checksum', path), `${path}.checksum`),
+    device_label: nullableString(prop(item, 'device_label', path), `${path}.device_label`),
+    action: string(prop(item, 'action', path), `${path}.action`),
+    created_at: string(prop(item, 'created_at', path), `${path}.created_at`),
+  }
+}
+
+export const fileAudit: Validator<FileAudit> = (value, path) => {
+  const item = object(value, path)
+  return {
+    id: string(prop(item, 'id', path), `${path}.id`),
+    action: string(prop(item, 'action', path), `${path}.action`),
+    resource_id: nullableString(prop(item, 'resource_id', path), `${path}.resource_id`),
+    resource_type: nullableString(prop(item, 'resource_type', path), `${path}.resource_type`),
+    device_label: nullableString(prop(item, 'device_label', path), `${path}.device_label`),
+    created_at: string(prop(item, 'created_at', path), `${path}.created_at`),
+  }
+}
+
 export const folder: Validator<Folder> = (value, path) => {
   const item = object(value, path)
   return {
@@ -313,6 +341,8 @@ export const calendarEntry: Validator<CalendarEntry> = (value, path) => {
 export const files = arrayOf(file)
 export const sharedFiles = arrayOf(sharedFile)
 export const fileShares = arrayOf(fileShare)
+export const fileVersions = arrayOf(fileVersion)
+export const fileActivity = arrayOf(fileAudit)
 export const folders = arrayOf(folder)
 export const groups = arrayOf(group)
 export const groupShareRecipients = arrayOf(groupShareRecipient)

@@ -137,6 +137,26 @@ export type FileShare = {
   "created_at": string
 }
 
+export type FileVersion = {
+  "id": string
+  "file_id": string
+  "version_number": number
+  "size_bytes": number
+  "checksum": string | null
+  "device_label": string | null
+  "action": string
+  "created_at": string
+}
+
+export type FileAudit = {
+  "id": string
+  "action": string
+  "resource_id": string | null
+  "resource_type": string | null
+  "device_label": string | null
+  "created_at": string
+}
+
 export type Folder = {
   "id": string
   "name": string
@@ -262,4 +282,3 @@ export type FileContentUpdateRequest = {
   "encryption_nonce": string
   "file": string
 }
-

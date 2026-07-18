@@ -2,8 +2,10 @@ import { authenticatedFetch, getValidAccessToken } from './auth'
 import { apiFetch } from './http'
 import type {
     File as ApiFile,
+    FileAudit,
     FileShare as FileSharePerson,
     FileSharePermission,
+    FileVersion,
     Folder as ApiFolder,
     ShareRecipient as FileShareRecipient,
     SharedFile,
@@ -11,8 +13,10 @@ import type {
 } from './generated'
 import {
     file,
+    fileActivity,
     fileShare,
     fileShares,
+    fileVersions,
     files,
     folder,
     folders,
@@ -37,9 +41,11 @@ async function parseErrorMessage(response: Response): Promise<string> {
 export type {
     ApiFile,
     ApiFolder,
+    FileAudit,
     FileSharePermission,
     FileSharePerson,
     FileShareRecipient,
+    FileVersion,
     SharedFile,
     StorageQuota,
 }
@@ -223,6 +229,30 @@ export async function restoreFile(id: string): Promise<void> {
     if (!res.ok) throw new Error(await parseErrorMessage(res))
 }
 
+export async function listFileVersions(id: string): Promise<FileVersion[]> {
+    const res = await authenticatedFetch(`${API_BASE}files/${id}/versions`, {
+        method: 'GET',
+    })
+    if (!res.ok) throw new Error(await parseErrorMessage(res))
+    return readJson(res, fileVersions, 'FileVersion[]')
+}
+
+export async function restoreFileVersion(id: string, versionId: string): Promise<ApiFile> {
+    const res = await authenticatedFetch(`${API_BASE}files/${id}/versions/${versionId}/restore`, {
+        method: 'POST',
+    })
+    if (!res.ok) throw new Error(await parseErrorMessage(res))
+    return readJson(res, file, 'File')
+}
+
+export async function listFileActivity(id: string): Promise<FileAudit[]> {
+    const res = await authenticatedFetch(`${API_BASE}files/${id}/activity`, {
+        method: 'GET',
+    })
+    if (!res.ok) throw new Error(await parseErrorMessage(res))
+    return readJson(res, fileActivity, 'FileAudit[]')
+}
+
 export async function permanentlyDeleteFile(id: string): Promise<void> {
     const res = await authenticatedFetch(`${API_BASE}files/${id}/permanent`, {
         method: 'DELETE',
@@ -337,9 +367,26 @@ export async function downloadFile(id: string): Promise<Blob> {
     return res.blob()
 }
 
+export type VerifiedDownload = {
+    blob: Blob
+    checksum: string | null
+}
+
+export async function downloadFileWithIntegrity(id: string): Promise<VerifiedDownload> {
+    const res = await authenticatedRequest(`${API_BASE}files/${id}/download`, {
+        method: 'GET',
+    })
+    if (!res.ok) throw new Error(await parseErrorMessage(res))
+    return {
+        blob: await res.blob(),
+        checksum: res.headers.get('x-skysyncr-sha256'),
+    }
+}
+
 export type PublicDownload = {
     blob: Blob
     filename: string
+    checksum: string | null
 }
 
 export async function downloadPublicFile(shareToken: string): Promise<PublicDownload> {
@@ -351,6 +398,7 @@ export async function downloadPublicFile(shareToken: string): Promise<PublicDown
     return {
         blob: await res.blob(),
         filename: filenameFromContentDisposition(res.headers.get('content-disposition')) ?? 'download.bin',
+        checksum: res.headers.get('x-skysyncr-sha256'),
     }
 }
 

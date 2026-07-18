@@ -16,7 +16,7 @@ type PersistedActivePrivateKeySession = ActivePrivateKeySession & {
 }
 
 let activePrivateKeySession: ActivePrivateKeySession | null = null
-let idleTimeoutId: ReturnType<typeof setTimeout> | null = null
+let idleTimeoutId: number | null = null
 let lifecycleListenersInstalled = false
 
 function activePrivateKeyStorageKey(userId: string): string {

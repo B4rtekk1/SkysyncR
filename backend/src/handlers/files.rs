@@ -4,7 +4,7 @@ use axum::{
     extract::{Extension, Multipart, Path, Query, State},
     http::{
         HeaderMap, HeaderValue, StatusCode,
-        header::{CONTENT_DISPOSITION, CONTENT_TYPE},
+        header::{CONTENT_DISPOSITION, CONTENT_TYPE, USER_AGENT},
     },
     response::{IntoResponse, Response},
 };
@@ -22,11 +22,12 @@ use crate::auth::AuthUser;
 use crate::db::files::{
     FileRecord, FileShareRecord, NewFileRecord, NewFileShare, ShareRecipientRecord,
     SharedFileRecord, add_user_file_favourite, consume_public_file_share_for_download,
-    create_file_record, delete_user_file_share, folder_belongs_to_user, get_file_share_recipient,
-    get_user_file_for_content_update_in_tx, get_user_file_for_download,
-    list_files_shared_with_user, list_user_file_shares, list_user_files,
-    remove_user_file_favourite, rename_user_file, restore_user_file, soft_delete_user_file,
-    update_user_file_content, update_user_file_note, update_user_file_share,
+    create_file_record, create_file_version_snapshot_in_tx, delete_user_file_share,
+    folder_belongs_to_user, get_file_share_recipient, get_user_file_for_content_update_in_tx,
+    get_user_file_for_download, insert_file_audit_log, list_files_shared_with_user,
+    list_user_file_audit_logs, list_user_file_shares, list_user_file_versions, list_user_files,
+    remove_user_file_favourite, rename_user_file, restore_user_file, restore_user_file_version,
+    soft_delete_user_file, update_user_file_content, update_user_file_note, update_user_file_share,
     upsert_user_file_share, user_file_exists,
 };
 use crate::db::storage::try_apply_storage_delta;
@@ -110,6 +111,7 @@ pub async fn list_files(
 pub async fn upload_file(
     State(state): State<AppState>,
     Extension(request_id): Extension<RequestId>,
+    headers: HeaderMap,
     auth: AuthUser,
     multipart: Multipart,
 ) -> Result<(StatusCode, Json<FileRecord>), ApiError> {
@@ -199,11 +201,21 @@ pub async fn upload_file(
         "file_transfer"
     );
 
+    log_file_audit(
+        &state,
+        auth.user_id,
+        "file.upload",
+        record.id,
+        device_label_from_headers(&headers).as_deref(),
+    )
+    .await;
+
     Ok((StatusCode::CREATED, Json(record)))
 }
 
 pub async fn soft_delete_file(
     State(state): State<AppState>,
+    headers: HeaderMap,
     auth: AuthUser,
     Path(file_id): Path<Uuid>,
 ) -> Result<StatusCode, ApiError> {
@@ -215,11 +227,21 @@ pub async fn soft_delete_file(
         return Err(ApiError::BadRequest("File not found".into()));
     }
 
+    log_file_audit(
+        &state,
+        auth.user_id,
+        "file.delete",
+        file_id,
+        device_label_from_headers(&headers).as_deref(),
+    )
+    .await;
+
     Ok(StatusCode::NO_CONTENT)
 }
 
 pub async fn restore_file(
     State(state): State<AppState>,
+    headers: HeaderMap,
     auth: AuthUser,
     Path(file_id): Path<Uuid>,
 ) -> Result<StatusCode, ApiError> {
@@ -230,6 +252,15 @@ pub async fn restore_file(
     if rows == 0 {
         return Err(ApiError::BadRequest("File not found".into()));
     }
+
+    log_file_audit(
+        &state,
+        auth.user_id,
+        "file.restore",
+        file_id,
+        device_label_from_headers(&headers).as_deref(),
+    )
+    .await;
 
     Ok(StatusCode::NO_CONTENT)
 }
@@ -252,6 +283,7 @@ pub async fn permanent_delete_file(
 
 pub async fn rename_file(
     State(state): State<AppState>,
+    headers: HeaderMap,
     auth: AuthUser,
     Path(file_id): Path<Uuid>,
     Json(payload): Json<RenameFileRequest>,
@@ -262,12 +294,22 @@ pub async fn rename_file(
         .map_err(|e| internal_error("rename file", e))?
         .ok_or_else(|| ApiError::BadRequest("File not found".into()))?;
 
+    log_file_audit(
+        &state,
+        auth.user_id,
+        "file.rename",
+        file_id,
+        device_label_from_headers(&headers).as_deref(),
+    )
+    .await;
+
     Ok(Json(file))
 }
 
 pub async fn update_file_content(
     State(state): State<AppState>,
     Extension(request_id): Extension<RequestId>,
+    headers: HeaderMap,
     auth: AuthUser,
     Path(file_id): Path<Uuid>,
     multipart: Multipart,
@@ -328,6 +370,21 @@ pub async fn update_file_content(
         return Err(internal_error("promote updated file", err));
     }
 
+    let device_label = device_label_from_headers(&headers);
+    create_file_version_snapshot_in_tx(
+        &mut tx,
+        file_id,
+        &target,
+        auth.user_id,
+        device_label.as_deref(),
+        "update",
+    )
+    .await
+    .map_err(|e| {
+        let _ = std::fs::remove_file(&new_storage_path);
+        internal_error("create file version", e)
+    })?;
+
     let file = update_user_file_content(
         &mut tx,
         auth.user_id,
@@ -336,7 +393,7 @@ pub async fn update_file_content(
         file_size,
         payload.encrypted_key,
         payload.encryption_nonce,
-        payload.checksum,
+        Some(payload.checksum),
     )
     .await
     .map_err(|e| {
@@ -353,17 +410,6 @@ pub async fn update_file_content(
         return Err(internal_error("commit file update transaction", err));
     }
 
-    if let Err(err) = fs::remove_file(&target.storage_path).await {
-        if err.kind() != std::io::ErrorKind::NotFound {
-            tracing::warn!(
-                error = %err,
-                storage_path = %target.storage_path,
-                file_id = %file.id,
-                "failed to remove previous file blob after content update"
-            );
-        }
-    }
-
     tracing::info!(
         request_id = %request_id.0,
         transfer_direction = "update",
@@ -373,7 +419,72 @@ pub async fn update_file_content(
         "file_transfer"
     );
 
+    log_file_audit(
+        &state,
+        auth.user_id,
+        "file.update",
+        file.id,
+        device_label.as_deref(),
+    )
+    .await;
+
     Ok(Json(file))
+}
+
+pub async fn list_file_versions(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Path(file_id): Path<Uuid>,
+) -> Result<Json<Vec<crate::db::files::FileVersionRecord>>, ApiError> {
+    ensure_user_file_exists(&state, auth.user_id, file_id).await?;
+    let versions = list_user_file_versions(&state.db_pool, auth.user_id, file_id)
+        .await
+        .map_err(|e| internal_error("list file versions", e))?;
+
+    Ok(Json(versions))
+}
+
+pub async fn restore_file_version(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    auth: AuthUser,
+    Path((file_id, version_id)): Path<(Uuid, Uuid)>,
+) -> Result<Json<FileRecord>, ApiError> {
+    let device_label = device_label_from_headers(&headers);
+    let file = restore_user_file_version(
+        &state.db_pool,
+        auth.user_id,
+        file_id,
+        version_id,
+        device_label.as_deref(),
+    )
+    .await
+    .map_err(|e| internal_error("restore file version", e))?
+    .ok_or_else(|| ApiError::BadRequest("File version not found".into()))?;
+
+    log_file_audit(
+        &state,
+        auth.user_id,
+        "file.version.restore",
+        file_id,
+        device_label.as_deref(),
+    )
+    .await;
+
+    Ok(Json(file))
+}
+
+pub async fn list_file_activity(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Path(file_id): Path<Uuid>,
+) -> Result<Json<Vec<crate::db::files::FileAuditRecord>>, ApiError> {
+    ensure_user_file_exists(&state, auth.user_id, file_id).await?;
+    let logs = list_user_file_audit_logs(&state.db_pool, auth.user_id, file_id)
+        .await
+        .map_err(|e| internal_error("list file activity", e))?;
+
+    Ok(Json(logs))
 }
 
 pub async fn share_file(
@@ -622,6 +733,11 @@ pub async fn download_file(
     if let Ok(value) = HeaderValue::from_str(&file.size_bytes.to_string()) {
         headers.insert(axum::http::header::CONTENT_LENGTH, value);
     }
+    if let Some(checksum) = file.checksum.as_deref() {
+        if let Ok(value) = HeaderValue::from_str(checksum) {
+            headers.insert("x-skysyncr-sha256", value);
+        }
+    }
     let disposition = format!(
         "attachment; filename=\"{}\"",
         sanitize_download_filename(&file.filename)
@@ -666,6 +782,11 @@ pub async fn download_public_file(
     );
     if let Ok(value) = HeaderValue::from_str(&file.size_bytes.to_string()) {
         headers.insert(axum::http::header::CONTENT_LENGTH, value);
+    }
+    if let Some(checksum) = file.checksum.as_deref() {
+        if let Ok(value) = HeaderValue::from_str(checksum) {
+            headers.insert("x-skysyncr-sha256", value);
+        }
     }
     let disposition = format!(
         "attachment; filename=\"{}\"",
@@ -972,5 +1093,34 @@ fn sanitize_download_filename(filename: &str) -> String {
         "download.bin".into()
     } else {
         sanitized
+    }
+}
+
+fn device_label_from_headers(headers: &HeaderMap) -> Option<String> {
+    headers
+        .get(USER_AGENT)
+        .and_then(|value| value.to_str().ok())
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(|value| value.chars().take(256).collect())
+}
+
+async fn log_file_audit(
+    state: &AppState,
+    user_id: Uuid,
+    action: &str,
+    file_id: Uuid,
+    device_label: Option<&str>,
+) {
+    if let Err(err) =
+        insert_file_audit_log(&state.db_pool, user_id, action, file_id, device_label).await
+    {
+        tracing::warn!(
+            error = %err,
+            user_id = %user_id,
+            file_id = %file_id,
+            action,
+            "failed to write file audit log"
+        );
     }
 }

@@ -8,9 +8,10 @@ use tower_http::timeout::TimeoutLayer;
 
 use crate::handlers::files::{
     add_file_favourite, create_file_share, delete_file_share, download_file, download_public_file,
-    get_file_share_recipient_profile, list_file_shares, list_files, list_shared_files_with_me,
-    permanent_delete_file, remove_file_favourite, rename_file, restore_file, share_file,
-    soft_delete_file, update_file_content, update_file_note, upload_file,
+    get_file_share_recipient_profile, list_file_activity, list_file_shares, list_file_versions,
+    list_files, list_shared_files_with_me, permanent_delete_file, remove_file_favourite,
+    rename_file, restore_file, restore_file_version, share_file, soft_delete_file,
+    update_file_content, update_file_note, upload_file,
 };
 use crate::state::AppState;
 
@@ -27,6 +28,12 @@ pub fn files_routes(
         .route("/share/{token}/download", get(download_public_file))
         .route("/files/{id}/download", get(download_file))
         .route("/files/{id}/content", put(update_file_content))
+        .route("/files/{id}/versions", get(list_file_versions))
+        .route(
+            "/files/{id}/versions/{version_id}/restore",
+            post(restore_file_version),
+        )
+        .route("/files/{id}/activity", get(list_file_activity))
         .route("/files/{id}/note", put(update_file_note))
         .route("/files/{id}/share", put(share_file))
         .route(

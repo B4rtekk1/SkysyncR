@@ -55,6 +55,28 @@ pub struct FileShareRecord {
 }
 
 #[derive(FromRow, Serialize)]
+pub struct FileVersionRecord {
+    pub id: Uuid,
+    pub file_id: Uuid,
+    pub version_number: i32,
+    pub size_bytes: i64,
+    pub checksum: Option<String>,
+    pub device_label: Option<String>,
+    pub action: String,
+    pub created_at: DateTime<Utc>,
+}
+
+#[derive(FromRow, Serialize)]
+pub struct FileAuditRecord {
+    pub id: Uuid,
+    pub action: String,
+    pub resource_id: Option<Uuid>,
+    pub resource_type: Option<String>,
+    pub device_label: Option<String>,
+    pub created_at: DateTime<Utc>,
+}
+
+#[derive(FromRow, Serialize)]
 pub struct ShareRecipientRecord {
     pub email: String,
     pub public_key: String,
@@ -111,12 +133,16 @@ pub struct DownloadFileRecord {
     pub filename: String,
     pub storage_path: String,
     pub size_bytes: i64,
+    pub checksum: Option<String>,
 }
 
 #[derive(FromRow)]
 pub struct UpdateFileContentTarget {
     pub storage_path: String,
     pub size_bytes: i64,
+    pub checksum: Option<String>,
+    pub encrypted_key: Vec<u8>,
+    pub encryption_nonce: Vec<u8>,
 }
 
 #[derive(FromRow)]

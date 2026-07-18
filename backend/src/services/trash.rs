@@ -5,7 +5,7 @@ use uuid::Uuid;
 
 use crate::db::files::{
     FilePurgeTarget, get_user_file_for_permanent_delete, hard_delete_file_record,
-    list_expired_deleted_files,
+    list_expired_deleted_files, list_file_version_storage_paths,
 };
 
 const PURGE_BATCH_SIZE: i64 = 100;
@@ -97,23 +97,42 @@ async fn purge_target(
     target: FilePurgeTarget,
     defer_storage_errors: bool,
 ) -> Result<(), TrashPurgeError> {
-    match fs::remove_file(&target.storage_path).await {
+    let mut storage_paths = list_file_version_storage_paths(pool, target.id).await?;
+    storage_paths.push(target.storage_path.clone());
+    storage_paths.sort();
+    storage_paths.dedup();
+
+    for storage_path in storage_paths {
+        if !remove_storage_path(&storage_path, target.id, defer_storage_errors).await? {
+            return Ok(());
+        }
+    }
+
+    hard_delete_file_record(pool, target.id).await?;
+    Ok(())
+}
+
+async fn remove_storage_path(
+    storage_path: &str,
+    file_id: Uuid,
+    defer_storage_errors: bool,
+) -> Result<bool, TrashPurgeError> {
+    match fs::remove_file(storage_path).await {
         Ok(()) => {}
         Err(err) if err.kind() == std::io::ErrorKind::NotFound => {}
         Err(err) => {
             if defer_storage_errors {
                 tracing::error!(
-                    file_id = %target.id,
+                    file_id = %file_id,
                     error = %err,
                     "trash purge failed to remove binary"
                 );
-                return Ok(());
+                return Ok(false);
             }
 
             return Err(err.into());
         }
     }
 
-    hard_delete_file_record(pool, target.id).await?;
-    Ok(())
+    Ok(true)
 }

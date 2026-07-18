@@ -60,6 +60,10 @@ function createRequest<T>(): IDBRequest<T> {
   } as IDBRequest<T>
 }
 
+function createOpenRequest(): IDBOpenDBRequest {
+  return createRequest<IDBDatabase>() as IDBOpenDBRequest
+}
+
 function createFakeIndexedDb(): IDBFactory {
   const values = new Map<IDBValidKey, unknown>()
   const db = {
@@ -119,7 +123,7 @@ function createFakeIndexedDb(): IDBFactory {
 
   return {
     open() {
-      const req = createRequest<IDBDatabase>()
+      const req = createOpenRequest()
       queueMicrotask(() => {
         Object.defineProperty(req, 'result', { value: db, configurable: true })
         req.onupgradeneeded?.(new Event('upgradeneeded') as IDBVersionChangeEvent)
@@ -127,7 +131,7 @@ function createFakeIndexedDb(): IDBFactory {
       })
       return req
     },
-  } as IDBFactory
+  } as unknown as IDBFactory
 }
 
 const fakeWindow = new FakeWindow()
