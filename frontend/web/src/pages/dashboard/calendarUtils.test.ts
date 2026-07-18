@@ -11,23 +11,16 @@ import {
   toDateKey,
 } from './calendarUtils.ts'
 
-class FakeStorage {
-  private values = new Map<string, string>()
-
-  getItem(key: string): string | null {
-    return this.values.get(key) ?? null
-  }
-
-  setItem(key: string, value: string): void {
-    this.values.set(key, value)
-  }
-
-  clear(): void {
-    this.values.clear()
-  }
+const storageValues = new Map<string, string>()
+const storage = {
+  getItem: (key: string): string | null => storageValues.get(key) ?? null,
+  setItem: (key: string, value: string): void => {
+    storageValues.set(key, value)
+  },
+  clear: (): void => {
+    storageValues.clear()
+  },
 }
-
-const storage = new FakeStorage()
 Object.assign(globalThis, { localStorage: storage })
 
 test.beforeEach(() => {
