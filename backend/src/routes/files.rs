@@ -7,7 +7,7 @@ use tower_http::limit::RequestBodyLimitLayer;
 use tower_http::timeout::TimeoutLayer;
 
 use crate::handlers::files::{
-    add_file_favourite, create_file_share, delete_file_share, download_file,
+    add_file_favourite, create_file_share, delete_file_share, download_file, download_public_file,
     get_file_share_recipient_profile, list_file_shares, list_files, list_shared_files_with_me,
     permanent_delete_file, remove_file_favourite, rename_file, restore_file, share_file,
     soft_delete_file, update_file_content, update_file_note, upload_file,
@@ -24,6 +24,7 @@ pub fn files_routes(
     Router::new()
         .route("/files", get(list_files).post(upload_file))
         .route("/files/shared-with-me", get(list_shared_files_with_me))
+        .route("/share/{token}/download", get(download_public_file))
         .route("/files/{id}/download", get(download_file))
         .route("/files/{id}/content", put(update_file_content))
         .route("/files/{id}/note", put(update_file_note))

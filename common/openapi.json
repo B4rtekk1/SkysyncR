@@ -994,6 +994,39 @@
           }
         }
       }
+    },
+    "/share/{shareToken}/download": {
+      "get": {
+        "operationId": "downloadPublicFile",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ShareToken"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Encrypted file download",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid, expired, or exhausted share link",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -1036,6 +1069,15 @@
       },
       "ShareId": {
         "name": "shareId",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "ShareToken": {
+        "name": "shareToken",
         "in": "path",
         "required": true,
         "schema": {

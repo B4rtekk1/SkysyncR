@@ -1,8 +1,8 @@
 use chrono::{Duration, Utc};
 use skysyncr::crypto::jwt::{generate_access_token_capped, verify_access_token};
 use skysyncr::db::files::{
-    NewFileRecord, NewFileShare, create_file_record, get_user_file_for_download,
-    list_files_shared_with_user, upsert_user_file_share,
+    NewFileRecord, NewFileShare, consume_public_file_share_for_download, create_file_record,
+    get_user_file_for_download, list_files_shared_with_user, upsert_user_file_share,
 };
 use skysyncr::db::refresh_tokens::{
     RefreshTokenAuth, authenticate_refresh_token, create_refresh_token, rotate_refresh_token,
@@ -487,4 +487,65 @@ async fn file_sharing_grants_recipient_access_without_self_share() {
     .await
     .unwrap();
     assert!(self_share.is_none());
+}
+
+#[tokio::test]
+async fn public_file_share_download_consumes_limit_atomically() {
+    let (_guard, pool) = test_pool().await;
+    let owner_id = insert_user(&pool, "public-owner@example.test").await;
+    let share_token = Uuid::new_v4().to_string();
+
+    let mut tx = pool.begin().await.unwrap();
+    let file = create_file_record(
+        &mut tx,
+        NewFileRecord {
+            owner_id,
+            filename: "public.txt".to_string(),
+            storage_path: "public.txt.enc".to_string(),
+            mime_type: Some("text/plain".to_string()),
+            size_bytes: 42,
+            encrypted_key: b"owner-key".to_vec(),
+            encryption_nonce: b"nonce".to_vec(),
+            checksum: "checksum".to_string(),
+            folder_id: None,
+        },
+    )
+    .await
+    .unwrap();
+    tx.commit().await.unwrap();
+
+    sqlx::query(
+        r#"
+        UPDATE files
+        SET is_public = TRUE,
+            share_token = $2,
+            share_download_limit = 1,
+            share_download_count = 0
+        WHERE id = $1
+        "#,
+    )
+    .bind(file.id)
+    .bind(&share_token)
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let download = consume_public_file_share_for_download(&pool, &share_token)
+        .await
+        .unwrap()
+        .expect("first public download should be allowed");
+    assert_eq!(download.filename, "public.txt");
+
+    let blocked = consume_public_file_share_for_download(&pool, &share_token)
+        .await
+        .unwrap();
+    assert!(blocked.is_none());
+
+    let count =
+        sqlx::query_scalar::<_, i32>("SELECT share_download_count FROM files WHERE id = $1")
+            .bind(file.id)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(count, 1);
 }

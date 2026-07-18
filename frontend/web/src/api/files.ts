@@ -327,6 +327,30 @@ export async function downloadFile(id: string): Promise<Blob> {
     return res.blob()
 }
 
+export type PublicDownload = {
+    blob: Blob
+    filename: string
+}
+
+export async function downloadPublicFile(shareToken: string): Promise<PublicDownload> {
+    const res = await apiFetch(`${API_BASE}share/${encodeURIComponent(shareToken)}/download`, {
+        method: 'GET',
+    })
+    if (!res.ok) throw new Error(await parseErrorMessage(res))
+
+    return {
+        blob: await res.blob(),
+        filename: filenameFromContentDisposition(res.headers.get('content-disposition')) ?? 'download.bin',
+    }
+}
+
+function filenameFromContentDisposition(value: string | null): string | null {
+    if (!value) return null
+    const match = /filename="([^"]+)"/i.exec(value)
+    const filename = match?.[1]?.trim()
+    return filename || null
+}
+
 function arrayBufferToBase64(buf: ArrayBuffer | Uint8Array): string {
     return btoa(String.fromCharCode(...new Uint8Array(buf)))
 }

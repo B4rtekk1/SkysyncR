@@ -21,11 +21,12 @@ use uuid::Uuid;
 use crate::auth::AuthUser;
 use crate::db::files::{
     FileRecord, FileShareRecord, NewFileRecord, NewFileShare, ShareRecipientRecord,
-    SharedFileRecord, add_user_file_favourite, create_file_record, delete_user_file_share,
-    folder_belongs_to_user, get_file_share_recipient, get_user_file_for_content_update_in_tx,
-    get_user_file_for_download, list_files_shared_with_user, list_user_file_shares,
-    list_user_files, remove_user_file_favourite, rename_user_file, restore_user_file,
-    soft_delete_user_file, update_user_file_content, update_user_file_note, update_user_file_share,
+    SharedFileRecord, add_user_file_favourite, consume_public_file_share_for_download,
+    create_file_record, delete_user_file_share, folder_belongs_to_user, get_file_share_recipient,
+    get_user_file_for_content_update_in_tx, get_user_file_for_download,
+    list_files_shared_with_user, list_user_file_shares, list_user_files,
+    remove_user_file_favourite, rename_user_file, restore_user_file, soft_delete_user_file,
+    update_user_file_content, update_user_file_note, update_user_file_share,
     upsert_user_file_share, user_file_exists,
 };
 use crate::db::storage::try_apply_storage_delta;
@@ -517,6 +518,12 @@ fn validate_share_download_limit(limit: i32) -> Result<i32, ApiError> {
     Ok(limit)
 }
 
+fn validate_share_token(value: &str) -> Result<String, ApiError> {
+    let trimmed = value.trim();
+    Uuid::parse_str(trimmed).map_err(|_| ApiError::BadRequest("Invalid share token".into()))?;
+    Ok(trimmed.to_string())
+}
+
 fn normalize_share_email(value: &str) -> Result<String, ApiError> {
     let email = value.trim().to_lowercase();
     crate::utils::validation::validate_email(&email)
@@ -630,6 +637,50 @@ pub async fn download_file(
         transfer_direction = "download",
         user_id = %auth.user_id,
         file_id = %file_id,
+        bytes = file.size_bytes,
+        "file_transfer"
+    );
+
+    Ok((headers, Body::from_stream(ReaderStream::new(download))).into_response())
+}
+
+pub async fn download_public_file(
+    State(state): State<AppState>,
+    Extension(request_id): Extension<RequestId>,
+    Path(share_token): Path<String>,
+) -> Result<Response, ApiError> {
+    let share_token = validate_share_token(&share_token)?;
+    let file = consume_public_file_share_for_download(&state.db_pool, &share_token)
+        .await
+        .map_err(|e| internal_error("get public download file", e))?
+        .ok_or_else(|| ApiError::BadRequest("This share link is invalid or has expired".into()))?;
+
+    let download = fs::File::open(&file.storage_path)
+        .await
+        .map_err(|e| internal_error("open public download file", e))?;
+
+    let mut headers = HeaderMap::new();
+    headers.insert(
+        CONTENT_TYPE,
+        HeaderValue::from_static("application/octet-stream"),
+    );
+    if let Ok(value) = HeaderValue::from_str(&file.size_bytes.to_string()) {
+        headers.insert(axum::http::header::CONTENT_LENGTH, value);
+    }
+    let disposition = format!(
+        "attachment; filename=\"{}\"",
+        sanitize_download_filename(&file.filename)
+    );
+    headers.insert(
+        CONTENT_DISPOSITION,
+        HeaderValue::from_str(&disposition)
+            .unwrap_or_else(|_| HeaderValue::from_static("attachment")),
+    );
+
+    tracing::info!(
+        request_id = %request_id.0,
+        transfer_direction = "public_download",
+        share_token = %share_token,
         bytes = file.size_bytes,
         "file_transfer"
     );

@@ -137,6 +137,31 @@ pub async fn get_user_file_for_download(
     .await
 }
 
+pub async fn consume_public_file_share_for_download(
+    pool: &PgPool,
+    share_token: &str,
+) -> Result<Option<DownloadFileRecord>, sqlx::Error> {
+    sqlx::query_as::<_, DownloadFileRecord>(
+        r#"
+        UPDATE files
+        SET share_download_count = share_download_count + 1,
+            updated_at = NOW()
+        WHERE share_token = $1
+          AND is_public = TRUE
+          AND is_deleted = FALSE
+          AND (share_expires_at IS NULL OR share_expires_at > NOW())
+          AND (
+              share_download_limit IS NULL
+              OR share_download_count < share_download_limit
+          )
+        RETURNING filename, storage_path, size_bytes
+        "#,
+    )
+    .bind(share_token)
+    .fetch_optional(pool)
+    .await
+}
+
 pub async fn get_user_file_for_content_update_in_tx(
     tx: &mut Transaction<'_, Postgres>,
     user_id: Uuid,

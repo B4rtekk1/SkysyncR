@@ -8,6 +8,7 @@ import ResetPassword from './pages/ResetPassword'
 import VerifyEmail from "./pages/VerifyUser";
 import Dashboard from './pages/Dashboard'
 import NotFound from './pages/NotFound'
+import PublicShare from './pages/PublicShare'
 import {getUnlockedVaultSession} from './api/session'
 
 function LandingRoute() {
@@ -43,6 +44,7 @@ function App() {
             <Route path="/forgot-password" element={<ForgotPassword/>}/>
             <Route path="/reset-password" element={<ResetPassword/>}/>
             <Route path="/verify" element={<VerifyEmail/>}/>
+            <Route path="/share/:token" element={<PublicShare/>}/>
             <Route path="/dashboard" element={<Dashboard/>}/>
             <Route path="*" element={<NotFound/>}/>
         </Routes>
