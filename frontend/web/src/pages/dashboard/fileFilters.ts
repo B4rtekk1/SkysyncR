@@ -1,4 +1,4 @@
-import { kindFromFile } from './fileUtils'
+import { kindFromFile } from './fileUtils.ts'
 import type { FileFilters, FileSortKey, FileTypeFilterKey, FileVisibilityFilterKey, Item } from './types'
 
 export const FILE_SORT_LABELS: Record<FileSortKey, string> = {
