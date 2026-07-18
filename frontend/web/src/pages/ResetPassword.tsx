@@ -18,22 +18,20 @@ function tokenFromLocation(): string {
 
 function ResetPassword() {
   const navigate = useNavigate()
-  const token = useMemo(tokenFromLocation, [])
+  const token = useMemo(() => tokenFromLocation(), [])
   const [userId, setUserId] = useState('')
   const [recoveryBlob, setRecoveryBlob] = useState<EncryptedPrivateKey | null>(null)
   const [recoveryKey, setRecoveryKey] = useState('')
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
-  const [loadingBlob, setLoadingBlob] = useState(true)
+  const [loadingBlob, setLoadingBlob] = useState(() => Boolean(token))
   const [saving, setSaving] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(() => (token ? null : 'Reset token is missing.'))
 
   useEffect(() => {
     let active = true
 
     if (!token) {
-      setError('Reset token is missing.')
-      setLoadingBlob(false)
       return
     }
 
