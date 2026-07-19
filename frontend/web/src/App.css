@@ -349,6 +349,20 @@ html[data-theme='light'] {
   margin-top: 22px;
 }
 
+.register-popup__action + .register-popup__action {
+  margin-top: 10px;
+}
+
+.register-popup__status {
+  margin-top: 12px !important;
+  color: var(--signal) !important;
+  font-size: 0.82rem !important;
+}
+
+.register-popup__status--error {
+  color: var(--amber) !important;
+}
+
 .not-found-page {
   background:
     linear-gradient(135deg, rgba(var(--signal-rgb), 0.1), transparent 36%),

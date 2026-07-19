@@ -14,17 +14,17 @@ pub fn init_tracing() {
     let env_filter =
         EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(DEFAULT_LOG_FILTER));
 
-    let format = std::env::var("LOG_FORMAT").unwrap_or_else(|_| "json".to_string());
-
-    if format.eq_ignore_ascii_case("pretty") {
-        tracing_subscriber::fmt()
-            .with_env_filter(env_filter)
-            .with_target(true)
-            .with_file(true)
-            .with_line_number(true)
-            .with_thread_ids(true)
-            .init();
+    let default_format = if std::env::var("APP_ENV")
+        .map(|value| value == "production" || value == "prod")
+        .unwrap_or(false)
+    {
+        "json"
     } else {
+        "pretty"
+    };
+    let format = std::env::var("LOG_FORMAT").unwrap_or_else(|_| default_format.to_string());
+
+    if format.eq_ignore_ascii_case("json") {
         tracing_subscriber::fmt()
             .json()
             .with_env_filter(env_filter)
@@ -34,6 +34,15 @@ pub fn init_tracing() {
             .with_file(true)
             .with_line_number(true)
             .with_thread_ids(true)
+            .init();
+    } else {
+        tracing_subscriber::fmt()
+            .with_env_filter(env_filter)
+            .compact()
+            .with_target(false)
+            .with_file(false)
+            .with_line_number(false)
+            .with_thread_ids(false)
             .init();
     }
 }

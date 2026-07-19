@@ -2,7 +2,7 @@ import { type SubmitEvent, useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { clearTokens } from '../../api/auth.ts'
 import { getUnlockedVaultSession } from '../../api/session.ts'
-import { ApiRequestError, getCurrentUser, loginUser } from '../../api/users.ts'
+import { ApiRequestError, getCurrentUser, loginUser, resendVerificationEmail } from '../../api/users.ts'
 import { isNetworkError } from '../../api/http.ts'
 import { decryptPrivateKey } from '../../crypto/keys'
 import { loadEncryptedPrivateKey, storeActivePrivateKey } from '../../crypto/storage'
@@ -13,6 +13,7 @@ type LoginError = {
   message: string
   action?: string
   field?: 'email' | 'password'
+  canResendVerification?: boolean
 }
 
 function messageFromError(err: unknown): string {
@@ -27,6 +28,7 @@ function LoginForm() {
   const [password, setPassword] = useState('')
   const [remember, setRemember] = useState(true)
   const [loading, setLoading] = useState(false)
+  const [resendStatus, setResendStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle')
   const [error, setError] = useState<LoginError | null>(null)
   const [showPassword, setShowPassword] = useState(false)
 
@@ -115,7 +117,8 @@ function LoginForm() {
         return {
           title: 'Email is not verified',
           message: 'Verify this email address before signing in.',
-          action: 'Open the verification link from your email inbox.',
+          action: 'Open the verification link from your email inbox or send a new one.',
+          canResendVerification: true,
           field: 'email',
         }
       }
@@ -146,6 +149,7 @@ function LoginForm() {
   async function handleSubmit(e: SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
     setError(null)
+    setResendStatus('idle')
 
     const validationError = validateForm()
     if (validationError) {
@@ -197,6 +201,19 @@ function LoginForm() {
       setError(getLoginError(err))
     } finally {
       setLoading(false)
+    }
+  }
+
+  async function resendVerification() {
+    const normalizedEmail = email.trim().toLowerCase()
+    if (!normalizedEmail || resendStatus === 'sending') return
+
+    setResendStatus('sending')
+    try {
+      await resendVerificationEmail(normalizedEmail)
+      setResendStatus('sent')
+    } catch {
+      setResendStatus('error')
     }
   }
 
@@ -278,6 +295,20 @@ function LoginForm() {
                 <strong>{error.title}</strong>
                 <span>{error.message}</span>
                 {error.action && <small>{error.action}</small>}
+                {error.canResendVerification && (
+                    <>
+                      <button
+                          type="button"
+                          className="auth-form__inline-action"
+                          onClick={() => void resendVerification()}
+                          disabled={resendStatus === 'sending'}
+                      >
+                        {resendStatus === 'sending' ? 'Sending...' : 'Send email again'}
+                      </button>
+                      {resendStatus === 'sent' && <small>A new verification link has been sent.</small>}
+                      {resendStatus === 'error' && <small>Could not send the email. Try again.</small>}
+                    </>
+                )}
               </div>
           )}
 

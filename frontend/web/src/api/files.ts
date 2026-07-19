@@ -288,11 +288,11 @@ export async function updateFileContent(params: {
     id: string
     encryptedFile: Blob | ReadableStream<Uint8Array>
     originalFilename: string
-    wrappedKey: ArrayBuffer | Uint8Array
+    wrappedKey: ArrayBuffer | Uint8Array | string
     encryptionNonce: ArrayBuffer | Uint8Array
 }): Promise<ApiFile> {
     const res = await authenticatedMultipartStream(`${API_BASE}files/${params.id}/content`, [
-        textPart('encrypted_key', arrayBufferToBase64(params.wrappedKey)),
+        textPart('encrypted_key', typeof params.wrappedKey === 'string' ? params.wrappedKey : arrayBufferToBase64(params.wrappedKey)),
         textPart('encryption_nonce', arrayBufferToBase64(params.encryptionNonce)),
         streamPart('file', params.encryptedFile, params.originalFilename, 'application/octet-stream'),
     ], 'PUT')

@@ -137,6 +137,33 @@ pub async fn verify_email_token(pool: &PgPool, token: &str) -> Result<bool, sqlx
     Ok(result.is_some())
 }
 
+pub async fn set_verification_token(
+    pool: &PgPool,
+    email: &str,
+    verification_ttl_hours: i64,
+) -> Result<Option<String>, sqlx::Error> {
+    let token = generate_verification_token();
+    let token_hash = hash_verification_token(&token);
+    let result = sqlx::query(
+        r#"
+        UPDATE users
+        SET verification_token = $2,
+            verification_token_expires_at = NOW() + ($3::int * interval '1 hour'),
+            updated_at = NOW()
+        WHERE email = $1
+          AND is_active = TRUE
+          AND email_verified = FALSE
+        "#,
+    )
+    .bind(email)
+    .bind(token_hash)
+    .bind(verification_ttl_hours as i32)
+    .execute(pool)
+    .await?;
+
+    Ok((result.rows_affected() == 1).then_some(token))
+}
+
 pub async fn is_user_verified(pool: &PgPool, email: &str) -> Result<bool, sqlx::Error> {
     let result = sqlx::query!(
         r#"

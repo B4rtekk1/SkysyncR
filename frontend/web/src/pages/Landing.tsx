@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom'
 import '../App.css'
 import TransferLog from '../components/TransferLog'
 import ThemeToggle from '../components/ThemeToggle'
+import { resendVerificationEmail } from '../api/users'
 
 interface LandingLocationState {
   verificationPromptEmail?: string
@@ -13,6 +14,7 @@ function Landing() {
   const navigate = useNavigate()
   const [loaded, setLoaded] = useState(false)
   const [navSolid, setNavSolid] = useState(false)
+  const [resendStatus, setResendStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle')
   const featuresRef = useRef<HTMLDivElement>(null)
   const [featuresVisible, setFeaturesVisible] = useState(false)
   const [verificationPromptEmail] = useState<string | null>(() => {
@@ -29,6 +31,18 @@ function Landing() {
       window.removeEventListener('scroll', onScroll)
     }
   }, [])
+
+  async function resendVerification() {
+    if (!verificationPromptEmail || resendStatus === 'sending') return
+
+    setResendStatus('sending')
+    try {
+      await resendVerificationEmail(verificationPromptEmail)
+      setResendStatus('sent')
+    } catch {
+      setResendStatus('error')
+    }
+  }
 
   useEffect(() => {
     const state = location.state as LandingLocationState | null
@@ -152,6 +166,16 @@ function Landing() {
                 >
                   Go to login
                 </button>
+                <button
+                    type="button"
+                    className="btn btn--outline btn--lg register-popup__action"
+                    onClick={() => void resendVerification()}
+                    disabled={resendStatus === 'sending'}
+                >
+                  {resendStatus === 'sending' ? 'Sending...' : 'Send email again'}
+                </button>
+                {resendStatus === 'sent' && <p className="register-popup__status">A new verification link has been sent.</p>}
+                {resendStatus === 'error' && <p className="register-popup__status register-popup__status--error">Could not send the email. Try again.</p>}
               </div>
             </div>
         )}

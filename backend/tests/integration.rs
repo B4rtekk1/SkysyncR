@@ -12,6 +12,7 @@ use skysyncr::db::users::{
     is_login_allowed, record_failed_login, reset_failed_login, update_last_login,
 };
 use sqlx::{Executor, PgPool, postgres::PgPoolOptions};
+use std::borrow::Cow;
 use std::sync::{Arc, OnceLock};
 use tokio::sync::{Mutex, OwnedMutexGuard};
 use uuid::Uuid;
@@ -38,11 +39,15 @@ async fn reset_test_pool() -> (OwnedMutexGuard<()>, PgPool) {
     let allow_non_local_reset = std::env::var("SKYSYNCR_ALLOW_NON_LOCAL_TEST_DB_RESET")
         .map(|value| value == "true")
         .unwrap_or(false);
+    let database_name = database_url
+        .rsplit_once('/')
+        .map(|(_, name)| name)
+        .map(|name| name.split(['?', '#']).next().unwrap_or(name))
+        .map(Cow::from)
+        .unwrap_or_else(|| Cow::from(""));
     assert!(
-        allow_non_local_reset
-            || database_url.contains("localhost")
-            || database_url.contains("127.0.0.1"),
-        "integration tests reset the public schema; use a local DATABASE_URL or set SKYSYNCR_ALLOW_NON_LOCAL_TEST_DB_RESET=true",
+        allow_non_local_reset || database_name.to_lowercase().contains("test"),
+        "integration tests reset the public schema; use a dedicated test database name containing 'test' or set SKYSYNCR_ALLOW_NON_LOCAL_TEST_DB_RESET=true",
     );
 
     let pool = PgPoolOptions::new()

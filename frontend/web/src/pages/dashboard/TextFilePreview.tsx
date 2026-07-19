@@ -7,6 +7,7 @@ import {
     type PythonCompletionItem,
 } from './pythonCompletion'
 import { highlightPython } from './pythonHighlight'
+import { checkPythonTypes, type PythonTypeDiagnostic } from './pythonTypeCheck'
 import type { Item } from './types'
 import type { TextPreviewMode } from './useTextFilePreview'
 
@@ -112,6 +113,26 @@ function renderPythonHighlight(text: string) {
             </span>
         )
     })
+}
+
+function PythonTypeDiagnostics({ diagnostics }: { diagnostics: PythonTypeDiagnostic[] }) {
+    if (diagnostics.length === 0) {
+        return null
+    }
+
+    return (
+        <div className="image-preview__type-diagnostics" aria-live="polite">
+            <strong>Python type warnings</strong>
+            {diagnostics.map((diagnostic) => (
+                <p key={`${diagnostic.line}-${diagnostic.column}-${diagnostic.message}`}>
+                    <span>
+                        L{diagnostic.line}:C{diagnostic.column}
+                    </span>
+                    {diagnostic.message}
+                </p>
+            ))}
+        </div>
+    )
 }
 
 function indentSelection(text: string, selectionStart: number, selectionEnd: number) {
@@ -250,6 +271,8 @@ export function TextFilePreview({
     text: string
     textMode: TextPreviewMode
 }) {
+    const typeDiagnostics = canHighlightPython ? checkPythonTypes(text) : []
+
     if (canRenderMarkdown && textMode === 'render') {
         return (
             <Suspense fallback={<MarkdownFallback />}>
@@ -260,9 +283,12 @@ export function TextFilePreview({
 
     if (canHighlightPython) {
         return (
-            <pre className="image-preview__text image-preview__text--highlight" tabIndex={0}>
-                {text ? renderPythonHighlight(text) : 'This file is empty.'}
-            </pre>
+            <>
+                <pre className="image-preview__text image-preview__text--highlight" tabIndex={0}>
+                    {text ? renderPythonHighlight(text) : 'This file is empty.'}
+                </pre>
+                <PythonTypeDiagnostics diagnostics={typeDiagnostics} />
+            </>
         )
     }
 
@@ -274,6 +300,7 @@ export function TextFilePreview({
 }
 
 export function TextFileEditor({
+    autosaveStatus,
     canHighlightPython,
     canRenderMarkdown,
     error,
@@ -282,6 +309,7 @@ export function TextFileEditor({
     saving,
     text,
 }: {
+    autosaveStatus?: 'idle' | 'pending' | 'saving' | 'saved' | 'error'
     canHighlightPython: boolean
     canRenderMarkdown: boolean
     error: string | null
@@ -293,6 +321,17 @@ export function TextFileEditor({
     const highlightRef = useRef<HTMLPreElement>(null)
     const textareaRef = useRef<HTMLTextAreaElement>(null)
     const [completion, setCompletion] = useState<(PythonCompletion & { left: number; selected: number; top: number }) | null>(null)
+    const typeDiagnostics = canHighlightPython ? checkPythonTypes(text) : []
+    const autosaveLabel =
+        autosaveStatus === 'pending'
+            ? 'Autosave pending'
+            : autosaveStatus === 'saving'
+              ? 'Autosaving...'
+              : autosaveStatus === 'saved'
+                ? 'Autosaved'
+                : autosaveStatus === 'error'
+                  ? 'Autosave failed'
+                  : null
     const renderHighlightedText = (value: string) => (value ? renderPythonHighlight(value) : null)
     const updateCompletion = (textarea: HTMLTextAreaElement, value: string = textarea.value) => {
         if (!canHighlightPython) {
@@ -460,6 +499,12 @@ export function TextFileEditor({
                     </Suspense>
                 </div>
             )}
+            {autosaveLabel && (
+                <p className={`image-preview__autosave image-preview__autosave--${autosaveStatus}`}>
+                    {autosaveLabel}
+                </p>
+            )}
+            <PythonTypeDiagnostics diagnostics={typeDiagnostics} />
             {error && <p className="image-preview__editor-error">{error}</p>}
         </div>
     )

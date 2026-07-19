@@ -130,7 +130,8 @@
     min-width: 0;
     min-height: 0;
     display: grid;
-    place-items: center;
+    align-items: stretch;
+    justify-items: stretch;
     padding: 18px;
     background:
         linear-gradient(45deg, rgba(148, 163, 184, 0.07) 25%, transparent 25%),

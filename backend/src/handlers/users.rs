@@ -32,6 +32,11 @@ pub struct VerifyParams {
     pub token: String,
 }
 
+#[derive(Deserialize)]
+pub struct ResendVerificationRequest {
+    pub email: String,
+}
+
 const REFRESH_TOKEN_COOKIE: &str = "skysyncr_refresh_token";
 const REFRESH_PERSISTENCE_COOKIE: &str = "skysyncr_refresh_persistent";
 const INVALID_LOGIN_MESSAGE: &str = "Invalid email or password";
@@ -450,7 +455,11 @@ pub async fn login_user(
         return Err(ApiError::Unauthorized(INVALID_LOGIN_MESSAGE.into()));
     };
 
-    if !auth_record.email_verified || !auth_record.login_allowed {
+    if !auth_record.email_verified {
+        return Err(ApiError::Forbidden("Email is not verified".into()));
+    }
+
+    if !auth_record.login_allowed {
         return Err(ApiError::Unauthorized(INVALID_LOGIN_MESSAGE.into()));
     }
 
@@ -609,4 +618,32 @@ pub async fn verify_email(
     } else {
         Err(ApiError::BadRequest("Invalid or expired token".into()))
     }
+}
+
+pub async fn resend_verification_email(
+    State(state): State<AppState>,
+    Json(payload): Json<ResendVerificationRequest>,
+) -> Result<&'static str, ApiError> {
+    let email = payload.email.trim().to_lowercase();
+    if validate_email(&email).is_err() {
+        return Ok("If this account needs verification, a new link has been sent");
+    }
+
+    let token = set_verification_token(
+        &state.db_pool,
+        &email,
+        state.config.verification_token_ttl_hours,
+    )
+    .await
+    .map_err(|e| internal_error("set verification token", e))?;
+
+    if let Some(token) = token {
+        tokio::spawn(async move {
+            if let Err(e) = send_verification_email(&email, &token).await {
+                tracing::error!(error = %e, "failed to resend verification email");
+            }
+        });
+    }
+
+    Ok("If this account needs verification, a new link has been sent")
 }

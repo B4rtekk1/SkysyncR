@@ -334,7 +334,13 @@ function SettingsModalContent({ currentUser, onClose, onSave }: SettingsModalPro
                                 </div>
                                 {passwordSaved && <span className="settings-badge">Updated</span>}
                             </div>
-                            <div className="settings-password-form">
+                            <form
+                                className="settings-password-form"
+                                onSubmit={(e) => {
+                                    e.preventDefault()
+                                    void savePassword()
+                                }}
+                            >
                                 <label className="settings-field">
                                     <span>Current password</span>
                                     <input
@@ -378,13 +384,12 @@ function SettingsModalContent({ currentUser, onClose, onSave }: SettingsModalPro
                                 {passwordError && <p className="settings-error">{passwordError}</p>}
                                 <button
                                     className="btn btn--outline"
-                                    type="button"
-                                    onClick={savePassword}
+                                    type="submit"
                                     disabled={passwordSaving}
                                 >
                                     {passwordSaving ? 'Changing...' : 'Change password'}
                                 </button>
-                            </div>
+                            </form>
                         </section>
 
                         <section className="settings-panel">

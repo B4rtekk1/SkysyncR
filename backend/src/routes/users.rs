@@ -1,6 +1,6 @@
 use crate::handlers::users::{
     change_password, current_user, login_user, logout_all_sessions, logout_user, refresh_tokens,
-    register_user, update_user_settings, verify_email,
+    register_user, resend_verification_email, update_user_settings, verify_email,
 };
 use crate::state::AppState;
 use axum::Router;
@@ -25,6 +25,7 @@ pub fn auth_limited_routes() -> Router<AppState> {
     Router::new()
         .route("/users/register", post(register_user))
         .route("/users/login", post(login_user))
+        .route("/users/resend-verification", post(resend_verification_email))
         .route("/users/forgot-password", post(forgot_password))
         .route("/users/recovery-blob", get(get_recovery_blob))
         .route("/users/reset-password", post(reset_password))

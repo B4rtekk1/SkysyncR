@@ -1,4 +1,4 @@
-import { lazy, Suspense, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import { CANCEL_ICON, CHECK_ICON, DOWNLOAD_ICON, RENAME_ICON } from './icons'
 import type { FilePreviewState, Item } from './types'
 import { formatBytes } from './fileUtils'
@@ -10,6 +10,9 @@ const SlidesPreview = lazy(() => import('./SlidesPreview').then((module) => ({ d
 const VideoPreviewPlayer = lazy(() =>
     import('./VideoPreviewPlayer').then((module) => ({ default: module.VideoPreviewPlayer })),
 )
+const AUTOSAVE_DELAY_MS = 1200
+
+type AutosaveStatus = 'idle' | 'pending' | 'saving' | 'saved' | 'error'
 
 function PreviewFallback({ label }: { label: string }) {
     return (
@@ -34,34 +37,87 @@ export function ImagePreviewModal({
     const { canHighlightPython, canRenderMarkdown, setTextMode, textMode } = useTextFilePreview(preview.item, preview.text)
     const [isEditingText, setIsEditingText] = useState(Boolean(preview.startEditing))
     const [editDraft, setEditDraft] = useState(preview.text ?? '')
-    const [editSaving, setEditSaving] = useState(false)
+    const [manualSaving, setManualSaving] = useState(false)
     const [editError, setEditError] = useState<string | null>(null)
+    const [autosaveStatus, setAutosaveStatus] = useState<AutosaveStatus>('idle')
+    const saveInFlightRef = useRef(false)
+    const autosaveTimerRef = useRef<number | null>(null)
     const canEditText = preview.text !== null && !('permissions' in preview.item)
     const hasTextChanges = editDraft !== (preview.text ?? '')
 
     const cancelEdit = () => {
+        if (autosaveTimerRef.current) {
+            window.clearTimeout(autosaveTimerRef.current)
+            autosaveTimerRef.current = null
+        }
         setEditDraft(preview.text ?? '')
         setEditError(null)
+        setAutosaveStatus('idle')
         setIsEditingText(false)
     }
 
-    const saveEdit = async () => {
-        if (!canEditText || editSaving || !hasTextChanges) {
-            setIsEditingText(false)
+    const saveEdit = useCallback(async ({ closeAfterSave = true }: { closeAfterSave?: boolean } = {}) => {
+        if (!canEditText || saveInFlightRef.current || !hasTextChanges) {
+            if (closeAfterSave) {
+                setIsEditingText(false)
+            }
             return
         }
 
-        setEditSaving(true)
+        if (autosaveTimerRef.current) {
+            window.clearTimeout(autosaveTimerRef.current)
+            autosaveTimerRef.current = null
+        }
+
+        const textToSave = editDraft
+        saveInFlightRef.current = true
+        if (closeAfterSave) {
+            setManualSaving(true)
+        }
         setEditError(null)
+        setAutosaveStatus('saving')
         try {
-            await onSaveText(preview.item, editDraft)
-            setIsEditingText(false)
+            await onSaveText(preview.item, textToSave)
+            setAutosaveStatus('saved')
+            if (closeAfterSave) {
+                setIsEditingText(false)
+            }
         } catch (e) {
             setEditError(e instanceof Error ? e.message : 'Could not save that file.')
+            setAutosaveStatus('error')
         } finally {
-            setEditSaving(false)
+            saveInFlightRef.current = false
+            setManualSaving(false)
         }
-    }
+    }, [canEditText, editDraft, hasTextChanges, onSaveText, preview.item])
+
+    useEffect(() => {
+        if (
+            !isEditingText ||
+            !canEditText ||
+            !hasTextChanges ||
+            manualSaving ||
+            autosaveStatus === 'saving' ||
+            saveInFlightRef.current
+        ) {
+            return
+        }
+
+        if (autosaveTimerRef.current) {
+            window.clearTimeout(autosaveTimerRef.current)
+        }
+
+        autosaveTimerRef.current = window.setTimeout(() => {
+            void saveEdit({ closeAfterSave: false })
+        }, AUTOSAVE_DELAY_MS)
+
+        return () => {
+            if (autosaveTimerRef.current) {
+                window.clearTimeout(autosaveTimerRef.current)
+                autosaveTimerRef.current = null
+            }
+        }
+    }, [autosaveStatus, canEditText, editDraft, hasTextChanges, isEditingText, manualSaving, saveEdit])
 
     return (
         <div className="image-preview" role="presentation" onMouseDown={onClose}>
@@ -84,7 +140,7 @@ export function ImagePreviewModal({
                                     className="file-card__action file-card__action--confirm"
                                     type="button"
                                     onClick={() => void saveEdit()}
-                                    disabled={editSaving}
+                                    disabled={manualSaving}
                                     aria-label={`Save ${preview.item.filename}`}
                                     title="Save"
                                 >
@@ -94,7 +150,7 @@ export function ImagePreviewModal({
                                     className="file-card__action file-card__action--cancel"
                                     type="button"
                                     onClick={cancelEdit}
-                                    disabled={editSaving}
+                                    disabled={manualSaving}
                                     aria-label={`Cancel editing ${preview.item.filename}`}
                                     title="Cancel"
                                 >
@@ -173,9 +229,13 @@ export function ImagePreviewModal({
                                 canHighlightPython={canHighlightPython}
                                 canRenderMarkdown={canRenderMarkdown}
                                 error={editError}
-                                saving={editSaving}
+                                autosaveStatus={autosaveStatus}
+                                saving={manualSaving}
                                 text={editDraft}
-                                onChange={setEditDraft}
+                                onChange={(value) => {
+                                    setEditDraft(value)
+                                    setAutosaveStatus('pending')
+                                }}
                                 onSave={() => void saveEdit()}
                             />
                         ) : (

@@ -119,6 +119,18 @@ export async function verifyUser(token: string): Promise<void> {
   }
 }
 
+export async function resendVerificationEmail(email: string): Promise<void> {
+  const res = await apiFetch(`${url}users/resend-verification`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email }),
+  })
+
+  if (!res.ok) {
+    await throwApiError(res, 'Could not send verification email')
+  }
+}
+
 export async function getCurrentUser(): Promise<CurrentUserResponse> {
   const res = await authenticatedFetch(`${url}users/me`, {
     method: 'GET',

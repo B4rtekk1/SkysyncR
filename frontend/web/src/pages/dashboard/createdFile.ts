@@ -6,6 +6,7 @@ export function mimeTypeForCreatedFile(filename: string) {
     if (lower.endsWith('.html') || lower.endsWith('.htm')) return 'text/html'
     if (lower.endsWith('.css')) return 'text/css'
     if (lower.endsWith('.js') || lower.endsWith('.mjs') || lower.endsWith('.cjs')) return 'text/javascript'
+    if (lower.endsWith('.py') || lower.endsWith('.pyi') || lower.endsWith('.pyw')) return 'text/x-python'
     return 'text/plain'
 }
 

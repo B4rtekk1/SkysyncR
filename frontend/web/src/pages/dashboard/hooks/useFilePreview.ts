@@ -5,11 +5,9 @@ import {
     decryptFileStream,
     encryptedFileFormatNonce,
     encryptFileStream,
-    generateFileKey,
     isChunkedFileNonce,
     streamToBlob,
     unwrapFileKeyForUser,
-    wrapFileKeyForUser,
 } from '../../../crypto/fileEncryption'
 import { type FileKind, kindFromFile } from '../fileUtils'
 import type { FilePreviewState, Item } from '../types'
@@ -41,7 +39,7 @@ function previewKindFromFile(filename: string, mime: string | null): FilePreview
 
 export function useFilePreview(
     privateKey: CryptoKey | null,
-    publicKey: string | null,
+    _publicKey: string | null,
     setError: (error: string | null) => void,
     onFileUpdated: (file: ApiFile) => void,
 ) {
@@ -174,18 +172,16 @@ export function useFilePreview(
     }
 
     async function handleSaveTextFile(item: Item, text: string) {
-        if (!publicKey) {
-            throw new Error('Public key is missing. Sign in again to save encrypted files.')
+        if (!privateKey) {
+            throw new Error('Private key is locked. Sign in again to save encrypted files.')
         }
-
-        const fileKey = await generateFileKey()
-        const wrappedKey = await wrapFileKeyForUser(fileKey, publicKey)
+        const fileKey = await unwrapFileKeyForUser(item.encrypted_key, privateKey)
         const encryptedFile = encryptFileStream(new Blob([text], { type: item.mime_type || 'text/plain' }), fileKey)
         const updated = await updateFileContent({
             id: item.id,
             encryptedFile,
             originalFilename: item.filename,
-            wrappedKey,
+            wrappedKey: item.encrypted_key,
             encryptionNonce: encryptedFileFormatNonce(),
         })
 
