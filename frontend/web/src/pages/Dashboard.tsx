@@ -7,12 +7,12 @@ import React, {
 } from 'react'
 import { useNavigate } from 'react-router-dom'
 import '../App.css'
-import '../css/Dashbord.css'
+import '../css/dashboard.css'
 import type { ShareableItem, ViewKey } from './dashboard/types'
-import { DashboardContent } from './dashboard/DashboardContent'
-import { DashboardModals } from './dashboard/DashboardModals'
-import { DashboardSidebar } from './dashboard/DashboardSidebar'
-import { DashboardTopbar } from './dashboard/DashboardTopbar'
+import { DashboardContent } from './dashboard/components/DashboardContent'
+import { DashboardModals } from './dashboard/components/DashboardModals'
+import { DashboardSidebar } from './dashboard/components/DashboardSidebar'
+import { DashboardTopbar } from './dashboard/components/DashboardTopbar'
 import {
     loadActiveView,
     saveActiveView,
