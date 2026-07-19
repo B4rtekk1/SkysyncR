@@ -16,6 +16,17 @@
     margin-bottom: 26px;
 }
 
+.shell__title {
+    margin-bottom: 4px;
+}
+
+.shell__subtitle {
+    margin: 0;
+    color: var(--mist);
+    font-size: 0.84rem;
+    line-height: 1.35;
+}
+
 .shell__content-actions {
     display: flex;
     align-items: center;

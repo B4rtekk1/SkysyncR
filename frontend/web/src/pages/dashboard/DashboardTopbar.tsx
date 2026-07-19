@@ -54,6 +54,23 @@ export function DashboardTopbar({
                     value={query}
                     onChange={(e) => onQueryChange(e.target.value)}
                 />
+                <button
+                    className={`shell__search-clear ${query ? '' : 'is-hidden'}`}
+                    type="button"
+                    onClick={() => onQueryChange('')}
+                    aria-label="Clear search"
+                    title="Clear search"
+                    tabIndex={query ? 0 : -1}
+                >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                        <path
+                            d="m7 7 10 10M17 7 7 17"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                        />
+                    </svg>
+                </button>
             </label>
 
             <div className="shell__topbar-actions">

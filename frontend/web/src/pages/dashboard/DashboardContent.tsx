@@ -220,6 +220,32 @@ export function DashboardContent({
     onDragEndCard,
 }: DashboardContentProps) {
     const isEmpty = visibleItems.length === 0 && renderedItems.length === 0 && visibleFolders.length === 0
+    const shownCount = visibleFolders.length + renderedItems.length
+    const totalCount = visibleFolders.length + visibleItems.length
+    const hasSearchOrFilter = Boolean(query || hasActiveFilter)
+    const resultLabel = totalCount === 1 ? 'item' : 'items'
+    const subtitle =
+        view === 'groups' || view === 'calendar'
+            ? null
+            : loading
+              ? 'Loading vault contents'
+              : hasSearchOrFilter
+                ? `${totalCount} ${resultLabel} match the current view`
+                : `${shownCount} ${shownCount === 1 ? 'item' : 'items'} in this view`
+    const clearSearchAndFiltersAction = (
+        <>
+            {query && (
+                <button className="btn btn--outline" type="button" onClick={() => onQueryChange('')}>
+                    Clear search
+                </button>
+            )}
+            {hasActiveFilter && (
+                <button className="btn btn--outline" type="button" onClick={onClearFilters}>
+                    Clear filters
+                </button>
+            )}
+        </>
+    )
 
     return (
         <div
@@ -238,6 +264,7 @@ export function DashboardContent({
             <div className="shell__content-head">
                 <div>
                     <h1 className="shell__title">{titleForView(view)}</h1>
+                    {subtitle && <p className="shell__subtitle">{subtitle}</p>}
                 </div>
 
                 <DashboardToolbar
@@ -306,6 +333,7 @@ export function DashboardContent({
                             ? 'Adjust the search or filter to see more shared files.'
                             : 'Files someone shares with you will show up here, still encrypted end-to-end.'
                     }
+                    actions={(query || hasActiveFilter) && clearSearchAndFiltersAction}
                 />
             )}
 
@@ -338,6 +366,7 @@ export function DashboardContent({
                             ? 'Adjust the search or filter to see more favourites.'
                             : 'Tap the star on any file to pin it here for quick access.'
                     }
+                    actions={(query || hasActiveFilter) && clearSearchAndFiltersAction}
                 />
             )}
 
@@ -357,6 +386,7 @@ export function DashboardContent({
                             ? 'Adjust the search or filter to see more deleted files.'
                             : `Deleted files stay here for ${currentUser?.trash_retention_days ?? 30} days before they're gone for good.`
                     }
+                    actions={(query || hasActiveFilter) && clearSearchAndFiltersAction}
                 />
             )}
 
@@ -367,6 +397,21 @@ export function DashboardContent({
                         query || hasActiveFilter
                             ? 'Try a different name, or clear the filter to see everything.'
                             : 'Files are locked with AES-256 on this device before they ever reach the network.'
+                    }
+                    actions={
+                        query || hasActiveFilter ? (
+                            clearSearchAndFiltersAction
+                        ) : (
+                            <>
+                                <label className="btn btn--solid">
+                                    Upload files
+                                    <input type="file" multiple onChange={onUploadChange} style={{ display: 'none' }} />
+                                </label>
+                                <button className="btn btn--outline" type="button" onClick={onOpenFolderCreate}>
+                                    New folder
+                                </button>
+                            </>
+                        )
                     }
                 />
             )}

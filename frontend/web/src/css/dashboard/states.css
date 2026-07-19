@@ -2,10 +2,23 @@
 
 .empty-pane {
     border: 1px dashed var(--line);
-    border-radius: 14px;
-    padding: 64px 24px;
+    border-radius: 12px;
+    padding: 52px 24px;
     text-align: center;
     background: var(--panel);
+}
+
+.empty-pane__icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 46px;
+    height: 46px;
+    margin-bottom: 16px;
+    border: 1px solid rgba(var(--signal-rgb), 0.22);
+    border-radius: 10px;
+    background: rgba(var(--signal-rgb), 0.08);
+    color: var(--signal);
 }
 
 .empty-pane__title {
@@ -24,6 +37,18 @@
     margin-inline: auto;
 }
 
+.empty-pane__actions {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-top: 22px;
+}
+
+.empty-pane__actions .btn {
+    min-width: 118px;
+}
+
 /* ---------- DRAG OVERLAY ---------- */
 
 .shell__content.is-dragging .file-grid,
@@ -32,11 +57,16 @@
 }
 
 .dropzone-overlay {
-    position: absolute;
-    inset: 16px;
+    position: sticky;
+    bottom: 18px;
+    z-index: 40;
+    min-height: 120px;
+    margin-top: -120px;
+    margin-inline: 16px;
     border: 2px dashed var(--signal);
     border-radius: 16px;
-    background: rgba(var(--signal-rgb), 0.06);
+    background: color-mix(in srgb, var(--panel) 84%, var(--signal));
+    box-shadow: 0 24px 70px -38px rgba(var(--signal-rgb), 0.7);
     display: flex;
     align-items: center;
     justify-content: center;
