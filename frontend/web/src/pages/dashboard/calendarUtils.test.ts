@@ -54,6 +54,26 @@ test('loadCalendarEntries returns an empty list for malformed storage', () => {
   assert.deepEqual(loadCalendarEntries(), [])
 })
 
+test('loadCalendarEntries ignores non-array storage payloads', () => {
+  storage.setItem(CALENDAR_ENTRIES_STORAGE_KEY, JSON.stringify({ id: 'entry-1', kind: 'event' }))
+  assert.deepEqual(loadCalendarEntries(), [])
+})
+
+test('loadCalendarEntries drops entries with missing required string fields', () => {
+  storage.setItem(
+    CALENDAR_ENTRIES_STORAGE_KEY,
+    JSON.stringify([
+      { id: '1', kind: 'event', date: '2026-07-18', time: '09:30', title: 'Valid', note: '', reminder: '' },
+      { id: '2', kind: 'event', date: '2026-07-18', time: '09:30', title: 'Missing note', reminder: '' },
+      { id: '3', kind: 'deadline', date: '2026-07-18', time: 930, title: 'Bad time', note: '', reminder: '' },
+    ]),
+  )
+
+  assert.deepEqual(loadCalendarEntries(), [
+    { id: '1', kind: 'event', date: '2026-07-18', time: '09:30', title: 'Valid', note: '', reminder: '', fileId: null },
+  ])
+})
+
 test('fromApiEntry trims API time precision and maps file_id', () => {
   assert.deepEqual(
     fromApiEntry({
@@ -75,6 +95,31 @@ test('fromApiEntry trims API time precision and maps file_id', () => {
       note: 'Notes',
       reminder: '15m',
       fileId: 'file-1',
+    },
+  )
+})
+
+test('fromApiEntry preserves null file references from the API', () => {
+  assert.deepEqual(
+    fromApiEntry({
+      id: 'entry-2',
+      kind: 'event',
+      date: '2026-07-20',
+      time: '08:05',
+      title: 'Planning',
+      note: '',
+      reminder: '',
+      file_id: null,
+    }),
+    {
+      id: 'entry-2',
+      kind: 'event',
+      date: '2026-07-20',
+      time: '08:05',
+      title: 'Planning',
+      note: '',
+      reminder: '',
+      fileId: null,
     },
   )
 })

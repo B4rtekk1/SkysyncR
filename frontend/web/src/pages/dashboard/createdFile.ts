@@ -11,5 +11,7 @@ export function mimeTypeForCreatedFile(filename: string) {
 }
 
 export function hasFileExtension(filename: string) {
-    return /\.[^.\s/\\]+$/.test(filename)
+    const trimmed = filename.trim()
+    const extensionStart = trimmed.lastIndexOf('.')
+    return extensionStart > 0 && extensionStart < trimmed.length - 1 && !/[\\/\s]/.test(trimmed.slice(extensionStart + 1))
 }

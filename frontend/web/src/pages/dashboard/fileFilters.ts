@@ -88,7 +88,7 @@ function getFileExtension(filename: string) {
 export function parseExcludedExtensions(value: string) {
     return value
         .split(/[\s,;]+/)
-        .map((extension) => extension.trim().toLowerCase().replace(/^\./, ''))
+        .map((extension) => extension.trim().toLowerCase().replace(/^\.+/, ''))
         .filter(Boolean)
 }
 
