@@ -31,13 +31,27 @@ type FileInfoPopoverProps = {
     onRestoreVersion?: ((versionId: string) => unknown | Promise<unknown>) | undefined
 }
 
+type FileHistoryState = {
+    fileId: string | null
+    versions: FileVersion[]
+    activity: FileAudit[]
+    status: 'idle' | 'error'
+}
+
 export function FileInfoPopover({ item, view, typeLabel, position, onClose, onRestoreVersion }: FileInfoPopoverProps) {
     const isFolder = !('filename' in item)
-    const [versions, setVersions] = useState<FileVersion[]>([])
-    const [activity, setActivity] = useState<FileAudit[]>([])
-    const [historyStatus, setHistoryStatus] = useState<'idle' | 'loading' | 'error'>('idle')
+    const [history, setHistory] = useState<FileHistoryState>({
+        fileId: null,
+        versions: [],
+        activity: [],
+        status: 'idle',
+    })
     const [restorePendingId, setRestorePendingId] = useState<string | null>(null)
     const title = isFolder ? item.name : item.filename
+    const hasCurrentHistory = !isFolder && history.fileId === item.id
+    const versions = hasCurrentHistory ? history.versions : []
+    const activity = hasCurrentHistory ? history.activity : []
+    const historyStatus = !isFolder && !hasCurrentHistory ? 'loading' : history.status
     const infoRows = isFolder
         ? [
               ['Name', item.name],
@@ -71,17 +85,24 @@ export function FileInfoPopover({ item, view, typeLabel, position, onClose, onRe
         if (isFolder) return
 
         let active = true
-        setHistoryStatus('loading')
         Promise.all([listFileVersions(item.id), listFileActivity(item.id)])
             .then(([nextVersions, nextActivity]) => {
                 if (!active) return
-                setVersions(nextVersions)
-                setActivity(nextActivity)
-                setHistoryStatus('idle')
+                setHistory({
+                    fileId: item.id,
+                    versions: nextVersions,
+                    activity: nextActivity,
+                    status: 'idle',
+                })
             })
             .catch(() => {
                 if (!active) return
-                setHistoryStatus('error')
+                setHistory({
+                    fileId: item.id,
+                    versions: [],
+                    activity: [],
+                    status: 'error',
+                })
             })
 
         return () => {
@@ -99,8 +120,12 @@ export function FileInfoPopover({ item, view, typeLabel, position, onClose, onRe
                 listFileVersions(item.id),
                 listFileActivity(item.id),
             ])
-            setVersions(nextVersions)
-            setActivity(nextActivity)
+            setHistory({
+                fileId: item.id,
+                versions: nextVersions,
+                activity: nextActivity,
+                status: 'idle',
+            })
         } finally {
             setRestorePendingId(null)
         }
