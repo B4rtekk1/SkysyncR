@@ -4,6 +4,7 @@ import '../App.css'
 import TransferLog from '../components/TransferLog'
 import ThemeToggle from '../components/ThemeToggle'
 import { resendVerificationEmail } from '../api/users'
+import { loadPendingVerificationEmail, savePendingVerificationEmail } from '../api/verificationReminder'
 
 interface LandingLocationState {
   verificationPromptEmail?: string
@@ -19,7 +20,7 @@ function Landing() {
   const [featuresVisible, setFeaturesVisible] = useState(false)
   const [verificationPromptEmail] = useState<string | null>(() => {
     const state = location.state as LandingLocationState | null
-    return state?.verificationPromptEmail ?? null
+    return state?.verificationPromptEmail ?? loadPendingVerificationEmail()
   })
 
   useEffect(() => {
@@ -48,6 +49,7 @@ function Landing() {
     const state = location.state as LandingLocationState | null
     if (!state?.verificationPromptEmail) return
 
+    savePendingVerificationEmail(state.verificationPromptEmail)
     navigate(location.pathname, { replace: true, state: null })
   }, [location.pathname, location.state, navigate])
 
@@ -162,17 +164,17 @@ function Landing() {
                 <button
                     type="button"
                     className="btn btn--solid btn--lg register-popup__action"
-                    onClick={() => navigate('/login')}
-                >
-                  Go to login
-                </button>
-                <button
-                    type="button"
-                    className="btn btn--outline btn--lg register-popup__action"
                     onClick={() => void resendVerification()}
                     disabled={resendStatus === 'sending'}
                 >
                   {resendStatus === 'sending' ? 'Sending...' : 'Send email again'}
+                </button>
+                <button
+                    type="button"
+                    className="btn btn--outline btn--lg register-popup__action"
+                    onClick={() => navigate('/login')}
+                >
+                  Continue to sign in
                 </button>
                 {resendStatus === 'sent' && <p className="register-popup__status">A new verification link has been sent.</p>}
                 {resendStatus === 'error' && <p className="register-popup__status register-popup__status--error">Could not send the email. Try again.</p>}

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { verifyUser } from '../../api/users'
+import { clearPendingVerificationEmail } from '../../api/verificationReminder'
 import type { VerificationStatus } from './types'
 
 const verificationRequests = new Map<string, Promise<void>>()
@@ -29,6 +30,7 @@ export function useEmailVerification(token: string | null) {
       try {
         await verifyTokenOnce(verificationToken)
         if (!active) return
+        clearPendingVerificationEmail()
         setStatus('success')
       } catch (err) {
         if (!active) return

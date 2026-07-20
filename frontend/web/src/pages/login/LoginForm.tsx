@@ -4,6 +4,11 @@ import { clearTokens } from '../../api/auth.ts'
 import { getUnlockedVaultSession } from '../../api/session.ts'
 import { ApiRequestError, getCurrentUser, loginUser, resendVerificationEmail } from '../../api/users.ts'
 import { isNetworkError } from '../../api/http.ts'
+import {
+  clearPendingVerificationEmail,
+  loadPendingVerificationEmail,
+  savePendingVerificationEmail,
+} from '../../api/verificationReminder.ts'
 import { decryptPrivateKey } from '../../crypto/keys'
 import { loadEncryptedPrivateKey, storeActivePrivateKey } from '../../crypto/storage'
 import EyeIcon from './EyeIcon'
@@ -24,11 +29,13 @@ function messageFromError(err: unknown): string {
 
 function LoginForm() {
   const navigate = useNavigate()
-  const [email, setEmail] = useState('')
+  const [pendingVerificationEmail, setPendingVerificationEmail] = useState<string | null>(() => loadPendingVerificationEmail())
+  const [email, setEmail] = useState(() => pendingVerificationEmail ?? '')
   const [password, setPassword] = useState('')
   const [remember, setRemember] = useState(true)
   const [loading, setLoading] = useState(false)
   const [resendStatus, setResendStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle')
+  const [pendingResendStatus, setPendingResendStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle')
   const [error, setError] = useState<LoginError | null>(null)
   const [showPassword, setShowPassword] = useState(false)
 
@@ -196,9 +203,17 @@ function LoginForm() {
 
       await storeActivePrivateKey(user.id, privateKey)
 
+      clearPendingVerificationEmail()
+      setPendingVerificationEmail(null)
       navigate('/dashboard', { replace: true })
     } catch (err) {
-      setError(getLoginError(err))
+      const loginError = getLoginError(err)
+      if (loginError.canResendVerification) {
+        const normalizedEmail = email.trim().toLowerCase()
+        savePendingVerificationEmail(normalizedEmail)
+        setPendingVerificationEmail(normalizedEmail)
+      }
+      setError(loginError)
     } finally {
       setLoading(false)
     }
@@ -217,6 +232,18 @@ function LoginForm() {
     }
   }
 
+  async function resendPendingVerification() {
+    if (!pendingVerificationEmail || pendingResendStatus === 'sending') return
+
+    setPendingResendStatus('sending')
+    try {
+      await resendVerificationEmail(pendingVerificationEmail)
+      setPendingResendStatus('sent')
+    } catch {
+      setPendingResendStatus('error')
+    }
+  }
+
   return (
       <div className="auth__form-card">
         <p className="eyebrow">
@@ -226,6 +253,23 @@ function LoginForm() {
         <p className="auth__subtitle">
           Your data is still waiting, encrypted — unlock it with your account.
         </p>
+
+        {pendingVerificationEmail && (
+            <div className="auth-form__notice" role="status">
+              <strong>Email verification pending</strong>
+              <span>Need another link for {pendingVerificationEmail}?</span>
+              <button
+                  type="button"
+                  className="auth-form__inline-action"
+                  onClick={() => void resendPendingVerification()}
+                  disabled={pendingResendStatus === 'sending'}
+              >
+                {pendingResendStatus === 'sending' ? 'Sending...' : 'Send email again'}
+              </button>
+              {pendingResendStatus === 'sent' && <small>A new verification link has been sent.</small>}
+              {pendingResendStatus === 'error' && <small>Could not send the email. Try again.</small>}
+            </div>
+        )}
 
         <form className="auth-form" onSubmit={handleSubmit} noValidate>
           <label className="field">
