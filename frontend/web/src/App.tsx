@@ -45,6 +45,7 @@ function App() {
             <Route path="/reset-password" element={<ResetPassword/>}/>
             <Route path="/verify" element={<VerifyEmail/>}/>
             <Route path="/share/:token" element={<PublicShare/>}/>
+            <Route path="/share/folders/:token" element={<PublicShare/>}/>
             <Route path="/dashboard" element={<Dashboard/>}/>
             <Route path="*" element={<NotFound/>}/>
         </Routes>

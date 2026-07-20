@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import '../App.css'
 import ThemeToggle from '../components/ThemeToggle'
-import { downloadPublicFile } from '../api/files'
+import { downloadPublicFile, verifyBlobChecksum } from '../api/files'
 
 type ShareStatus = 'loading' | 'ready' | 'error'
 
@@ -34,6 +34,7 @@ function PublicShare() {
 
       try {
         const file = await downloadPublicFile(token)
+        await verifyBlobChecksum(file.blob, file.checksum)
         if (!active) return
         saveBlob(file.blob, file.filename)
         setStatus('ready')

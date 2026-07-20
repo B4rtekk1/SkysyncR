@@ -383,6 +383,17 @@ export async function downloadFileWithIntegrity(id: string): Promise<VerifiedDow
     }
 }
 
+export async function verifyBlobChecksum(blob: Blob, expectedChecksum: string | null): Promise<'verified' | 'missing'> {
+    if (!expectedChecksum) return 'missing'
+
+    const actual = await sha256Hex(blob)
+    if (actual.toLowerCase() !== expectedChecksum.toLowerCase()) {
+        throw new Error('Downloaded file failed integrity verification.')
+    }
+
+    return 'verified'
+}
+
 export type PublicDownload = {
     blob: Blob
     filename: string
@@ -470,4 +481,9 @@ async function multipartBlob(
 
     const buffer = await new Response(value).arrayBuffer()
     return new Blob([buffer], { type: contentType })
+}
+
+async function sha256Hex(blob: Blob): Promise<string> {
+    const digest = await crypto.subtle.digest('SHA-256', await blob.arrayBuffer())
+    return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('')
 }

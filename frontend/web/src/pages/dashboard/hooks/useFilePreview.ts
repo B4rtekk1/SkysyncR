@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { downloadFile, updateFileContent, type ApiFile } from '../../../api/files'
+import { downloadFileWithIntegrity, updateFileContent, verifyBlobChecksum, type ApiFile } from '../../../api/files'
 import {
     decryptFile,
     decryptFileStream,
@@ -56,7 +56,8 @@ export function useFilePreview(
             throw new Error('File encryption metadata is missing.')
         }
 
-        const encryptedBlob = await downloadFile(item.id)
+        const { blob: encryptedBlob, checksum } = await downloadFileWithIntegrity(item.id)
+        await verifyBlobChecksum(encryptedBlob, checksum)
         const fileKey = await unwrapFileKeyForUser(item.encrypted_key, privateKey)
         if (isChunkedFileNonce(item.encryption_nonce)) {
             return streamToBlob(decryptFileStream(encryptedBlob, fileKey, item.encryption_nonce), item.mime_type)

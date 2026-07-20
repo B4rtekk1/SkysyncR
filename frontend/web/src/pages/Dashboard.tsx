@@ -215,6 +215,7 @@ function Dashboard() {
     const {
         handleDelete,
         handleRestore,
+        handleRestoreVersion,
         handlePermanentDelete,
         handleRename,
         handleShare,
@@ -438,6 +439,7 @@ function Dashboard() {
                     onToggleFolderFavourite={toggleFolderFavourite}
                     onDelete={handleDelete}
                     onRestore={handleRestore}
+                    onRestoreVersion={handleRestoreVersion}
                     onPermanentDelete={handlePermanentDelete}
                     onDownload={handleDownload}
                     onPreview={handleFilePreview}

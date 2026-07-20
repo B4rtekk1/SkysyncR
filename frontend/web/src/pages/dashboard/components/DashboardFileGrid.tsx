@@ -23,6 +23,7 @@ type DashboardFileGridProps = {
     onToggleFolderFavourite: (id: string) => void | Promise<void>
     onDelete: (id: string) => void | Promise<void>
     onRestore: (id: string) => void | Promise<void>
+    onRestoreVersion: (item: Item, versionId: string) => unknown | Promise<unknown>
     onPermanentDelete: (id: string) => void | Promise<void>
     onDownload: (item: Item) => void | Promise<void>
     onPreview: (item: Item) => void | Promise<void>
@@ -56,6 +57,7 @@ export function DashboardFileGrid({
     onToggleFolderFavourite,
     onDelete,
     onRestore,
+    onRestoreVersion,
     onPermanentDelete,
     onDownload,
     onPreview,
@@ -99,6 +101,7 @@ export function DashboardFileGrid({
                         view={view}
                         onDelete={view === 'all' ? onDelete : undefined}
                         onRestore={view === 'trash' ? onRestore : undefined}
+                        onRestoreVersion={view === 'all' || view === 'favourites' ? onRestoreVersion : undefined}
                         onPermanentDelete={view === 'trash' ? onPermanentDelete : undefined}
                         onDownload={view !== 'trash' ? onDownload : undefined}
                         onPreview={view !== 'trash' ? onPreview : undefined}

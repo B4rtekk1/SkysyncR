@@ -99,6 +99,7 @@ type DashboardContentProps = {
     onToggleFolderFavourite: (id: string) => void | Promise<void>
     onDelete: (id: string) => void | Promise<void>
     onRestore: (id: string) => void | Promise<void>
+    onRestoreVersion: (item: Item, versionId: string) => unknown | Promise<unknown>
     onPermanentDelete: (id: string) => void | Promise<void>
     onDownload: (item: Item) => void | Promise<void>
     onPreview: (item: Item) => void | Promise<void>
@@ -206,6 +207,7 @@ export function DashboardContent({
     onToggleFolderFavourite,
     onDelete,
     onRestore,
+    onRestoreVersion,
     onPermanentDelete,
     onDownload,
     onPreview,
@@ -436,6 +438,7 @@ export function DashboardContent({
                     onToggleFolderFavourite={onToggleFolderFavourite}
                     onDelete={onDelete}
                     onRestore={onRestore}
+                    onRestoreVersion={onRestoreVersion}
                     onPermanentDelete={onPermanentDelete}
                     onDownload={onDownload}
                     onPreview={onPreview}

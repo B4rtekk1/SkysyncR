@@ -5,7 +5,6 @@ import {
     useState,
     type CSSProperties,
     type DragEvent,
-    type KeyboardEvent as ReactKeyboardEvent,
 } from 'react'
 import { FileCardActions } from './FileCardActions'
 import { FileCardHeader } from './FileCardHeader'
@@ -22,6 +21,7 @@ export function FileCard({
                       pending,
                       onDelete,
                       onRestore,
+                      onRestoreVersion,
                       onPermanentDelete,
                       onDownload,
                       onPreview,
@@ -47,6 +47,7 @@ export function FileCard({
     pending: boolean
     onDelete?: ((id: string) => void) | undefined
     onRestore?: ((id: string) => void) | undefined
+    onRestoreVersion?: ((item: Item, versionId: string) => unknown | Promise<unknown>) | undefined
     onPermanentDelete?: ((id: string) => void) | undefined
     onDownload?: ((item: Item) => void) | undefined
     onPreview?: ((item: Item) => void) | undefined
@@ -157,12 +158,9 @@ export function FileCard({
         }
     }, [isInfoOpen, scheduleInfoPositionUpdate])
 
-    const handlePreviewKeyDown = (e: ReactKeyboardEvent<HTMLElement>) => {
-        if (!canPreview) return
-        if (e.key !== 'Enter' && e.key !== ' ') return
-        e.preventDefault()
-        onPreview?.(item)
-    }
+    const isInteractiveClickTarget = (target: EventTarget | null) =>
+        target instanceof Element &&
+        Boolean(target.closest('button, input, textarea, select, a, [role="button"]'))
     const cancelRename = () => {
         setRenameDraft(item.filename)
         setIsRenaming(false)
@@ -206,11 +204,15 @@ export function FileCard({
             }`}
             style={style}
             draggable={draggable && !pending && !isRenaming}
-            role={canPreview ? 'button' : undefined}
-            tabIndex={canPreview ? 0 : undefined}
             aria-label={canPreview ? `Preview ${item.filename}` : undefined}
-            onClick={canPreview ? () => onPreview?.(item) : undefined}
-            onKeyDown={handlePreviewKeyDown}
+            onClick={
+                canPreview
+                    ? (e) => {
+                          if (isInteractiveClickTarget(e.target)) return
+                          onPreview?.(item)
+                      }
+                    : undefined
+            }
             onDragStart={(e) => onDragStartCard?.(item.id, e)}
             onDragEnter={(e) => {
                 e.preventDefault()
@@ -276,6 +278,7 @@ export function FileCard({
                     isRenaming={isRenaming}
                     renameSaving={renameSaving}
                     canRename={canRename}
+                    canPreview={canPreview}
                     canDownload={canDownload}
                     canShare={canShare}
                     canNote={canNote}
@@ -288,6 +291,7 @@ export function FileCard({
                                 typeLabel={typeLabel}
                                 position={infoPosition}
                                 onClose={() => setIsInfoOpen(false)}
+                                onRestoreVersion={onRestoreVersion ? (versionId) => onRestoreVersion(item, versionId) : undefined}
                             />
                         ) : null
                     }
@@ -302,6 +306,7 @@ export function FileCard({
                         if (!isInfoOpen) scheduleInfoPositionUpdate()
                         setIsInfoOpen((current) => !current)
                     }}
+                    onPreview={onPreview}
                     onDownload={onDownload}
                     onShare={onShare}
                     onNote={onNote}

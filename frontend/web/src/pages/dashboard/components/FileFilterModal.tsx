@@ -1,4 +1,4 @@
-import type { CSSProperties } from 'react'
+import { useEffect, type CSSProperties } from 'react'
 import {
     FILE_TYPE_FILTER_LABELS,
     FILE_TYPE_FILTER_OPTIONS,
@@ -58,6 +58,17 @@ export function FileFilterModal({
     onModifiedDateChange,
     onClearFilters,
 }: FileFilterModalProps) {
+    useEffect(() => {
+        if (!isOpen) return
+
+        function closeOnEscape(e: KeyboardEvent) {
+            if (e.key === 'Escape') onClose()
+        }
+
+        window.addEventListener('keydown', closeOnEscape)
+        return () => window.removeEventListener('keydown', closeOnEscape)
+    }, [isOpen, onClose])
+
     if (!isOpen) return null
 
     return (

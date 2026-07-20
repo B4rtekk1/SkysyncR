@@ -3,6 +3,7 @@ import {
     permanentlyDeleteFile,
     renameFile,
     restoreFile,
+    restoreFileVersion,
     setFileFavourite,
     shareFile,
     softDeleteFile,
@@ -36,24 +37,40 @@ export function useFileActions({
 }: UseFileActionsOptions) {
     const handleDelete = useCallback(
         async (id: string) => {
-            setItems((prev) => prev.filter((i) => i.id !== id))
+            let previousItems: Item[] = []
+
+            setItems((prev) => {
+                previousItems = prev
+                return prev.filter((i) => i.id !== id)
+            })
+            setStorageItems((prev) => prev.map((item) => (item.id === id ? { ...item, is_deleted: true } : item)))
+
             try {
                 await softDeleteFile(id)
                 await refreshQuota()
             } catch (e) {
+                setItems(previousItems)
+                setStorageItems((prev) => prev.map((item) => (item.id === id ? { ...item, is_deleted: false } : item)))
                 setError(e instanceof Error ? e.message : 'Could not move that file to trash.')
             }
         },
-        [refreshQuota, setError, setItems],
+        [refreshQuota, setError, setItems, setStorageItems],
     )
 
     const handleRestore = useCallback(
         async (id: string) => {
-            setItems((prev) => prev.filter((i) => i.id !== id))
+            let previousItems: Item[] = []
+
+            setItems((prev) => {
+                previousItems = prev
+                return prev.filter((i) => i.id !== id)
+            })
+
             try {
                 await restoreFile(id)
                 await refreshQuota()
             } catch (e) {
+                setItems(previousItems)
                 setError(e instanceof Error ? e.message : 'Could not restore that file.')
             }
         },
@@ -65,9 +82,20 @@ export function useFileActions({
             const confirmed = window.confirm('Permanently delete this file? This cannot be undone.')
             if (!confirmed) return
 
-            setItems((prev) => prev.filter((i) => i.id !== id))
-            setStorageItems((prev) => prev.filter((i) => i.id !== id))
+            let previousItems: Item[] = []
+            let previousStorageItems: ApiFile[] = []
+            let previousFavouriteIds = new Set<string>()
+
+            setItems((prev) => {
+                previousItems = prev
+                return prev.filter((i) => i.id !== id)
+            })
+            setStorageItems((prev) => {
+                previousStorageItems = prev
+                return prev.filter((i) => i.id !== id)
+            })
             setFavouriteIds((prev) => {
+                previousFavouriteIds = prev
                 const next = new Set(prev)
                 next.delete(id)
                 return next
@@ -77,10 +105,36 @@ export function useFileActions({
                 await permanentlyDeleteFile(id)
                 await refreshQuota()
             } catch (e) {
+                setItems(previousItems)
+                setStorageItems(previousStorageItems)
+                setFavouriteIds(previousFavouriteIds)
                 setError(e instanceof Error ? e.message : 'Could not permanently delete that file.')
             }
         },
         [refreshQuota, setError, setFavouriteIds, setItems, setStorageItems],
+    )
+
+    const handleRestoreVersion = useCallback(
+        async (item: Item, versionId: string) => {
+            setError(null)
+            try {
+                const restored = await restoreFileVersion(item.id, versionId)
+                const visibleRestored = {
+                    ...restored,
+                    filename: item.filename,
+                    mime_type: item.mime_type,
+                    note: item.note,
+                }
+                setItems((prev) => prev.map((current) => (current.id === item.id ? visibleRestored : current)))
+                setStorageItems((prev) => prev.map((current) => (current.id === item.id ? visibleRestored : current)))
+                await refreshQuota()
+                return visibleRestored
+            } catch (e) {
+                setError(e instanceof Error ? e.message : 'Could not restore that version.')
+                throw e
+            }
+        },
+        [refreshQuota, setError, setItems, setStorageItems],
     )
 
     const handleRename = useCallback(
@@ -198,6 +252,7 @@ export function useFileActions({
     return {
         handleDelete,
         handleRestore,
+        handleRestoreVersion,
         handlePermanentDelete,
         handleRename,
         handleShare,

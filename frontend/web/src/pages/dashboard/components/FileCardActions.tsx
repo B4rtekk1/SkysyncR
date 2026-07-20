@@ -5,6 +5,7 @@ import {
     DOWNLOAD_ICON,
     INFO_ICON,
     NOTE_ICON,
+    PREVIEW_ICON,
     RENAME_ICON,
     SHARE_ICON,
     TRASH_OPEN_ICON,
@@ -17,6 +18,7 @@ type FileCardActionsProps = {
     isRenaming: boolean
     renameSaving: boolean
     canRename: boolean
+    canPreview: boolean
     canDownload: boolean
     canShare: boolean
     canNote: boolean
@@ -26,6 +28,7 @@ type FileCardActionsProps = {
     onCancelRename: () => void
     onStartRename: () => void
     onToggleInfo: () => void
+    onPreview?: ((item: Item) => void) | undefined
     onDownload?: ((item: Item) => void) | undefined
     onShare?: ((item: Item) => void | Promise<void>) | undefined
     onNote?: ((item: Item) => void) | undefined
@@ -40,6 +43,7 @@ export function FileCardActions({
     isRenaming,
     renameSaving,
     canRename,
+    canPreview,
     canDownload,
     canShare,
     canNote,
@@ -49,6 +53,7 @@ export function FileCardActions({
     onCancelRename,
     onStartRename,
     onToggleInfo,
+    onPreview,
     onDownload,
     onShare,
     onNote,
@@ -100,6 +105,20 @@ export function FileCardActions({
                     type="button"
                 >
                     {RENAME_ICON}
+                </button>
+            )}
+            {canPreview && (
+                <button
+                    className="file-card__action file-card__action--preview"
+                    onClick={(e) => {
+                        e.stopPropagation()
+                        onPreview?.(item)
+                    }}
+                    aria-label={`Preview ${item.filename}`}
+                    title="Preview"
+                    type="button"
+                >
+                    {PREVIEW_ICON}
                 </button>
             )}
             {!isRenaming && (

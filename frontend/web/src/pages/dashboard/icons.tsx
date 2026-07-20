@@ -178,6 +178,18 @@ export const INFO_ICON = (
     </svg>
 )
 
+export const PREVIEW_ICON = (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path
+            d="M3.8 12s2.8-5.2 8.2-5.2 8.2 5.2 8.2 5.2-2.8 5.2-8.2 5.2S3.8 12 3.8 12Z"
+            stroke="currentColor"
+            strokeWidth="1.6"
+            strokeLinejoin="round"
+        />
+        <circle cx="12" cy="12" r="2.4" stroke="currentColor" strokeWidth="1.6" />
+    </svg>
+)
+
 export const NOTE_ICON = (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
         <path
