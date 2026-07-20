@@ -5,7 +5,17 @@ import { generateKeyPair, exportPublicKey, encryptPrivateKey, decryptPrivateKey,
 import { storeActivePrivateKey, storeEncryptedPrivateKey } from '../../crypto/storage'
 import EyeIcon from '../login/EyeIcon'
 import PasswordRequirements from './PasswordRequirements'
-import { suggestNameFromEmail } from './passwordRules'
+import { getPasswordRequirements, suggestNameFromEmail } from './passwordRules'
+
+type RegisterField = 'email' | 'password' | 'confirmPassword'
+
+type RegisterError = {
+  title: string
+  message: string
+  field?: RegisterField
+}
+
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 function RegisterForm() {
   const navigate = useNavigate()
@@ -15,22 +25,87 @@ function RegisterForm() {
   const [confirmPassword, setConfirmPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [step, setStep] = useState<'idle' | 'generating' | 'sending'>('idle')
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<RegisterError | null>(null)
   const [passwordFocused, setPasswordFocused] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
   const [recoveryKey, setRecoveryKey] = useState<string | null>(null)
   const [verificationEmail, setVerificationEmail] = useState('')
 
+  function clearErrorFor(field: RegisterField) {
+    setError((current) => {
+      if (!current) return null
+      return !current.field || current.field === field ? null : current
+    })
+  }
+
+  function validateForm(): RegisterError | null {
+    const normalizedEmail = email.trim().toLowerCase()
+
+    if (!normalizedEmail) {
+      return {
+        title: 'Email is required',
+        message: 'Enter the email address you want to use for this account.',
+        field: 'email',
+      }
+    }
+
+    if (!EMAIL_PATTERN.test(normalizedEmail)) {
+      return {
+        title: 'Check the email address',
+        message: 'Use a full email address, for example you@example.com.',
+        field: 'email',
+      }
+    }
+
+    if (!password) {
+      return {
+        title: 'Password is required',
+        message: 'Create a password before generating your encryption keys.',
+        field: 'password',
+      }
+    }
+
+    const unmetPasswordRequirement = getPasswordRequirements(password).find((requirement) => !requirement.met)
+    if (unmetPasswordRequirement) {
+      return {
+        title: 'Password is not strong enough',
+        message: unmetPasswordRequirement.label,
+        field: 'password',
+      }
+    }
+
+    if (!confirmPassword) {
+      return {
+        title: 'Confirm your password',
+        message: 'Re-enter the same password to continue.',
+        field: 'confirmPassword',
+      }
+    }
+
+    if (password !== confirmPassword) {
+      return {
+        title: 'Passwords do not match',
+        message: 'Both password fields must contain the same value.',
+        field: 'confirmPassword',
+      }
+    }
+
+    return null
+  }
+
   async function handleSubmit(e: SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
     setError(null)
 
-    if (password !== confirmPassword) {
-      setError('Passwords do not match')
+    const validationError = validateForm()
+    if (validationError) {
+      setError(validationError)
+      if (validationError.field === 'password') setPasswordFocused(true)
       return
     }
 
+    const normalizedEmail = email.trim().toLowerCase()
     setLoading(true)
 
     try {
@@ -53,7 +128,7 @@ function RegisterForm() {
       setStep('sending')
 
       const { id: userId } = await registerUser({
-        email,
+        email: normalizedEmail,
         display_name: displayName,
         password,
         public_key: publicKeyBase64,
@@ -65,9 +140,12 @@ function RegisterForm() {
       await storeActivePrivateKey(userId, activePrivateKey)
 
       setRecoveryKey(nextRecoveryKey)
-      setVerificationEmail(email.trim().toLowerCase())
+      setVerificationEmail(normalizedEmail)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Something went wrong.')
+      setError({
+        title: 'Could not create account',
+        message: err instanceof Error ? err.message : 'Something went wrong.',
+      })
     } finally {
       setLoading(false)
       setStep('idle')
@@ -130,7 +208,11 @@ function RegisterForm() {
                 autoComplete="email"
                 required
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                aria-invalid={error?.field === 'email'}
+                onChange={(e) => {
+                  setEmail(e.target.value)
+                  clearErrorFor('email')
+                }}
                 placeholder="you@example.com"
             />
           </label>
@@ -141,7 +223,6 @@ function RegisterForm() {
                 className="field__input"
                 type="text"
                 autoComplete="name"
-                required
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder={email.length > 0 ? suggestNameFromEmail(email) : 'John Doe'}
@@ -157,8 +238,12 @@ function RegisterForm() {
                   autoComplete="new-password"
                   required
                   value={password}
+                  aria-invalid={error?.field === 'password'}
                   onFocus={() => setPasswordFocused(true)}
-                  onChange={(e) => setPassword(e.target.value)}
+                  onChange={(e) => {
+                    setPassword(e.target.value)
+                    clearErrorFor('password')
+                  }}
                   placeholder="••••••••••••"
               />
               <button
@@ -186,7 +271,11 @@ function RegisterForm() {
                   autoComplete="new-password"
                   required
                   value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  aria-invalid={error?.field === 'confirmPassword'}
+                  onChange={(e) => {
+                    setConfirmPassword(e.target.value)
+                    clearErrorFor('confirmPassword')
+                  }}
                   placeholder="••••••••••••"
               />
               <button
@@ -202,9 +291,10 @@ function RegisterForm() {
           </label>
 
           {error && (
-              <p className="auth-form__error" role="alert">
-                {error}
-              </p>
+              <div className="auth-form__error" role="alert">
+                <strong>{error.title}</strong>
+                <span>{error.message}</span>
+              </div>
           )}
 
           <button
