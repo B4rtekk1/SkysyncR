@@ -31,6 +31,9 @@ function RegisterForm() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
   const [recoveryKey, setRecoveryKey] = useState<string | null>(null)
   const [verificationEmail, setVerificationEmail] = useState('')
+  const [recoveryKeyCopied, setRecoveryKeyCopied] = useState(false)
+  const [recoveryKeySaved, setRecoveryKeySaved] = useState(false)
+  const [recoveryKeyMessage, setRecoveryKeyMessage] = useState<string | null>(null)
 
   function clearErrorFor(field: RegisterField) {
     setError((current) => {
@@ -152,6 +155,51 @@ function RegisterForm() {
     }
   }
 
+  async function copyRecoveryKey() {
+    if (!recoveryKey) return
+
+    setRecoveryKeyMessage(null)
+    try {
+      await navigator.clipboard.writeText(recoveryKey)
+      setRecoveryKeyCopied(true)
+      window.setTimeout(() => setRecoveryKeyCopied(false), 1600)
+    } catch {
+      setRecoveryKeyMessage('Clipboard access is unavailable. Select the key and copy it manually.')
+    }
+  }
+
+  function downloadRecoveryKey() {
+    if (!recoveryKey) return
+
+    const content = [
+      'SkysyncR recovery key',
+      '',
+      recoveryKey,
+      '',
+      'Keep this key private. It is required to reset your password without losing encrypted files.',
+    ].join('\n')
+    const blob = new Blob([content], { type: 'text/plain;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = 'skysyncr-recovery-key.txt'
+    link.click()
+    URL.revokeObjectURL(url)
+  }
+
+  function finishRecoveryStep() {
+    if (!recoveryKeySaved) {
+      setRecoveryKeyMessage('Confirm that you saved the recovery key before continuing.')
+      return
+    }
+
+    navigate('/', {
+      state: {
+        verificationPromptEmail: verificationEmail,
+      },
+    })
+  }
+
   const submitLabel =
       step === 'generating'
           ? 'Generating your keys…'
@@ -169,18 +217,50 @@ function RegisterForm() {
           <p className="auth__subtitle">
             You need this key to reset your password without losing access to encrypted files.
           </p>
-          <div className="auth-form__error" role="status">
-            <strong>{recoveryKey}</strong>
-            <span>Store it somewhere private. SkysyncR cannot show it again.</span>
+          <div className="recovery-key" role="status" aria-label="Recovery key">
+            <code>{recoveryKey}</code>
           </div>
+          <p className="recovery-key__warning" role="alert">
+            <strong>SkysyncR cannot show this key again.</strong>
+            <span> Store it somewhere private before continuing.</span>
+          </p>
+          <div className="recovery-key__actions">
+            <button
+                type="button"
+                className="btn btn--outline"
+                onClick={() => void copyRecoveryKey()}
+            >
+              {recoveryKeyCopied ? 'Copied' : 'Copy key'}
+            </button>
+            <button
+                type="button"
+                className="btn btn--outline"
+                onClick={downloadRecoveryKey}
+            >
+              Download .txt
+            </button>
+          </div>
+          <label className="checkbox recovery-key__confirm">
+            <input
+                type="checkbox"
+                checked={recoveryKeySaved}
+                onChange={(e) => {
+                  setRecoveryKeySaved(e.target.checked)
+                  if (e.target.checked) setRecoveryKeyMessage(null)
+                }}
+            />
+            <span>I saved this recovery key somewhere private.</span>
+          </label>
+          {recoveryKeyMessage && (
+              <div className="auth-form__error" role="alert">
+                <span>{recoveryKeyMessage}</span>
+              </div>
+          )}
           <button
               type="button"
               className="btn btn--solid btn--lg auth-form__submit"
-              onClick={() => navigate('/', {
-                state: {
-                  verificationPromptEmail: verificationEmail,
-                },
-              })}
+              onClick={finishRecoveryStep}
+              disabled={!recoveryKeySaved}
           >
             I saved it
           </button>
