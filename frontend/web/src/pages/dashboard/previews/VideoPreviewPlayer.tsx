@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type CSSProperties, type KeyboardEvent } from 'react'
+import '../../../css/dashboard/preview-video.css'
 import type { Item } from '../types'
 import { formatBytes } from '../fileUtils'
 

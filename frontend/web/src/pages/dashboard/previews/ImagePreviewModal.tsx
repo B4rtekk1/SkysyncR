@@ -1,4 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react'
+import '../../../css/dashboard/preview-image.css'
 import { CANCEL_ICON, CHECK_ICON, DOWNLOAD_ICON, RENAME_ICON } from '../icons'
 import type { FilePreviewState, Item } from '../types'
 import { formatBytes } from '../fileUtils'

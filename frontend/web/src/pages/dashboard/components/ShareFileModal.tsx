@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
+import '../../../css/dashboard/sharing.css'
 import {
     createFileShare,
     deleteFileShare,

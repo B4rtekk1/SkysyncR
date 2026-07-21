@@ -1,6 +1,5 @@
 import { useCallback, useMemo, useRef, useState, type ChangeEvent } from 'react'
 import '../App.css'
-import '../css/dashboard.css'
 import '../css/Settings.css'
 import ThemeToggle from '../components/ThemeToggle'
 import { useTheme, type ThemePreference } from '../hooks/UseTheme'

@@ -1,6 +1,5 @@
 import {lazy, Suspense, useEffect} from 'react'
 import {Routes, Route, useNavigate} from 'react-router-dom'
-import {getUnlockedVaultSession} from './api/session'
 
 const Landing = lazy(() => import('./pages/Landing'))
 const Login = lazy(() => import('./pages/Login'))
@@ -22,7 +21,8 @@ function LandingRoute() {
     useEffect(() => {
         let active = true
 
-        getUnlockedVaultSession({ allowRefresh: false })
+        import('./api/session')
+            .then(({ getUnlockedVaultSession }) => getUnlockedVaultSession({ allowRefresh: false }))
             .then((session) => {
                 if (active && session) {
                     navigate('/dashboard', {replace: true})

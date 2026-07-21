@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState, type ChangeEvent, type RefObject } from 'react'
-import { FileFilterModal } from './FileFilterModal'
+import { lazy, Suspense, useEffect, useRef, useState, type ChangeEvent, type RefObject } from 'react'
 import { GRID_VIEW_ICON, LIST_VIEW_ICON } from '../icons'
 import { FILE_SORT_LABELS } from '../fileFilters'
 import type { FileFilters, FileSortKey, FileTypeFilterKey, FileVisibilityFilterKey, LayoutMode, ViewKey } from '../types'
+
+const FileFilterModal = lazy(() => import('./FileFilterModal').then((module) => ({ default: module.FileFilterModal })))
 
 type DashboardToolbarProps = {
     view: ViewKey
@@ -224,29 +225,33 @@ export function DashboardToolbar({
                         </svg>
                     </button>
 
-                    <FileFilterModal
-                        isOpen={filterMenuOpen}
-                        isClosing={filterMenuClosing}
-                        filterSummary={filterSummary}
-                        query={query}
-                        fileFilters={fileFilters}
-                        hasActiveFilter={hasActiveFilter}
-                        sizeSliderMax={sizeSliderMax}
-                        sizeSliderMinValue={sizeSliderMinValue}
-                        sizeSliderMaxValue={sizeSliderMaxValue}
-                        sizeSliderMinPct={sizeSliderMinPct}
-                        sizeSliderMaxPct={sizeSliderMaxPct}
-                        onClose={onCloseFilterMenu}
-                        onQueryChange={onQueryChange}
-                        onClearFileTypes={onClearFileTypes}
-                        onToggleFileType={onToggleFileType}
-                        onVisibilityChange={onVisibilityChange}
-                        onSizeInputChange={onSizeInputChange}
-                        onSizeSliderChange={onSizeSliderChange}
-                        onExcludedExtensionsChange={onExcludedExtensionsChange}
-                        onModifiedDateChange={onModifiedDateChange}
-                        onClearFilters={onClearFilters}
-                    />
+                    {filterMenuOpen && (
+                        <Suspense fallback={null}>
+                            <FileFilterModal
+                                isOpen={filterMenuOpen}
+                                isClosing={filterMenuClosing}
+                                filterSummary={filterSummary}
+                                query={query}
+                                fileFilters={fileFilters}
+                                hasActiveFilter={hasActiveFilter}
+                                sizeSliderMax={sizeSliderMax}
+                                sizeSliderMinValue={sizeSliderMinValue}
+                                sizeSliderMaxValue={sizeSliderMaxValue}
+                                sizeSliderMinPct={sizeSliderMinPct}
+                                sizeSliderMaxPct={sizeSliderMaxPct}
+                                onClose={onCloseFilterMenu}
+                                onQueryChange={onQueryChange}
+                                onClearFileTypes={onClearFileTypes}
+                                onToggleFileType={onToggleFileType}
+                                onVisibilityChange={onVisibilityChange}
+                                onSizeInputChange={onSizeInputChange}
+                                onSizeSliderChange={onSizeSliderChange}
+                                onExcludedExtensionsChange={onExcludedExtensionsChange}
+                                onModifiedDateChange={onModifiedDateChange}
+                                onClearFilters={onClearFilters}
+                            />
+                        </Suspense>
+                    )}
                 </div>
             )}
 

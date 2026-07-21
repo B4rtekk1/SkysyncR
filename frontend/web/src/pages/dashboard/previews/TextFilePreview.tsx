@@ -1,4 +1,5 @@
 import { lazy, Suspense, useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
+import '../../../css/dashboard/preview-text.css'
 import { COPY_ICON } from '../icons'
 import {
     applyPythonCompletion,
