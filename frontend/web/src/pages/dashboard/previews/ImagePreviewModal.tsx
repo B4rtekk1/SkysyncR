@@ -12,6 +12,7 @@ const VideoPreviewPlayer = lazy(() =>
     import('./VideoPreviewPlayer').then((module) => ({ default: module.VideoPreviewPlayer })),
 )
 const AUTOSAVE_DELAY_MS = 1200
+const loadedPreviewImageUrls = new Set<string>()
 
 type AutosaveStatus = 'idle' | 'pending' | 'saving' | 'saved' | 'error'
 
@@ -39,12 +40,27 @@ export function ImagePreviewModal({
     const [isEditingText, setIsEditingText] = useState(Boolean(preview.startEditing))
     const [editDraft, setEditDraft] = useState(preview.text ?? '')
     const [manualSaving, setManualSaving] = useState(false)
+    const [loadedImageUrl, setLoadedImageUrl] = useState<string | null>(null)
     const [editError, setEditError] = useState<string | null>(null)
     const [autosaveStatus, setAutosaveStatus] = useState<AutosaveStatus>('idle')
     const saveInFlightRef = useRef(false)
     const autosaveTimerRef = useRef<number | null>(null)
     const canEditText = preview.text !== null && !('permissions' in preview.item)
     const hasTextChanges = editDraft !== (preview.text ?? '')
+    const isImageLoaded = preview.url ? loadedPreviewImageUrls.has(preview.url) || loadedImageUrl === preview.url : false
+
+    const markImageLoaded = useCallback((url: string | null) => {
+        if (!url) return
+
+        loadedPreviewImageUrls.add(url)
+        setLoadedImageUrl(url)
+    }, [])
+
+    const captureLoadedImage = useCallback((node: HTMLImageElement | null) => {
+        if (!node || !node.complete || node.naturalWidth <= 0) return
+
+        markImageLoaded(node.currentSrc || node.src)
+    }, [markImageLoaded])
 
     const cancelEdit = () => {
         if (autosaveTimerRef.current) {
@@ -200,14 +216,28 @@ export function ImagePreviewModal({
                     </div>
                 </div>
                 <div className="image-preview__stage">
-                    {preview.loading && (
+                    {preview.loading && !(preview.kind === 'image' && preview.url) && (
                         <div className="image-preview__loading">
                             <span className="spinner" />
                             Loading preview...
                         </div>
                     )}
                     {preview.url && preview.kind === 'image' && (
-                        <img className="image-preview__image" src={preview.url} alt={preview.item.filename} />
+                        <div
+                            className={`image-preview__image-shell ${
+                                isImageLoaded ? 'is-loaded' : ''
+                            }`}
+                            style={{ backgroundImage: `url("${preview.url}")` }}
+                        >
+                            <img
+                                ref={captureLoadedImage}
+                                className="image-preview__image"
+                                src={preview.url}
+                                alt={preview.item.filename}
+                                onLoad={() => markImageLoaded(preview.url)}
+                                onError={() => markImageLoaded(preview.url)}
+                            />
+                        </div>
                     )}
                     {preview.url && preview.kind === 'video' && (
                         <Suspense fallback={<PreviewFallback label="Loading video preview..." />}>

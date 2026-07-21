@@ -1,6 +1,7 @@
 html[data-theme='light'] {
   --panel: #ffffff;
   --panel-2: #f0f2f4;
+  --panel-3: #e5e8f0;
   --paper: #16191c;
   --mist: #6a7178;
   --line: #e2e5e9;

@@ -4,6 +4,7 @@ html[data-theme='dark'] {
   --dark-ink: #0a0e1a;
   --dark-panel: #121829;
   --dark-panel-2: #161e33;
+  --dark-panel-3: #0e1424;
   --dark-line: #232b42;
   --dark-paper: #edeff6;
   --dark-mist: #8c94ad;
@@ -20,6 +21,7 @@ html[data-theme='dark'] {
   --light-ink: #f5f6fa;
   --light-panel: #ffffff;
   --light-panel-2: #eef0f6;
+  --light-panel-3: #e5e8f0;
   --light-line: #dde1ec;
   --light-paper: #131722;
   --light-mist: #656d84;
@@ -36,6 +38,7 @@ html[data-theme='dark'] {
   --ink: var(--dark-ink);
   --panel: var(--dark-panel);
   --panel-2: var(--dark-panel-2);
+  --panel-3: var(--dark-panel-3);
   --line: var(--dark-line);
   --paper: var(--dark-paper);
   --mist: var(--dark-mist);
@@ -63,6 +66,7 @@ html[data-theme='light'] {
   --ink: var(--light-ink);
   --panel: var(--light-panel);
   --panel-2: var(--light-panel-2);
+  --panel-3: var(--light-panel-3);
   --line: var(--light-line);
   --paper: var(--light-paper);
   --mist: var(--light-mist);
