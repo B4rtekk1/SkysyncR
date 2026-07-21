@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type ChangeEvent } from 'react'
+import { useCallback, useMemo, useRef, useState, type ChangeEvent } from 'react'
 import '../App.css'
 import '../css/dashboard.css'
 import '../css/Settings.css'
@@ -28,6 +28,7 @@ import {
 } from './settingsPreferences'
 import PasswordRequirements from './register/PasswordRequirements'
 import { getPasswordRequirements } from './register/passwordRules'
+import { useModalA11y } from '../hooks/useModalA11y'
 
 const SETTINGS_ANIMATION_MS = 220
 const MAX_AVATAR_BYTES = 2 * 1024 * 1024
@@ -57,6 +58,7 @@ function SettingsModalContent({ currentUser, onClose, onSave }: SettingsModalPro
     const [passwordSaving, setPasswordSaving] = useState(false)
     const [passwordSaved, setPasswordSaved] = useState(false)
     const [passwordError, setPasswordError] = useState<string | null>(null)
+    const dialogRef = useRef<HTMLElement>(null)
     const { theme, themePreference, setThemePreference } = useTheme()
     const initials = useMemo(() => {
         const source = settings.displayName || currentUser?.email || 'S'
@@ -72,14 +74,7 @@ function SettingsModalContent({ currentUser, onClose, onSave }: SettingsModalPro
         })
     }, [onClose])
 
-    useEffect(() => {
-        function closeOnEscape(e: KeyboardEvent) {
-            if (e.key === 'Escape') requestClose()
-        }
-
-        window.addEventListener('keydown', closeOnEscape)
-        return () => window.removeEventListener('keydown', closeOnEscape)
-    }, [requestClose])
+    useModalA11y({ dialogRef, onClose: requestClose })
 
     function updateSetting<K extends keyof SettingsState>(key: K, value: SettingsState[K]) {
         setSettings((prev) => ({ ...prev, [key]: value }))
@@ -254,6 +249,7 @@ function SettingsModalContent({ currentUser, onClose, onSave }: SettingsModalPro
             onMouseDown={requestClose}
         >
             <section
+                ref={dialogRef}
                 className="settings-dialog"
                 role="dialog"
                 aria-modal="true"

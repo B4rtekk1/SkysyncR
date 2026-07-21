@@ -1,4 +1,5 @@
-import { useEffect, type CSSProperties } from 'react'
+import { useRef, type CSSProperties } from 'react'
+import { useModalA11y } from '../../../hooks/useModalA11y'
 import {
     FILE_TYPE_FILTER_LABELS,
     FILE_TYPE_FILTER_OPTIONS,
@@ -58,16 +59,8 @@ export function FileFilterModal({
     onModifiedDateChange,
     onClearFilters,
 }: FileFilterModalProps) {
-    useEffect(() => {
-        if (!isOpen) return
-
-        function closeOnEscape(e: KeyboardEvent) {
-            if (e.key === 'Escape') onClose()
-        }
-
-        window.addEventListener('keydown', closeOnEscape)
-        return () => window.removeEventListener('keydown', closeOnEscape)
-    }, [isOpen, onClose])
+    const dialogRef = useRef<HTMLDivElement>(null)
+    useModalA11y({ dialogRef, onClose, enabled: isOpen })
 
     if (!isOpen) return null
 
@@ -79,6 +72,7 @@ export function FileFilterModal({
             }}
         >
             <div
+                ref={dialogRef}
                 className="file-filter__dialog"
                 role="dialog"
                 aria-modal="true"

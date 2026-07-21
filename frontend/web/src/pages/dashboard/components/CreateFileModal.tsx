@@ -1,3 +1,6 @@
+import { useRef } from 'react'
+import { useModalA11y } from '../../../hooks/useModalA11y'
+
 type CreateFileModalProps = {
     currentFolderName: string
     fileNameDraft: string
@@ -17,9 +20,18 @@ export function CreateFileModal({
     onCreate,
     onClose,
 }: CreateFileModalProps) {
+    const dialogRef = useRef<HTMLDivElement>(null)
+    useModalA11y({ dialogRef, onClose })
+
     return (
-        <div className="file-filter__modal is-opening" role="dialog" aria-modal="true" aria-labelledby="file-create-title">
-            <div className="file-filter__dialog file-create">
+        <div className="file-filter__modal is-opening">
+            <div
+                ref={dialogRef}
+                className="file-filter__dialog file-create"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="file-create-title"
+            >
                 <div className="file-filter__modal-head">
                     <div>
                         <h2 id="file-create-title">New file</h2>

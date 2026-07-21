@@ -9,6 +9,7 @@ import {
 } from '../../../api/files'
 import { listGroupShareRecipients } from '../../../api/groups'
 import { unwrapFileKeyForUser, wrapFileKeyForUser } from '../../../crypto/fileEncryption'
+import { useModalA11y } from '../../../hooks/useModalA11y'
 import { COPY_ICON } from '../icons'
 import { createQrPath } from '../qr'
 import { DEFAULT_SHARE_DURATION_SECONDS, PermissionDropdown, ShareDurationDropdown } from './shareControls'
@@ -60,6 +61,7 @@ export function ShareFileModal({
     const [groupSharing, setGroupSharing] = useState(false)
     const [sharePreviewBaseTime] = useState(() => Date.now())
     const requestedShareRef = useRef<string | null>(null)
+    const dialogRef = useRef<HTMLElement>(null)
     const qr = useMemo(() => (shareUrl ? createQrPath(shareUrl) : null), [shareUrl])
     const isFileShare = 'filename' in item
     const title = isFileShare ? item.filename : item.name
@@ -96,14 +98,7 @@ export function ShareFileModal({
         return 'write'
     }
 
-    useEffect(() => {
-        function closeOnEscape(e: globalThis.KeyboardEvent) {
-            if (e.key === 'Escape') onClose()
-        }
-
-        window.addEventListener('keydown', closeOnEscape)
-        return () => window.removeEventListener('keydown', closeOnEscape)
-    }, [onClose])
+    useModalA11y({ dialogRef, onClose })
 
     useEffect(() => {
         if (item.is_public && item.share_token) {
@@ -293,6 +288,7 @@ export function ShareFileModal({
     return (
         <div className="share-modal" role="presentation" onMouseDown={onClose}>
             <section
+                ref={dialogRef}
                 className="share-modal__dialog"
                 role="dialog"
                 aria-modal="true"
