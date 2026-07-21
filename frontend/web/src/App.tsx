@@ -1,15 +1,20 @@
-import {useEffect} from 'react'
+import {lazy, Suspense, useEffect} from 'react'
 import {Routes, Route, useNavigate} from 'react-router-dom'
-import Landing from './pages/Landing'
-import Login from './pages/Login'
-import Register from './pages/Register'
-import ForgotPassword from './pages/ForgotPassword'
-import ResetPassword from './pages/ResetPassword'
-import VerifyEmail from "./pages/VerifyUser";
-import Dashboard from './pages/Dashboard'
-import NotFound from './pages/NotFound'
-import PublicShare from './pages/PublicShare'
 import {getUnlockedVaultSession} from './api/session'
+
+const Landing = lazy(() => import('./pages/Landing'))
+const Login = lazy(() => import('./pages/Login'))
+const Register = lazy(() => import('./pages/Register'))
+const ForgotPassword = lazy(() => import('./pages/ForgotPassword'))
+const ResetPassword = lazy(() => import('./pages/ResetPassword'))
+const VerifyEmail = lazy(() => import('./pages/VerifyUser'))
+const Dashboard = lazy(() => import('./pages/Dashboard'))
+const NotFound = lazy(() => import('./pages/NotFound'))
+const PublicShare = lazy(() => import('./pages/PublicShare'))
+
+function RouteFallback() {
+    return null
+}
 
 function LandingRoute() {
     const navigate = useNavigate()
@@ -37,18 +42,20 @@ function LandingRoute() {
 
 function App() {
     return (
-        <Routes>
-            <Route path="/" element={<LandingRoute/>}/>
-            <Route path="/login" element={<Login/>}/>
-            <Route path="/register" element={<Register/>}/>
-            <Route path="/forgot-password" element={<ForgotPassword/>}/>
-            <Route path="/reset-password" element={<ResetPassword/>}/>
-            <Route path="/verify" element={<VerifyEmail/>}/>
-            <Route path="/share/:token" element={<PublicShare/>}/>
-            <Route path="/share/folders/:token" element={<PublicShare/>}/>
-            <Route path="/dashboard" element={<Dashboard/>}/>
-            <Route path="*" element={<NotFound/>}/>
-        </Routes>
+        <Suspense fallback={<RouteFallback/>}>
+            <Routes>
+                <Route path="/" element={<LandingRoute/>}/>
+                <Route path="/login" element={<Login/>}/>
+                <Route path="/register" element={<Register/>}/>
+                <Route path="/forgot-password" element={<ForgotPassword/>}/>
+                <Route path="/reset-password" element={<ResetPassword/>}/>
+                <Route path="/verify" element={<VerifyEmail/>}/>
+                <Route path="/share/:token" element={<PublicShare/>}/>
+                <Route path="/share/folders/:token" element={<PublicShare/>}/>
+                <Route path="/dashboard" element={<Dashboard/>}/>
+                <Route path="*" element={<NotFound/>}/>
+            </Routes>
+        </Suspense>
     )
 }
 
