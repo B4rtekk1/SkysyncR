@@ -2,7 +2,9 @@ use crate::routes::calendar::calendar_routes;
 use crate::routes::files::files_routes;
 use crate::routes::folders::folders_routes;
 use crate::routes::groups::groups_routes;
+use crate::routes::notifications::notifications_routes;
 use crate::routes::storage::storage_routes;
+use crate::routes::tags::tags_routes;
 use crate::routes::users::{auth_limited_routes, users_routes};
 use crate::services::storage_consistency::spawn_storage_consistency_worker;
 use crate::services::trash::spawn_trash_purge_worker;
@@ -157,6 +159,8 @@ pub async fn run_server() {
         .merge(folders_routes())
         .merge(groups_routes())
         .merge(calendar_routes())
+        .merge(tags_routes())
+        .merge(notifications_routes())
         .with_state(state)
         .layer(security_header_layer(
             header::X_CONTENT_TYPE_OPTIONS,

@@ -2,5 +2,7 @@ pub mod calendar;
 pub mod files;
 pub mod folders;
 pub mod groups;
+pub mod notifications;
 pub mod storage;
+pub mod tags;
 pub mod users;

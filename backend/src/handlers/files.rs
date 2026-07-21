@@ -39,6 +39,7 @@ use crate::utils::errors::{ApiError, internal_error};
 #[derive(Deserialize)]
 pub struct ListFilesQuery {
     pub folder_id: Option<String>,
+    pub tag_id: Option<String>,
     #[serde(default)]
     pub trashed: bool,
 }
@@ -100,10 +101,22 @@ pub async fn list_files(
         .map(Uuid::parse_str)
         .transpose()
         .map_err(|_| ApiError::BadRequest("Invalid folder_id".into()))?;
+    let tag_id = query
+        .tag_id
+        .as_deref()
+        .map(Uuid::parse_str)
+        .transpose()
+        .map_err(|_| ApiError::BadRequest("Invalid tag_id".into()))?;
 
-    let files = list_user_files(&state.db_pool, auth.user_id, folder_id, query.trashed)
-        .await
-        .map_err(|e| internal_error("list files", e))?;
+    let files = list_user_files(
+        &state.db_pool,
+        auth.user_id,
+        folder_id,
+        tag_id,
+        query.trashed,
+    )
+    .await
+    .map_err(|e| internal_error("list files", e))?;
 
     Ok(Json(files))
 }

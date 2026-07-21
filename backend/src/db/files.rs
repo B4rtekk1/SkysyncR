@@ -14,6 +14,7 @@ pub async fn list_user_files(
     pool: &PgPool,
     user_id: Uuid,
     folder_id: Option<Uuid>,
+    tag_id: Option<Uuid>,
     trashed: bool,
 ) -> Result<Vec<FileRecord>, sqlx::Error> {
     sqlx::query_as::<_, FileRecord>(
@@ -47,12 +48,24 @@ pub async fn list_user_files(
         WHERE owner_id = $1
           AND is_deleted = $2
           AND ($3::uuid IS NULL OR folder_id = $3)
+          AND (
+              $4::uuid IS NULL
+              OR EXISTS (
+                  SELECT 1
+                  FROM file_tags ft
+                  JOIN tags t ON t.id = ft.tag_id
+                  WHERE ft.file_id = files.id
+                    AND ft.tag_id = $4
+                    AND t.owner_id = $1
+              )
+          )
         ORDER BY updated_at DESC
         "#,
     )
     .bind(user_id)
     .bind(trashed)
     .bind(folder_id)
+    .bind(tag_id)
     .fetch_all(pool)
     .await
 }

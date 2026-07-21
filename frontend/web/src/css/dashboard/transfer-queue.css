@@ -1,11 +1,15 @@
 .transfer-queue {
+    position: fixed;
+    right: 24px;
+    bottom: 24px;
+    z-index: 80;
+    width: min(420px, calc(100vw - 32px));
+    max-height: min(420px, calc(100vh - 48px));
     border: 1px solid var(--line);
     border-radius: 8px;
-    background:
-        linear-gradient(180deg, rgba(var(--signal-rgb), 0.06), transparent 62%),
-        var(--panel);
+    background: var(--panel);
     box-shadow: 0 16px 34px rgba(0, 0, 0, 0.16);
-    margin: 0 0 18px;
+    margin: 0;
     overflow: hidden;
 }
 
@@ -18,12 +22,12 @@
 }
 
 .transfer-queue__head {
-    padding: 14px 16px;
+    padding: 10px 12px;
     border-bottom: 1px solid rgba(148, 163, 184, 0.14);
 }
 
 .transfer-queue__title {
-    font-size: 0.96rem;
+    font-size: 0.86rem;
     font-weight: 700;
     line-height: 1.2;
     margin: 0;
@@ -33,7 +37,7 @@
 .transfer-queue__meta,
 .transfer-queue__detail {
     color: var(--mist);
-    font-size: 0.78rem;
+    font-size: 0.72rem;
     line-height: 1.35;
     margin: 3px 0 0;
 }
@@ -57,8 +61,8 @@
     font-size: 0.78rem;
     font-weight: 700;
     line-height: 1;
-    min-height: 32px;
-    padding: 0 11px;
+    min-height: 28px;
+    padding: 0 9px;
 }
 
 .transfer-queue__button:hover:not(:disabled),
@@ -74,12 +78,14 @@
 
 .transfer-queue__list {
     display: grid;
+    max-height: 310px;
+    overflow: auto;
 }
 
 .transfer-queue__row {
     grid-template-columns: minmax(0, 1fr) auto auto;
-    min-height: 62px;
-    padding: 12px 16px;
+    min-height: 52px;
+    padding: 9px 12px;
 }
 
 .transfer-queue__row + .transfer-queue__row {
@@ -100,7 +106,7 @@
 }
 
 .transfer-queue__name {
-    font-size: 0.9rem;
+    font-size: 0.8rem;
     font-weight: 700;
     line-height: 1.25;
     color: var(--paper);
@@ -108,7 +114,7 @@
 
 .transfer-queue__error {
     color: #b42318;
-    font-size: 0.76rem;
+    font-size: 0.7rem;
     line-height: 1.35;
     margin-top: 3px;
 }
@@ -117,10 +123,10 @@
     border-radius: 999px;
     color: var(--mist);
     background: rgba(148, 163, 184, 0.12);
-    font-size: 0.72rem;
+    font-size: 0.68rem;
     font-weight: 800;
-    min-width: 86px;
-    padding: 6px 9px;
+    min-width: 74px;
+    padding: 5px 8px;
     text-align: center;
 }
 
@@ -141,6 +147,12 @@
 }
 
 @media (max-width: 760px) {
+    .transfer-queue {
+        right: 12px;
+        bottom: 12px;
+        width: calc(100vw - 24px);
+    }
+
     .transfer-queue__head,
     .transfer-queue__row {
         grid-template-columns: minmax(0, 1fr);
