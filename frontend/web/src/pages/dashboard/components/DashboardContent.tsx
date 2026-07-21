@@ -473,6 +473,7 @@ export function DashboardContent({
                     renderedItems={renderedItems}
                     exitingIds={exitingIds}
                     pendingIds={pendingIds}
+                    uploadTransfers={uploadTransfers}
                     favouriteIds={favouriteIds}
                     folderFavouriteIds={folderFavouriteIds}
                     view={view}

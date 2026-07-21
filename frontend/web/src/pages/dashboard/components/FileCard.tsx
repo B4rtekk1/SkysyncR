@@ -15,11 +15,13 @@ import { DRAG_HANDLE_ICON, STAR_ICON_FILLED, STAR_ICON_OUTLINE } from '../icons'
 import type { Item, ViewKey } from '../types'
 import { KIND_LABELS, formatBytes, formatRelative, kindFromFile, useDecryptReveal } from '../fileUtils'
 import { isShared } from '../fileCardUtils'
+import type { UploadTransferStatus } from '../hooks/useFileUpload'
 
 export function FileCard({
                       item,
                       index,
                       pending,
+                      transferStatus,
                       onDelete,
                       onRestore,
                       onRestoreVersion,
@@ -47,6 +49,7 @@ export function FileCard({
     item: Item
     index: number
     pending: boolean
+    transferStatus: UploadTransferStatus | undefined
     onDelete?: ((id: string) => void) | undefined
     onRestore?: ((id: string) => void) | undefined
     onRestoreVersion?: ((item: Item, versionId: string) => unknown | Promise<unknown>) | undefined
@@ -224,7 +227,7 @@ export function FileCard({
                 canToggleFavourite ? 'file-card--has-favourite' : ''
             } ${
                 hasAction ? 'file-card--has-action' : ''
-            } ${isDragging ? 'is-dragging-card' : ''} ${isDropTarget ? 'is-drop-target' : ''} ${
+            } ${pending ? 'file-card--pending' : ''} ${isDragging ? 'is-dragging-card' : ''} ${isDropTarget ? 'is-drop-target' : ''} ${
                 isSearchExiting ? 'is-search-exiting' : ''
             }`}
             style={style}
@@ -277,7 +280,7 @@ export function FileCard({
                     {isFavourite ? STAR_ICON_FILLED : STAR_ICON_OUTLINE}
                 </button>
             )}
-            <FileCardHeader item={item} kind={kind} pending={pending} />
+            <FileCardHeader item={item} kind={kind} pending={pending} transferStatus={transferStatus} />
             <div className="file-card__name-slot">
                 {isRenaming ? (
                     <FileRenameInput

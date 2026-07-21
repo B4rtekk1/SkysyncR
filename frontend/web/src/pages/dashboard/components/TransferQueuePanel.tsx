@@ -1,6 +1,5 @@
 import type { UploadTransfer } from '../hooks/useFileUpload'
 import { formatBytes } from '../fileUtils'
-import './TransferQueuePanel.css'
 
 type TransferQueuePanelProps = {
     transfers: UploadTransfer[]

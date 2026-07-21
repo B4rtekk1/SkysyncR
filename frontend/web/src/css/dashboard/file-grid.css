@@ -155,6 +155,29 @@
     transition: border-color 0.15s ease, transform 0.15s ease, opacity 0.15s ease, box-shadow 0.15s ease;
 }
 
+.file-card--pending {
+    border-color: rgba(var(--signal-rgb), 0.24);
+    background:
+        linear-gradient(180deg, rgba(var(--signal-rgb), 0.08), transparent 58%),
+        var(--panel);
+    box-shadow: inset 0 0 0 1px rgba(var(--signal-rgb), 0.04);
+}
+
+.file-card--pending::after {
+    content: '';
+    position: absolute;
+    right: 14px;
+    bottom: 12px;
+    left: 14px;
+    height: 3px;
+    border-radius: 999px;
+    background:
+        linear-gradient(90deg, rgba(var(--signal-rgb), 0.9), rgba(255, 176, 76, 0.9), rgba(var(--signal-rgb), 0.9))
+        0 0 / 140px 100%;
+    opacity: 0.72;
+    animation: upload-card-progress 1.35s linear infinite;
+}
+
 .file-card[draggable='true'] {
     cursor: pointer;
 }
@@ -368,6 +391,15 @@
     }
 }
 
+@keyframes upload-card-progress {
+    from {
+        background-position: 0 0;
+    }
+    to {
+        background-position: 140px 0;
+    }
+}
+
 @media (prefers-reduced-motion: reduce) {
     .view-toggle::before,
     .view-toggle__button,
@@ -381,7 +413,8 @@
 
     .file-grid.is-layout-switching,
     .file-grid.is-layout-switching .file-card,
-    .file-card.is-search-exiting {
+    .file-card.is-search-exiting,
+    .file-card--pending::after {
         animation-duration: 1ms;
         animation-delay: 0ms;
     }
@@ -501,15 +534,36 @@
     display: flex;
     align-items: center;
     gap: 5px;
+    max-width: 112px;
+    min-height: 22px;
+    padding: 0 8px;
+    border: 1px solid rgba(var(--signal-rgb), 0.18);
+    border-radius: 999px;
+    background: rgba(var(--signal-rgb), 0.08);
     font-family: var(--font-mono), monospace;
     font-size: 0.66rem;
-    letter-spacing: 0.03em;
+    letter-spacing: 0;
     color: var(--signal);
     text-transform: uppercase;
+    white-space: nowrap;
 }
 
 .file-card__badge--pending {
+    border-color: rgba(var(--signal-rgb), 0.24);
+    color: var(--paper);
+    background: rgba(var(--signal-rgb), 0.1);
+}
+
+.file-card__badge--paused {
+    border-color: rgba(255, 176, 76, 0.28);
     color: var(--amber);
+    background: rgba(255, 176, 76, 0.08);
+}
+
+.file-card__badge--failed {
+    border-color: rgba(239, 68, 68, 0.3);
+    color: #ef4444;
+    background: rgba(239, 68, 68, 0.08);
 }
 
 .file-card__name-slot {

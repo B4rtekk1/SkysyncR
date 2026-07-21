@@ -2,6 +2,7 @@ import React, { type DragEvent } from 'react'
 import type { ApiFolder } from '../../../api/files'
 import { FileCard } from './FileCard'
 import { FolderCard } from './FolderCard'
+import type { UploadTransfer } from '../hooks/useFileUpload'
 import type { Item, LayoutMode, ViewKey } from '../types'
 
 type DashboardFileGridProps = {
@@ -9,6 +10,7 @@ type DashboardFileGridProps = {
     renderedItems: Item[]
     exitingIds: Set<string>
     pendingIds: Set<string>
+    uploadTransfers: UploadTransfer[]
     favouriteIds: Set<string>
     folderFavouriteIds: Set<string>
     view: ViewKey
@@ -44,6 +46,7 @@ export function DashboardFileGrid({
     renderedItems,
     exitingIds,
     pendingIds,
+    uploadTransfers,
     favouriteIds,
     folderFavouriteIds,
     view,
@@ -73,6 +76,8 @@ export function DashboardFileGrid({
     onDragEndCard,
     onMoveCardByKeyboard,
 }: DashboardFileGridProps) {
+    const transferStatusByTempId = new Map(uploadTransfers.map((transfer) => [transfer.tempId, transfer.status]))
+
     return (
         <div
             className={`file-grid file-grid--${layoutMode} ${
@@ -100,6 +105,7 @@ export function DashboardFileGrid({
                         item={item}
                         index={visibleFolders.length + i}
                         pending={pendingIds.has(item.id)}
+                        transferStatus={transferStatusByTempId.get(item.id)}
                         view={view}
                         onDelete={view === 'all' ? onDelete : undefined}
                         onRestore={view === 'trash' ? onRestore : undefined}

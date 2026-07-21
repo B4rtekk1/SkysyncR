@@ -1,8 +1,10 @@
 .transfer-queue {
-    border: 1px solid rgba(134, 146, 166, 0.26);
+    border: 1px solid var(--line);
     border-radius: 8px;
-    background: color-mix(in srgb, var(--surface, #ffffff) 92%, #eef3f8);
-    box-shadow: 0 12px 28px rgba(26, 38, 60, 0.08);
+    background:
+        linear-gradient(180deg, rgba(var(--signal-rgb), 0.06), transparent 62%),
+        var(--panel);
+    box-shadow: 0 16px 34px rgba(0, 0, 0, 0.16);
     margin: 0 0 18px;
     overflow: hidden;
 }
@@ -17,7 +19,7 @@
 
 .transfer-queue__head {
     padding: 14px 16px;
-    border-bottom: 1px solid rgba(134, 146, 166, 0.18);
+    border-bottom: 1px solid rgba(148, 163, 184, 0.14);
 }
 
 .transfer-queue__title {
@@ -25,11 +27,12 @@
     font-weight: 700;
     line-height: 1.2;
     margin: 0;
+    color: var(--paper);
 }
 
 .transfer-queue__meta,
 .transfer-queue__detail {
-    color: var(--muted, #667085);
+    color: var(--mist);
     font-size: 0.78rem;
     line-height: 1.35;
     margin: 3px 0 0;
@@ -47,8 +50,8 @@
 .transfer-queue__icon-button {
     border: 1px solid rgba(88, 101, 124, 0.28);
     border-radius: 6px;
-    background: var(--surface, #ffffff);
-    color: var(--text, #172033);
+    background: rgba(var(--signal-rgb), 0.08);
+    color: var(--paper);
     cursor: pointer;
     font: inherit;
     font-size: 0.78rem;
@@ -56,6 +59,12 @@
     line-height: 1;
     min-height: 32px;
     padding: 0 11px;
+}
+
+.transfer-queue__button:hover:not(:disabled),
+.transfer-queue__icon-button:hover {
+    border-color: rgba(var(--signal-rgb), 0.38);
+    color: var(--signal);
 }
 
 .transfer-queue__button:disabled {
@@ -74,7 +83,7 @@
 }
 
 .transfer-queue__row + .transfer-queue__row {
-    border-top: 1px solid rgba(134, 146, 166, 0.14);
+    border-top: 1px solid rgba(148, 163, 184, 0.12);
 }
 
 .transfer-queue__file {
@@ -94,6 +103,7 @@
     font-size: 0.9rem;
     font-weight: 700;
     line-height: 1.25;
+    color: var(--paper);
 }
 
 .transfer-queue__error {
@@ -105,8 +115,8 @@
 
 .transfer-queue__status {
     border-radius: 999px;
-    color: #344054;
-    background: #eef2f6;
+    color: var(--mist);
+    background: rgba(148, 163, 184, 0.12);
     font-size: 0.72rem;
     font-weight: 800;
     min-width: 86px;
@@ -116,18 +126,18 @@
 
 .transfer-queue__status--encrypting,
 .transfer-queue__status--uploading {
-    color: #075985;
-    background: #e0f2fe;
+    color: var(--signal);
+    background: rgba(var(--signal-rgb), 0.12);
 }
 
 .transfer-queue__status--paused {
-    color: #854d0e;
-    background: #fef3c7;
+    color: var(--amber);
+    background: rgba(255, 176, 76, 0.1);
 }
 
 .transfer-queue__status--failed {
-    color: #b42318;
-    background: #fee4e2;
+    color: #ef4444;
+    background: rgba(239, 68, 68, 0.1);
 }
 
 @media (max-width: 760px) {

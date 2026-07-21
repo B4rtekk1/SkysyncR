@@ -4,6 +4,7 @@
 @import './dashboard/file-filters.css';
 @import './dashboard/file-grid.css';
 @import './dashboard/file-card.css';
+@import './dashboard/transfer-queue.css';
 @import './dashboard/groups.css';
 @import './dashboard/groups-polish.css';
 @import './dashboard/groups-overrides.css';
