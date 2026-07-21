@@ -5,6 +5,7 @@ import {
     useState,
     type CSSProperties,
     type DragEvent,
+    type KeyboardEvent as ReactKeyboardEvent,
 } from 'react'
 import { FileCardActions } from './FileCardActions'
 import { FileCardHeader } from './FileCardHeader'
@@ -41,6 +42,7 @@ export function FileCard({
                       onDragLeaveCard,
                       onDropCard,
                       onDragEndCard,
+                      onMoveCardByKeyboard,
                   }: {
     item: Item
     index: number
@@ -67,6 +69,7 @@ export function FileCard({
     onDragLeaveCard?: ((id: string) => void) | undefined
     onDropCard?: ((id: string, e: DragEvent<HTMLElement>) => void) | undefined
     onDragEndCard?: (() => void) | undefined
+    onMoveCardByKeyboard?: ((id: string, offset: number) => void) | undefined
 }) {
     const display = useDecryptReveal(item.filename, index * 60)
     const kind = kindFromFile(item.filename, item.mime_type)
@@ -95,6 +98,11 @@ export function FileCard({
             (view === 'trash' && (onRestore || onPermanentDelete)) ||
             !isRenaming,
     )
+    const keyboardLabel = draggable
+        ? `${canPreview ? 'Preview' : 'File'} ${item.filename}. Use Alt plus arrow keys to move this file.`
+        : canPreview
+          ? `Preview ${item.filename}`
+          : undefined
 
     const updateInfoPosition = useCallback(() => {
         const card = cardRef.current
@@ -191,6 +199,23 @@ export function FileCard({
             input.setSelectionRange(0, selectionEnd)
         })
     }
+    const handleCardKeyDown = (e: ReactKeyboardEvent<HTMLElement>) => {
+        if (isInteractiveClickTarget(e.target)) return
+
+        if (draggable && e.altKey) {
+            const offset = e.key === 'ArrowUp' || e.key === 'ArrowLeft' ? -1 : e.key === 'ArrowDown' || e.key === 'ArrowRight' ? 1 : 0
+            if (offset !== 0) {
+                e.preventDefault()
+                onMoveCardByKeyboard?.(item.id, offset)
+            }
+            return
+        }
+
+        if (canPreview && (e.key === 'Enter' || e.key === ' ')) {
+            e.preventDefault()
+            onPreview?.(item)
+        }
+    }
 
     return (
         <article
@@ -204,7 +229,9 @@ export function FileCard({
             }`}
             style={style}
             draggable={draggable && !pending && !isRenaming}
-            aria-label={canPreview ? `Preview ${item.filename}` : undefined}
+            tabIndex={canPreview || draggable ? 0 : undefined}
+            aria-label={keyboardLabel}
+            aria-keyshortcuts={draggable ? 'Alt+ArrowUp Alt+ArrowDown Alt+ArrowLeft Alt+ArrowRight' : undefined}
             onClick={
                 canPreview
                     ? (e) => {
@@ -213,6 +240,7 @@ export function FileCard({
                       }
                     : undefined
             }
+            onKeyDown={handleCardKeyDown}
             onDragStart={(e) => onDragStartCard?.(item.id, e)}
             onDragEnter={(e) => {
                 e.preventDefault()

@@ -55,6 +55,7 @@ function Dashboard() {
         handleNavDragLeave,
         handleNavDrop,
         handleNavDragEnd,
+        moveNavItem,
     } = useNavOrdering()
     const {
         sidebarWidth,
@@ -62,6 +63,7 @@ function Dashboard() {
         sidebarCompact,
         setSidebarHidden,
         startSidebarResize,
+        resizeSidebarWithKeyboard,
     } = useSidebarState()
     const {
         navListRef,
@@ -240,6 +242,7 @@ function Dashboard() {
         handleCardDragLeave,
         handleCardDrop,
         handleCardDragEnd,
+        moveCardByKeyboard,
     } = useManualCardOrdering({ sortKey, view, setItems })
     const {
         folderTrail,
@@ -328,12 +331,14 @@ function Dashboard() {
                 storageBreakdownTotal={storageBreakdownTotal}
                 onHideSidebar={() => setSidebarHidden(true)}
                 onStartSidebarResize={startSidebarResize}
+                onResizeSidebarWithKeyboard={resizeSidebarWithKeyboard}
                 onSelectNavView={selectNavView}
                 onNavDragStart={handleNavDragStart}
                 onNavDragEnter={handleNavDragEnter}
                 onNavDragLeave={handleNavDragLeave}
                 onNavDrop={handleNavDrop}
                 onNavDragEnd={handleNavDragEnd}
+                onMoveNavItem={moveNavItem}
                 onOpenSettings={() => setSettingsOpen(true)}
             />
 
@@ -452,6 +457,7 @@ function Dashboard() {
                     onDragLeaveCard={handleCardDragLeave}
                     onDropCard={handleCardDrop}
                     onDragEndCard={handleCardDragEnd}
+                    onMoveCardByKeyboard={moveCardByKeyboard}
                 />
             </div>
             <DashboardModals

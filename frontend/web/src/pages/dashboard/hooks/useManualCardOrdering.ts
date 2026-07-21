@@ -8,6 +8,18 @@ type UseManualCardOrderingParams = {
     setItems: Dispatch<SetStateAction<Item[]>>
 }
 
+function reorderByOffset(items: Item[], id: string, offset: number) {
+    const fromIdx = items.findIndex((item) => item.id === id)
+    const toIdx = Math.min(items.length - 1, Math.max(0, fromIdx + offset))
+    if (fromIdx === -1 || fromIdx === toIdx) return items
+
+    const next = [...items]
+    const [moved] = next.splice(fromIdx, 1)
+    if (!moved) return items
+    next.splice(toIdx, 0, moved)
+    return next
+}
+
 export function useManualCardOrdering({ sortKey, view, setItems }: UseManualCardOrderingParams) {
     const [draggedCardId, setDraggedCardId] = useState<string | null>(null)
     const [dropTargetId, setDropTargetId] = useState<string | null>(null)
@@ -51,6 +63,17 @@ export function useManualCardOrdering({ sortKey, view, setItems }: UseManualCard
         setDropTargetId(null)
     }
 
+    function moveCardByKeyboard(id: string, offset: number) {
+        if (sortKey !== 'manual') return
+
+        setItems((prev) => {
+            const next = reorderByOffset(prev, id, offset)
+            if (next === prev) return prev
+            saveOrderIds(view, next.map((item) => item.id))
+            return next
+        })
+    }
+
     return {
         draggedCardId,
         dropTargetId,
@@ -59,5 +82,6 @@ export function useManualCardOrdering({ sortKey, view, setItems }: UseManualCard
         handleCardDragLeave,
         handleCardDrop,
         handleCardDragEnd,
+        moveCardByKeyboard,
     }
 }

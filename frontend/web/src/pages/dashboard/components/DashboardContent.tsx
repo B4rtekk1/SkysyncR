@@ -112,6 +112,7 @@ type DashboardContentProps = {
     onDragLeaveCard: (id: string) => void
     onDropCard: (id: string, event: DragEvent<HTMLElement>) => void
     onDragEndCard: () => void
+    onMoveCardByKeyboard: (id: string, offset: number) => void
 }
 
 function titleForView(view: ViewKey) {
@@ -220,6 +221,7 @@ export function DashboardContent({
     onDragLeaveCard,
     onDropCard,
     onDragEndCard,
+    onMoveCardByKeyboard,
 }: DashboardContentProps) {
     const isEmpty = visibleItems.length === 0 && renderedItems.length === 0 && visibleFolders.length === 0
     const shownCount = visibleFolders.length + renderedItems.length
@@ -451,6 +453,7 @@ export function DashboardContent({
                     onDragLeaveCard={onDragLeaveCard}
                     onDropCard={onDropCard}
                     onDragEndCard={onDragEndCard}
+                    onMoveCardByKeyboard={onMoveCardByKeyboard}
                 />
             )}
 

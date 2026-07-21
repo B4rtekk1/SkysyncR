@@ -478,7 +478,7 @@
     outline: none;
 }
 
-.file-card--can-preview:focus-visible {
+.file-card:focus-visible {
     outline: 2px solid var(--signal);
     outline-offset: 3px;
 }

@@ -1,4 +1,9 @@
-import React, { type DragEvent, type MouseEventHandler, type RefObject } from 'react'
+import React, {
+    type DragEvent,
+    type KeyboardEventHandler,
+    type PointerEventHandler,
+    type RefObject,
+} from 'react'
 import { Link } from 'react-router-dom'
 import type { StorageQuota } from '../../../api/files'
 import {
@@ -33,13 +38,15 @@ type DashboardSidebarProps = {
     storageBreakdown: StorageBreakdownItem[]
     storageBreakdownTotal: number
     onHideSidebar: () => void
-    onStartSidebarResize: MouseEventHandler<HTMLButtonElement>
+    onStartSidebarResize: PointerEventHandler<HTMLButtonElement>
+    onResizeSidebarWithKeyboard: KeyboardEventHandler<HTMLButtonElement>
     onSelectNavView: (key: ViewKey) => void
     onNavDragStart: (key: ViewKey, e: DragEvent<HTMLButtonElement>) => void
     onNavDragEnter: (key: ViewKey) => void
     onNavDragLeave: (key: ViewKey) => void
     onNavDrop: (key: ViewKey, e: DragEvent<HTMLButtonElement>) => void
     onNavDragEnd: () => void
+    onMoveNavItem: (key: ViewKey, offset: number) => void
     onOpenSettings: () => void
 }
 
@@ -61,12 +68,14 @@ export function DashboardSidebar({
     storageBreakdownTotal,
     onHideSidebar,
     onStartSidebarResize,
+    onResizeSidebarWithKeyboard,
     onSelectNavView,
     onNavDragStart,
     onNavDragEnter,
     onNavDragLeave,
     onNavDrop,
     onNavDragEnd,
+    onMoveNavItem,
     onOpenSettings,
 }: DashboardSidebarProps) {
     return (
@@ -89,8 +98,10 @@ export function DashboardSidebar({
             <button
                 className="shell__resize-handle"
                 type="button"
-                onMouseDown={onStartSidebarResize}
+                onPointerDown={onStartSidebarResize}
+                onKeyDown={onResizeSidebarWithKeyboard}
                 aria-label="Resize navigation"
+                aria-keyshortcuts="ArrowLeft ArrowRight"
                 title="Drag to resize navigation"
             />
 
@@ -125,7 +136,16 @@ export function DashboardSidebar({
                             draggedNavKey === key ? 'is-dragging-nav' : ''
                         } ${dropNavTarget === key ? 'is-drop-target-nav' : ''}`}
                         onClick={() => onSelectNavView(key)}
+                        onKeyDown={(e) => {
+                            if (!e.altKey) return
+                            const offset = e.key === 'ArrowUp' || e.key === 'ArrowLeft' ? -1 : e.key === 'ArrowDown' || e.key === 'ArrowRight' ? 1 : 0
+                            if (offset === 0) return
+
+                            e.preventDefault()
+                            onMoveNavItem(key, offset)
+                        }}
                         draggable
+                        aria-keyshortcuts="Alt+ArrowUp Alt+ArrowDown Alt+ArrowLeft Alt+ArrowRight"
                         onDragStart={(e) => onNavDragStart(key, e)}
                         onDragEnter={(e) => {
                             e.preventDefault()

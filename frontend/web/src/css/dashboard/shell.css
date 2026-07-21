@@ -83,6 +83,7 @@
     border: none;
     background: transparent;
     cursor: col-resize;
+    touch-action: none;
 }
 
 .shell__resize-handle::after {
@@ -97,8 +98,14 @@
 }
 
 .shell__resize-handle:hover::after,
+.shell__resize-handle:focus-visible::after,
 .is-resizing-sidebar .shell__resize-handle::after {
     background: var(--signal);
+}
+
+.shell__resize-handle:focus-visible {
+    outline: 2px solid var(--signal);
+    outline-offset: -3px;
 }
 
 .is-resizing-sidebar {

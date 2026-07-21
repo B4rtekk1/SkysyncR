@@ -36,6 +36,7 @@ type DashboardFileGridProps = {
     onDragLeaveCard: (id: string) => void
     onDropCard: (id: string, e: DragEvent<HTMLElement>) => void
     onDragEndCard: () => void
+    onMoveCardByKeyboard: (id: string, offset: number) => void
 }
 
 export function DashboardFileGrid({
@@ -70,6 +71,7 @@ export function DashboardFileGrid({
     onDragLeaveCard,
     onDropCard,
     onDragEndCard,
+    onMoveCardByKeyboard,
 }: DashboardFileGridProps) {
     return (
         <div
@@ -120,6 +122,7 @@ export function DashboardFileGrid({
                         onDragLeaveCard={onDragLeaveCard}
                         onDropCard={onDropCard}
                         onDragEndCard={onDragEndCard}
+                        onMoveCardByKeyboard={onMoveCardByKeyboard}
                     />
                 )
             })}

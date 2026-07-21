@@ -2,6 +2,18 @@ import { useState, type DragEvent } from 'react'
 import { loadNavOrder, saveNavOrder } from '../storage'
 import type { ViewKey } from '../types'
 
+function moveItem<T>(items: T[], source: T, offset: number) {
+    const fromIdx = items.indexOf(source)
+    const toIdx = Math.min(items.length - 1, Math.max(0, fromIdx + offset))
+    if (fromIdx === -1 || fromIdx === toIdx) return items
+
+    const next = [...items]
+    const [moved] = next.splice(fromIdx, 1)
+    if (!moved) return items
+    next.splice(toIdx, 0, moved)
+    return next
+}
+
 export function useNavOrdering() {
     const [navOrder, setNavOrder] = useState<ViewKey[]>(() => loadNavOrder())
     const [draggedNavKey, setDraggedNavKey] = useState<ViewKey | null>(null)
@@ -45,6 +57,15 @@ export function useNavOrdering() {
         setDropNavTarget(null)
     }
 
+    function moveNavItem(key: ViewKey, offset: number) {
+        setNavOrder((prev) => {
+            const next = moveItem(prev, key, offset)
+            if (next === prev) return prev
+            saveNavOrder(next)
+            return next
+        })
+    }
+
     return {
         navOrder,
         draggedNavKey,
@@ -54,5 +75,6 @@ export function useNavOrdering() {
         handleNavDragLeave,
         handleNavDrop,
         handleNavDragEnd,
+        moveNavItem,
     }
 }
