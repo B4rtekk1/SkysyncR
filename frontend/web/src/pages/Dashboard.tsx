@@ -188,7 +188,17 @@ function Dashboard() {
         storageBreakdown,
         storageBreakdownTotal,
     } = useStorageSummary(quota, storageItems)
-    const { ingestFiles, ingestFileArray } = useFileUpload({
+    const {
+        ingestFiles,
+        ingestFileArray,
+        transfers: uploadTransfers,
+        pauseTransfer,
+        resumeTransfer,
+        retryTransfer,
+        removeTransfer,
+        pauseAllTransfers,
+        resumeAllTransfers,
+    } = useFileUpload({
         publicKey,
         folderId: view === 'all' ? activeFolderId : null,
         setItems,
@@ -405,6 +415,13 @@ function Dashboard() {
                     onOpenFileCreate={() => setFileCreateOpen(true)}
                     onOpenFolderCreate={() => setFolderCreateOpen(true)}
                     onUploadChange={onUploadChange}
+                    uploadTransfers={uploadTransfers}
+                    onPauseTransfer={pauseTransfer}
+                    onResumeTransfer={resumeTransfer}
+                    onRetryTransfer={retryTransfer}
+                    onRemoveTransfer={removeTransfer}
+                    onPauseAllTransfers={pauseAllTransfers}
+                    onResumeAllTransfers={resumeAllTransfers}
                     folderTrail={folderTrail}
                     onOpenRoot={openFolderRoot}
                     onOpenFolderAt={openFolderAt}

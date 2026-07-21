@@ -202,6 +202,7 @@ export async function uploadFile(params: {
     folderId?: string
     wrappedKey: ArrayBuffer
     encryptionNonce: ArrayBuffer | Uint8Array
+    signal?: AbortSignal
 }): Promise<ApiFile> {
     const res = await authenticatedMultipartStream(`${API_BASE}files`, [
         textPart('filename', params.storedFilename),
@@ -210,7 +211,7 @@ export async function uploadFile(params: {
         textPart('encrypted_key', arrayBufferToBase64(params.wrappedKey)),
         textPart('encryption_nonce', arrayBufferToBase64(params.encryptionNonce)),
         streamPart('file', params.encryptedFile, 'encrypted.bin', 'application/octet-stream'),
-    ])
+    ], 'POST', params.signal)
     if (!res.ok) throw new Error(await parseErrorMessage(res))
     return readJson(res, file, 'File')
 }
@@ -468,10 +469,13 @@ async function authenticatedMultipartStream(
     url: string,
     parts: MultipartPart[],
     method = 'POST',
+    signal?: AbortSignal,
 ): Promise<Response> {
     const body = new FormData()
 
     for (const part of parts) {
+        signal?.throwIfAborted()
+
         if (part.kind === 'text') {
             body.append(part.name, part.value)
             continue
@@ -479,23 +483,27 @@ async function authenticatedMultipartStream(
 
         body.append(
             part.name,
-            await multipartBlob(part.value, part.contentType),
+            await multipartBlob(part.value, part.contentType, signal),
             part.filename,
         )
     }
 
-    return authenticatedRequest(url, { method, body })
+    return authenticatedRequest(url, signal ? { method, body, signal } : { method, body })
 }
 
 async function multipartBlob(
     value: Blob | ReadableStream<Uint8Array>,
     contentType: string,
+    signal?: AbortSignal,
 ): Promise<Blob> {
+    signal?.throwIfAborted()
+
     if (value instanceof Blob) {
         return value.type === contentType ? value : value.slice(0, value.size, contentType)
     }
 
     const buffer = await new Response(value).arrayBuffer()
+    signal?.throwIfAborted()
     return new Blob([buffer], { type: contentType })
 }
 

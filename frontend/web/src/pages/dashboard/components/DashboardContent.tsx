@@ -7,6 +7,8 @@ import { DashboardToolbar } from './DashboardToolbar'
 import { EmptyPane } from './EmptyPane'
 import { FolderBreadcrumbs } from './FolderBreadcrumbs'
 import { GroupsPanel } from './GroupsPanel'
+import { TransferQueuePanel } from './TransferQueuePanel'
+import type { UploadTransfer } from '../hooks/useFileUpload'
 import type {
     FileFilters,
     FileSortKey,
@@ -61,6 +63,13 @@ type DashboardContentProps = {
     onOpenFileCreate: () => void
     onOpenFolderCreate: () => void
     onUploadChange: (event: ChangeEvent<HTMLInputElement>) => void
+    uploadTransfers: UploadTransfer[]
+    onPauseTransfer: (id: string) => void
+    onResumeTransfer: (id: string) => void
+    onRetryTransfer: (id: string) => void
+    onRemoveTransfer: (id: string) => void
+    onPauseAllTransfers: () => void
+    onResumeAllTransfers: () => void
     folderTrail: ApiFolder[]
     onOpenRoot: () => void
     onOpenFolderAt: (folder: ApiFolder, index: number) => void
@@ -176,6 +185,13 @@ export function DashboardContent({
     onOpenFileCreate,
     onOpenFolderCreate,
     onUploadChange,
+    uploadTransfers,
+    onPauseTransfer,
+    onResumeTransfer,
+    onRetryTransfer,
+    onRemoveTransfer,
+    onPauseAllTransfers,
+    onResumeAllTransfers,
     folderTrail,
     onOpenRoot,
     onOpenFolderAt,
@@ -338,6 +354,18 @@ export function DashboardContent({
                 <p className="shell__error" role="alert">
                     {error}
                 </p>
+            )}
+
+            {view === 'all' && (
+                <TransferQueuePanel
+                    transfers={uploadTransfers}
+                    onPause={onPauseTransfer}
+                    onResume={onResumeTransfer}
+                    onRetry={onRetryTransfer}
+                    onRemove={onRemoveTransfer}
+                    onPauseAll={onPauseAllTransfers}
+                    onResumeAll={onResumeAllTransfers}
+                />
             )}
 
             {loading && <p className="shell__loading">Loading...</p>}
