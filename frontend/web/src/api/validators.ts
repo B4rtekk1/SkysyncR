@@ -8,7 +8,9 @@ import type {
   FileVersion,
   Folder,
   Group,
+  GroupIncomingInvite,
   GroupInvite,
+  GroupMember,
   GroupRole,
   GroupShareRecipient,
   RegisterResponse,
@@ -302,6 +304,31 @@ export const groupInvite: Validator<GroupInvite> = (value, path) => {
   }
 }
 
+export const groupMember: Validator<GroupMember> = (value, path) => {
+  const item = object(value, path)
+  return {
+    userId: string(prop(item, 'userId', path), `${path}.userId`),
+    email: string(prop(item, 'email', path), `${path}.email`),
+    displayName: nullableString(prop(item, 'displayName', path), `${path}.displayName`),
+    role: groupRole(prop(item, 'role', path), `${path}.role`) as GroupRole,
+    joinedAt: string(prop(item, 'joinedAt', path), `${path}.joinedAt`),
+    isOwner: boolean(prop(item, 'isOwner', path), `${path}.isOwner`),
+  }
+}
+
+export const groupIncomingInvite: Validator<GroupIncomingInvite> = (value, path) => {
+  const item = object(value, path)
+  return {
+    id: string(prop(item, 'id', path), `${path}.id`),
+    groupId: string(prop(item, 'groupId', path), `${path}.groupId`),
+    groupName: string(prop(item, 'groupName', path), `${path}.groupName`),
+    invitedByEmail: string(prop(item, 'invitedByEmail', path), `${path}.invitedByEmail`),
+    role: groupRole(prop(item, 'role', path), `${path}.role`) as GroupRole,
+    createdAt: string(prop(item, 'createdAt', path), `${path}.createdAt`),
+    expiresAt: string(prop(item, 'expiresAt', path), `${path}.expiresAt`),
+  }
+}
+
 export const group: Validator<Group> = (value, path) => {
   const item = object(value, path)
   return {
@@ -309,6 +336,10 @@ export const group: Validator<Group> = (value, path) => {
     name: string(prop(item, 'name', path), `${path}.name`),
     defaultRole: groupRole(prop(item, 'defaultRole', path), `${path}.defaultRole`) as GroupRole,
     createdAt: string(prop(item, 'createdAt', path), `${path}.createdAt`),
+    ownerEmail: string(prop(item, 'ownerEmail', path), `${path}.ownerEmail`),
+    ownedByMe: boolean(prop(item, 'ownedByMe', path), `${path}.ownedByMe`),
+    myRole: groupRole(prop(item, 'myRole', path), `${path}.myRole`) as GroupRole,
+    members: arrayOf(groupMember)(prop(item, 'members', path), `${path}.members`),
     invites: arrayOf(groupInvite)(prop(item, 'invites', path), `${path}.invites`),
   }
 }
@@ -345,5 +376,6 @@ export const fileVersions = arrayOf(fileVersion)
 export const fileActivity = arrayOf(fileAudit)
 export const folders = arrayOf(folder)
 export const groups = arrayOf(group)
+export const groupIncomingInvites = arrayOf(groupIncomingInvite)
 export const groupShareRecipients = arrayOf(groupShareRecipient)
 export const calendarEntries = arrayOf(calendarEntry)

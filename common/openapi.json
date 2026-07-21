@@ -833,6 +833,56 @@
         }
       }
     },
+    "/groups/invitations": {
+      "get": {
+        "operationId": "listIncomingGroupInvites",
+        "responses": {
+          "200": {
+            "description": "Incoming group invitations",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/GroupIncomingInvite"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/groups/invitations/{inviteId}/accept": {
+      "post": {
+        "operationId": "acceptGroupInvite",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/InviteId"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Accepted"
+          }
+        }
+      }
+    },
+    "/groups/invitations/{inviteId}/decline": {
+      "post": {
+        "operationId": "declineGroupInvite",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/InviteId"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Declined"
+          }
+        }
+      }
+    },
     "/groups/{groupId}": {
       "patch": {
         "operationId": "updateGroup",
@@ -874,6 +924,21 @@
         "responses": {
           "204": {
             "description": "Deleted"
+          }
+        }
+      }
+    },
+    "/groups/{groupId}/membership": {
+      "delete": {
+        "operationId": "leaveGroup",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/GroupId"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Left group"
           }
         }
       }
@@ -924,6 +989,50 @@
         "responses": {
           "204": {
             "description": "Deleted"
+          }
+        }
+      }
+    },
+    "/groups/{groupId}/members/{memberUserId}": {
+      "patch": {
+        "operationId": "updateGroupMember",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/GroupId"
+          },
+          {
+            "$ref": "#/components/parameters/MemberUserId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GroupMemberRoleRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Updated member"
+          }
+        }
+      },
+      "delete": {
+        "operationId": "deleteGroupMember",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/GroupId"
+          },
+          {
+            "$ref": "#/components/parameters/MemberUserId"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Removed member"
           }
         }
       }
@@ -1095,6 +1204,15 @@
       },
       "InviteId": {
         "name": "inviteId",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "MemberUserId": {
+        "name": "memberUserId",
         "in": "path",
         "required": true,
         "schema": {
@@ -1632,6 +1750,89 @@
           }
         }
       },
+      "FileVersion": {
+        "type": "object",
+        "required": [
+          "id",
+          "file_id",
+          "version_number",
+          "size_bytes",
+          "checksum",
+          "device_label",
+          "action",
+          "created_at"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "file_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "version_number": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "size_bytes": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "checksum": {
+            "type": "string",
+            "nullable": true
+          },
+          "device_label": {
+            "type": "string",
+            "nullable": true
+          },
+          "action": {
+            "type": "string"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "FileAudit": {
+        "type": "object",
+        "required": [
+          "id",
+          "action",
+          "resource_id",
+          "resource_type",
+          "device_label",
+          "created_at"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "action": {
+            "type": "string"
+          },
+          "resource_id": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "resource_type": {
+            "type": "string",
+            "nullable": true
+          },
+          "device_label": {
+            "type": "string",
+            "nullable": true
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
       "Folder": {
         "type": "object",
         "required": [
@@ -1746,6 +1947,81 @@
           }
         }
       },
+      "GroupMember": {
+        "type": "object",
+        "required": [
+          "userId",
+          "email",
+          "displayName",
+          "role",
+          "joinedAt",
+          "isOwner"
+        ],
+        "properties": {
+          "userId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "email": {
+            "type": "string",
+            "format": "email"
+          },
+          "displayName": {
+            "type": "string",
+            "nullable": true
+          },
+          "role": {
+            "$ref": "#/components/schemas/GroupRole"
+          },
+          "joinedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "isOwner": {
+            "type": "boolean"
+          }
+        }
+      },
+      "GroupIncomingInvite": {
+        "type": "object",
+        "required": [
+          "id",
+          "groupId",
+          "groupName",
+          "invitedByEmail",
+          "role",
+          "createdAt",
+          "expiresAt"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "groupId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "groupName": {
+            "type": "string"
+          },
+          "invitedByEmail": {
+            "type": "string",
+            "format": "email"
+          },
+          "role": {
+            "$ref": "#/components/schemas/GroupRole"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
       "Group": {
         "type": "object",
         "required": [
@@ -1753,6 +2029,10 @@
           "name",
           "defaultRole",
           "createdAt",
+          "ownerEmail",
+          "ownedByMe",
+          "myRole",
+          "members",
           "invites"
         ],
         "properties": {
@@ -1769,6 +2049,22 @@
           "createdAt": {
             "type": "string",
             "format": "date-time"
+          },
+          "ownerEmail": {
+            "type": "string",
+            "format": "email"
+          },
+          "ownedByMe": {
+            "type": "boolean"
+          },
+          "myRole": {
+            "$ref": "#/components/schemas/GroupRole"
+          },
+          "members": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GroupMember"
+            }
           },
           "invites": {
             "type": "array",
@@ -2028,6 +2324,17 @@
             "type": "string",
             "format": "email"
           },
+          "role": {
+            "$ref": "#/components/schemas/GroupRole"
+          }
+        }
+      },
+      "GroupMemberRoleRequest": {
+        "type": "object",
+        "required": [
+          "role"
+        ],
+        "properties": {
           "role": {
             "$ref": "#/components/schemas/GroupRole"
           }

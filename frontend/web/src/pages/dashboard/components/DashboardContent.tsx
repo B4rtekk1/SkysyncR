@@ -13,6 +13,7 @@ import type {
     FileTypeFilterKey,
     FileVisibilityFilterKey,
     Group,
+    GroupIncomingInvite,
     Item,
     LayoutMode,
     ViewKey,
@@ -76,6 +77,7 @@ type DashboardContentProps = {
     folderFavouriteIds: Set<string>
     currentUser: CurrentUserResponse | null
     groups: Group[]
+    incomingGroupInvites: GroupIncomingInvite[]
     groupError: string | null
     activeGroupId: string | null
     groupCreateOpen: boolean
@@ -89,6 +91,11 @@ type DashboardContentProps = {
     onCloseGroupInvite: () => void
     onInvite: (groupId: string, email: string, role: Group['defaultRole']) => void
     onRemoveInvite: (groupId: string, inviteId: string) => void
+    onAcceptInvite: (inviteId: string) => void
+    onDeclineInvite: (inviteId: string) => void
+    onUpdateMember: (groupId: string, memberUserId: string, role: Group['defaultRole']) => void
+    onRemoveMember: (groupId: string, memberUserId: string) => void
+    onLeaveGroup: (groupId: string) => void
     onUpdateGroup: (groupId: string, name: string, defaultRole: Group['defaultRole']) => void
     onDeleteGroup: (groupId: string) => void
     draggedCardId: string | null
@@ -185,6 +192,7 @@ export function DashboardContent({
     folderFavouriteIds,
     currentUser,
     groups,
+    incomingGroupInvites,
     groupError,
     activeGroupId,
     groupCreateOpen,
@@ -198,6 +206,11 @@ export function DashboardContent({
     onCloseGroupInvite,
     onInvite,
     onRemoveInvite,
+    onAcceptInvite,
+    onDeclineInvite,
+    onUpdateMember,
+    onRemoveMember,
+    onLeaveGroup,
     onUpdateGroup,
     onDeleteGroup,
     draggedCardId,
@@ -344,6 +357,7 @@ export function DashboardContent({
             {!loading && view === 'groups' && (
                 <GroupsPanel
                     groups={groups}
+                    incomingInvites={incomingGroupInvites}
                     error={groupError}
                     activeGroupId={activeGroupId}
                     createOpen={groupCreateOpen}
@@ -357,6 +371,11 @@ export function DashboardContent({
                     onCloseInvite={onCloseGroupInvite}
                     onInvite={onInvite}
                     onRemoveInvite={onRemoveInvite}
+                    onAcceptInvite={onAcceptInvite}
+                    onDeclineInvite={onDeclineInvite}
+                    onUpdateMember={onUpdateMember}
+                    onRemoveMember={onRemoveMember}
+                    onLeaveGroup={onLeaveGroup}
                     onUpdateGroup={onUpdateGroup}
                     onDeleteGroup={onDeleteGroup}
                 />

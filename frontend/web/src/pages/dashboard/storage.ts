@@ -153,6 +153,10 @@ export function loadGroups(): Group[] {
             return (JSON.parse(raw) as Group[]).map((group) => ({
                 ...group,
                 defaultRole: group.defaultRole ?? 'viewer',
+                ownerEmail: group.ownerEmail ?? '',
+                ownedByMe: group.ownedByMe ?? true,
+                myRole: group.myRole ?? 'admin',
+                members: group.members ?? [],
                 invites: group.invites ?? [],
             }))
         }
@@ -166,6 +170,10 @@ export function loadGroups(): Group[] {
                       name: 'Main group',
                       defaultRole: 'viewer',
                       createdAt: new Date().toISOString(),
+                      ownerEmail: '',
+                      ownedByMe: true,
+                      myRole: 'admin',
+                      members: [],
                       invites: legacyInvites,
                   },
               ]

@@ -25,7 +25,10 @@ pub fn auth_limited_routes() -> Router<AppState> {
     Router::new()
         .route("/users/register", post(register_user))
         .route("/users/login", post(login_user))
-        .route("/users/resend-verification", post(resend_verification_email))
+        .route(
+            "/users/resend-verification",
+            post(resend_verification_email),
+        )
         .route("/users/forgot-password", post(forgot_password))
         .route("/users/recovery-blob", get(get_recovery_blob))
         .route("/users/reset-password", post(reset_password))

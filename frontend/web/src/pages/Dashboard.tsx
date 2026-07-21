@@ -74,6 +74,7 @@ function Dashboard() {
     const { layoutMode, layoutSwitchTarget, changeLayoutMode } = useLayoutModeSwitch()
     const {
         groups,
+        incomingInvites,
         activeGroupId,
         groupCreateOpen,
         groupInviteOpen,
@@ -83,6 +84,11 @@ function Dashboard() {
         openGroup,
         backToGroups,
         addGroupInvite,
+        acceptGroupInvite,
+        declineGroupInvite,
+        updateMemberRole,
+        removeGroupMember,
+        leaveGroup,
         updateGroup,
         deleteGroup,
         removeGroupInvite,
@@ -415,6 +421,7 @@ function Dashboard() {
                     folderFavouriteIds={folderFavouriteIds}
                     currentUser={currentUser}
                     groups={groups}
+                    incomingGroupInvites={incomingInvites}
                     groupError={groupError}
                     activeGroupId={activeGroupId}
                     groupCreateOpen={groupCreateOpen}
@@ -434,6 +441,11 @@ function Dashboard() {
                     onCloseGroupInvite={() => setGroupInviteOpen(false)}
                     onInvite={addGroupInvite}
                     onRemoveInvite={removeGroupInvite}
+                    onAcceptInvite={acceptGroupInvite}
+                    onDeclineInvite={declineGroupInvite}
+                    onUpdateMember={updateMemberRole}
+                    onRemoveMember={removeGroupMember}
+                    onLeaveGroup={leaveGroup}
                     onUpdateGroup={updateGroup}
                     onDeleteGroup={deleteGroup}
                     draggedCardId={draggedCardId}

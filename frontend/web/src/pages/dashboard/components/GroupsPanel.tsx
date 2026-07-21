@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import type * as React from 'react'
-import type { Group, GroupInviteRole } from '../types'
+import type { Group, GroupIncomingInvite, GroupInviteRole } from '../types'
 import { formatRelative } from '../fileUtils'
 import {
     ARROW_LEFT_ICON,
@@ -13,6 +13,7 @@ import { RoleDropdown } from './groupControls'
 
 export function GroupsPanel({
                                 groups,
+                                incomingInvites,
                                 activeGroupId,
                                 createOpen,
                                 inviteOpen,
@@ -25,11 +26,17 @@ export function GroupsPanel({
                                 onCloseInvite,
                                 onInvite,
                                 onRemoveInvite,
+                                onAcceptInvite,
+                                onDeclineInvite,
+                                onUpdateMember,
+                                onRemoveMember,
+                                onLeaveGroup,
                                 onUpdateGroup,
                                 onDeleteGroup,
                                 error,
-                            }: {
+}: {
     groups: Group[]
+    incomingInvites: GroupIncomingInvite[]
     error?: string | null
     activeGroupId: string | null
     createOpen: boolean
@@ -43,6 +50,11 @@ export function GroupsPanel({
     onCloseInvite: () => void
     onInvite: (groupId: string, email: string, role: GroupInviteRole) => void
     onRemoveInvite: (groupId: string, inviteId: string) => void
+    onAcceptInvite: (inviteId: string) => void
+    onDeclineInvite: (inviteId: string) => void
+    onUpdateMember: (groupId: string, memberUserId: string, role: GroupInviteRole) => void
+    onRemoveMember: (groupId: string, memberUserId: string) => void
+    onLeaveGroup: (groupId: string) => void
     onUpdateGroup: (groupId: string, name: string, defaultRole: GroupInviteRole) => void
     onDeleteGroup: (groupId: string) => void
 }) {
@@ -57,6 +69,7 @@ export function GroupsPanel({
     const [settingsError, setSettingsError] = useState<string | null>(null)
     const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
     const activeGroup = activeGroupId ? groups.find((group) => group.id === activeGroupId) ?? null : null
+    const canManageActiveGroup = activeGroup?.ownedByMe ?? false
 
     useEffect(() => {
         let timeout: ReturnType<typeof setTimeout> | undefined
@@ -178,6 +191,11 @@ export function GroupsPanel({
             return
         }
 
+        if (activeGroup.members.some((member) => member.email === normalizedEmail)) {
+            setFormError('This person is already a member.')
+            return
+        }
+
         onInvite(activeGroup.id, normalizedEmail, role)
         setEmail('')
         setRole('viewer')
@@ -214,17 +232,23 @@ export function GroupsPanel({
                                 </div>
                             </div>
                         </div>
-                        <button className="btn btn--solid" type="button" onClick={onOpenInvite}>
-                            {PLUS_ICON} Add member
-                        </button>
+                        {canManageActiveGroup ? (
+                            <button className="btn btn--solid" type="button" onClick={onOpenInvite}>
+                                {PLUS_ICON} Add member
+                            </button>
+                        ) : (
+                            <button className="btn btn--outline" type="button" onClick={() => onLeaveGroup(activeGroup.id)}>
+                                Leave group
+                            </button>
+                        )}
                     </div>
 
                     <div className="groups-summary">
                         <div className="groups-summary__item">
                             <span className="groups-summary__icon" aria-hidden="true">{PLUS_ICON}</span>
                             <div>
-                                <strong>{activeGroup.invites.length}</strong>
-                                <span>Pending invitations</span>
+                                <strong>{activeGroup.members.length}</strong>
+                                <span>{activeGroup.members.length === 1 ? 'Member' : 'Members'}</span>
                             </div>
                         </div>
                         <div className="groups-summary__item">
@@ -237,12 +261,13 @@ export function GroupsPanel({
                         <div className="groups-summary__item">
                             <span className="groups-summary__icon" aria-hidden="true">{CHECK_ICON}</span>
                             <div>
-                                <strong className={`groups-role groups-role--${activeGroup.defaultRole}`}>{activeGroup.defaultRole}</strong>
-                                <span>Default access</span>
+                                <strong className={`groups-role groups-role--${activeGroup.myRole}`}>{activeGroup.myRole}</strong>
+                                <span>Your access</span>
                             </div>
                         </div>
                     </div>
 
+                    {canManageActiveGroup && (
                     <form className="groups-settings" onSubmit={submitSettings}>
                         <div className="groups-settings__head">
                             <div>
@@ -312,6 +337,7 @@ export function GroupsPanel({
                             )}
                         </div>
                     </form>
+                    )}
 
                     <div className="groups-members">
                         <div className="groups-members__head">
@@ -319,38 +345,86 @@ export function GroupsPanel({
                                 <p className="groups-panel__eyebrow">Access</p>
                                 <h3>Members</h3>
                             </div>
-                            <span className="groups-members__count">{activeGroup.invites.length}</span>
+                            <span className="groups-members__count">{activeGroup.members.length}</span>
                         </div>
                         <div className="groups-invites">
-                            {activeGroup.invites.length > 0 ? (
-                                activeGroup.invites.map((invite) => (
-                                    <div className="groups-invites__row" key={invite.id}>
+                            {activeGroup.members.length > 0 ? (
+                                activeGroup.members.map((member) => (
+                                    <div className="groups-invites__row" key={member.userId}>
                                         <div className="groups-invites__avatar" aria-hidden="true">
-                                            {invite.email.charAt(0).toUpperCase()}
+                                            {member.email.charAt(0).toUpperCase()}
                                         </div>
                                         <div className="groups-invites__person">
-                                            <strong>{invite.email}</strong>
-                                            <span>Invited {formatRelative(invite.createdAt)}</span>
+                                            <strong>{member.displayName || member.email}</strong>
+                                            <span>{member.isOwner ? 'Owner' : `Joined ${formatRelative(member.joinedAt)}`}</span>
                                         </div>
-                                        <span className={`groups-role groups-role--${invite.role}`}>{invite.role}</span>
-                                        <button
-                                            className="groups-invites__remove"
-                                            type="button"
-                                            onClick={() => onRemoveInvite(activeGroup.id, invite.id)}
-                                            aria-label={`Cancel invitation for ${invite.email}`}
-                                        >
-                                            Cancel
-                                        </button>
+                                        {canManageActiveGroup && !member.isOwner ? (
+                                            <RoleDropdown
+                                                value={member.role}
+                                                onChange={(nextRole) => onUpdateMember(activeGroup.id, member.userId, nextRole)}
+                                                label={`Role for ${member.email}`}
+                                            />
+                                        ) : (
+                                            <span className={`groups-role groups-role--${member.role}`}>{member.role}</span>
+                                        )}
+                                        {canManageActiveGroup && !member.isOwner && (
+                                            <button
+                                                className="groups-invites__remove"
+                                                type="button"
+                                                onClick={() => onRemoveMember(activeGroup.id, member.userId)}
+                                                aria-label={`Remove ${member.email} from ${activeGroup.name}`}
+                                            >
+                                                Remove
+                                            </button>
+                                        )}
                                     </div>
                                 ))
                             ) : (
-                                <p className="groups-invites__empty">No invitations yet. Add the first member to start collaborating.</p>
+                                <p className="groups-invites__empty">No members yet.</p>
                             )}
                         </div>
                     </div>
+
+                    {canManageActiveGroup && (
+                        <div className="groups-members">
+                            <div className="groups-members__head">
+                                <div>
+                                    <p className="groups-panel__eyebrow">Invitations</p>
+                                    <h3>Pending</h3>
+                                </div>
+                                <span className="groups-members__count">{activeGroup.invites.length}</span>
+                            </div>
+                            <div className="groups-invites">
+                                {activeGroup.invites.length > 0 ? (
+                                    activeGroup.invites.map((invite) => (
+                                        <div className="groups-invites__row" key={invite.id}>
+                                            <div className="groups-invites__avatar" aria-hidden="true">
+                                                {invite.email.charAt(0).toUpperCase()}
+                                            </div>
+                                            <div className="groups-invites__person">
+                                                <strong>{invite.email}</strong>
+                                                <span>Invited {formatRelative(invite.createdAt)}</span>
+                                            </div>
+                                            <span className={`groups-role groups-role--${invite.role}`}>{invite.role}</span>
+                                            <button
+                                                className="groups-invites__remove"
+                                                type="button"
+                                                onClick={() => onRemoveInvite(activeGroup.id, invite.id)}
+                                                aria-label={`Cancel invitation for ${invite.email}`}
+                                            >
+                                                Cancel
+                                            </button>
+                                        </div>
+                                    ))
+                                ) : (
+                                    <p className="groups-invites__empty">No pending invitations.</p>
+                                )}
+                            </div>
+                        </div>
+                    )}
                 </section>
 
-                {inviteOpen && (
+                {inviteOpen && canManageActiveGroup && (
                     <div className="groups-modal" role="presentation" onMouseDown={closeInvite}>
                         <form
                             className="groups-modal__dialog"
@@ -433,6 +507,48 @@ export function GroupsPanel({
                     </button>
                 </div>
 
+                {incomingInvites.length > 0 && (
+                    <div className="groups-members groups-members--incoming">
+                        <div className="groups-members__head">
+                            <div>
+                                <p className="groups-panel__eyebrow">Invitations</p>
+                                <h3>Waiting for you</h3>
+                            </div>
+                            <span className="groups-members__count">{incomingInvites.length}</span>
+                        </div>
+                        <div className="groups-invites">
+                            {incomingInvites.map((invite) => (
+                                <div className="groups-invites__row" key={invite.id}>
+                                    <div className="groups-invites__avatar" aria-hidden="true">
+                                        {invite.groupName.charAt(0).toUpperCase()}
+                                    </div>
+                                    <div className="groups-invites__person">
+                                        <strong>{invite.groupName}</strong>
+                                        <span>Invited by {invite.invitedByEmail}</span>
+                                    </div>
+                                    <span className={`groups-role groups-role--${invite.role}`}>{invite.role}</span>
+                                    <div className="groups-danger__actions">
+                                        <button
+                                            className="btn btn--outline"
+                                            type="button"
+                                            onClick={() => onDeclineInvite(invite.id)}
+                                        >
+                                            Decline
+                                        </button>
+                                        <button
+                                            className="btn btn--solid"
+                                            type="button"
+                                            onClick={() => onAcceptInvite(invite.id)}
+                                        >
+                                            Accept
+                                        </button>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
                 {groups.length > 0 ? (
                     <div className="groups-list">
                         {groups.map((group) => (
@@ -444,9 +560,9 @@ export function GroupsPanel({
                             >
                                 <div className="groups-list__mark" aria-hidden="true">{group.name.charAt(0).toUpperCase()}</div>
                                 <div className="groups-list__body">
-                                    <div className="groups-list__title-row"><strong>{group.name}</strong><span className={`groups-role groups-role--${group.defaultRole}`}>{group.defaultRole}</span></div>
+                                    <div className="groups-list__title-row"><strong>{group.name}</strong><span className={`groups-role groups-role--${group.myRole}`}>{group.ownedByMe ? 'owner' : group.myRole}</span></div>
                                     <div className="groups-list__meta">
-                                        <span>{group.invites.length === 1 ? '1 pending invitation' : `${group.invites.length} pending invitations`}</span>
+                                        <span>{group.members.length === 1 ? '1 member' : `${group.members.length} members`}</span>
                                         <span>Created {formatRelative(group.createdAt)}</span>
                                     </div>
                                 </div>

@@ -379,6 +379,10 @@ html[data-theme='light'] .groups-list__mark {
     margin-top: 28px;
 }
 
+.groups-members--incoming {
+    margin: 0 0 24px;
+}
+
 .groups-members__head {
     margin-bottom: 12px;
 }
@@ -418,6 +422,14 @@ html[data-theme='light'] .groups-list__mark {
 
 .groups-invites__remove {
     border: 1px solid transparent;
+}
+
+.groups-invites__row .role-dropdown {
+    width: min(160px, 100%);
+}
+
+.groups-invites__row .groups-danger__actions {
+    justify-content: flex-end;
 }
 
 .groups-invites__remove:hover,
@@ -521,6 +533,11 @@ html[data-theme='light'] .groups-list__mark {
     .groups-invites__remove {
         grid-column: 3;
         grid-row: 1 / span 2;
+    }
+
+    .groups-invites__row .groups-danger__actions {
+        grid-column: 2 / -1;
+        justify-content: flex-start;
     }
 }
 

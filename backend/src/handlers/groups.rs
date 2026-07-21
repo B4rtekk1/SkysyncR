@@ -8,9 +8,12 @@ use uuid::Uuid;
 
 use crate::auth::AuthUser;
 use crate::db::groups::{
-    GroupInviteRecord, GroupRecord, GroupShareRecipientRecord, GroupUpdate, NewGroup,
-    NewGroupInvite, create_group_invite_record, create_group_record, delete_group_invite_record,
-    delete_group_record, group_belongs_to_user, list_group_share_recipients, list_user_groups,
+    GroupIncomingInviteRecord, GroupInviteRecord, GroupRecord, GroupShareRecipientRecord,
+    GroupUpdate, NewGroup, NewGroupInvite, accept_group_invite_record, create_group_invite_record,
+    create_group_record, decline_group_invite_record, delete_group_invite_record,
+    delete_group_member_record, delete_group_record, group_belongs_to_user,
+    group_invite_target_available, leave_group_record, list_group_share_recipients,
+    list_incoming_group_invites, list_user_groups, update_group_member_role_record,
     update_group_record,
 };
 use crate::state::AppState;
@@ -29,6 +32,11 @@ pub struct GroupInviteRequest {
     pub role: String,
 }
 
+#[derive(Deserialize)]
+pub struct GroupMemberRoleRequest {
+    pub role: String,
+}
+
 pub async fn list_groups(
     State(state): State<AppState>,
     auth: AuthUser,
@@ -38,6 +46,17 @@ pub async fn list_groups(
         .map_err(|e| internal_error("list groups", e))?;
 
     Ok(Json(groups))
+}
+
+pub async fn list_incoming_invites(
+    State(state): State<AppState>,
+    auth: AuthUser,
+) -> Result<Json<Vec<GroupIncomingInviteRecord>>, ApiError> {
+    let invites = list_incoming_group_invites(&state.db_pool, auth.user_id)
+        .await
+        .map_err(|e| internal_error("list incoming group invites", e))?;
+
+    Ok(Json(invites))
 }
 
 pub async fn create_group(
@@ -125,6 +144,15 @@ pub async fn create_group_invite(
 
     let email = payload.email.trim().to_lowercase();
     validate_email(&email).map_err(|msg| ApiError::BadRequest(msg.into()))?;
+    let available = group_invite_target_available(&state.db_pool, group_id, &email)
+        .await
+        .map_err(|e| internal_error("check group invite target", e))?;
+    if !available {
+        return Err(ApiError::BadRequest(
+            "This person is already a member or has a pending invitation".into(),
+        ));
+    }
+
     let role = validate_group_role(&payload.role)?;
     let invite = create_group_invite_record(
         &state.db_pool,
@@ -152,6 +180,94 @@ pub async fn delete_group_invite(
 
     if rows == 0 {
         return Err(ApiError::BadRequest("Group invite not found".into()));
+    }
+
+    Ok(StatusCode::NO_CONTENT)
+}
+
+pub async fn accept_group_invite(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Path(invite_id): Path<Uuid>,
+) -> Result<StatusCode, ApiError> {
+    let rows = accept_group_invite_record(&state.db_pool, auth.user_id, invite_id)
+        .await
+        .map_err(|e| internal_error("accept group invite", e))?;
+
+    if rows == 0 {
+        return Err(ApiError::BadRequest("Group invite not found".into()));
+    }
+
+    Ok(StatusCode::NO_CONTENT)
+}
+
+pub async fn decline_group_invite(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Path(invite_id): Path<Uuid>,
+) -> Result<StatusCode, ApiError> {
+    let rows = decline_group_invite_record(&state.db_pool, auth.user_id, invite_id)
+        .await
+        .map_err(|e| internal_error("decline group invite", e))?;
+
+    if rows == 0 {
+        return Err(ApiError::BadRequest("Group invite not found".into()));
+    }
+
+    Ok(StatusCode::NO_CONTENT)
+}
+
+pub async fn update_group_member(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Path((group_id, member_user_id)): Path<(Uuid, Uuid)>,
+    Json(payload): Json<GroupMemberRoleRequest>,
+) -> Result<StatusCode, ApiError> {
+    let role = validate_group_role(&payload.role)?;
+    let rows = update_group_member_role_record(
+        &state.db_pool,
+        auth.user_id,
+        group_id,
+        member_user_id,
+        role,
+    )
+    .await
+    .map_err(|e| internal_error("update group member", e))?;
+
+    if rows == 0 {
+        return Err(ApiError::BadRequest("Group member not found".into()));
+    }
+
+    Ok(StatusCode::NO_CONTENT)
+}
+
+pub async fn delete_group_member(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Path((group_id, member_user_id)): Path<(Uuid, Uuid)>,
+) -> Result<StatusCode, ApiError> {
+    let rows = delete_group_member_record(&state.db_pool, auth.user_id, group_id, member_user_id)
+        .await
+        .map_err(|e| internal_error("delete group member", e))?;
+
+    if rows == 0 {
+        return Err(ApiError::BadRequest("Group member not found".into()));
+    }
+
+    Ok(StatusCode::NO_CONTENT)
+}
+
+pub async fn leave_group(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Path(group_id): Path<Uuid>,
+) -> Result<StatusCode, ApiError> {
+    let rows = leave_group_record(&state.db_pool, auth.user_id, group_id)
+        .await
+        .map_err(|e| internal_error("leave group", e))?;
+
+    if rows == 0 {
+        return Err(ApiError::BadRequest("Group membership not found".into()));
     }
 
     Ok(StatusCode::NO_CONTENT)

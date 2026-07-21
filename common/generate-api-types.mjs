@@ -60,4 +60,6 @@ for (const [name, schema] of Object.entries(schemas)) {
   lines.push('')
 }
 
+if (lines.at(-1) === '') lines.pop()
+
 await writeFile(outPath, `${lines.join('\n')}\n`)

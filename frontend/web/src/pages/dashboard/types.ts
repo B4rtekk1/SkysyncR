@@ -51,11 +51,34 @@ export type GroupInvite = {
     createdAt: string
 }
 
+export type GroupMember = {
+    userId: string
+    email: string
+    displayName: string | null
+    role: GroupInviteRole
+    joinedAt: string
+    isOwner: boolean
+}
+
+export type GroupIncomingInvite = {
+    id: string
+    groupId: string
+    groupName: string
+    invitedByEmail: string
+    role: GroupInviteRole
+    createdAt: string
+    expiresAt: string
+}
+
 export type Group = {
     id: string
     name: string
     defaultRole: GroupInviteRole
     createdAt: string
+    ownerEmail: string
+    ownedByMe: boolean
+    myRole: GroupInviteRole
+    members: GroupMember[]
     invites: GroupInvite[]
 }
 

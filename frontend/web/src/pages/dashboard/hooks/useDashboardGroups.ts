@@ -1,14 +1,20 @@
 import { useEffect, useState } from 'react'
 import {
+    acceptGroupInvite as acceptRemoteGroupInvite,
     createGroup as createRemoteGroup,
     createGroupInvite,
+    declineGroupInvite as declineRemoteGroupInvite,
+    deleteGroupMember,
     deleteGroup as deleteRemoteGroup,
     deleteGroupInvite,
+    leaveGroup as leaveRemoteGroup,
+    listIncomingGroupInvites,
     listGroups,
+    updateGroupMemberRole,
     updateGroup as updateRemoteGroup,
 } from '../../../api/groups'
 import { loadGroups, saveGroups } from '../storage'
-import type { Group, GroupInviteRole } from '../types'
+import type { Group, GroupIncomingInvite, GroupInviteRole } from '../types'
 
 export function useDashboardGroups() {
     const [groups, setGroups] = useState<Group[]>([])
@@ -16,6 +22,7 @@ export function useDashboardGroups() {
     const [groupCreateOpen, setGroupCreateOpen] = useState(false)
     const [groupInviteOpen, setGroupInviteOpen] = useState(false)
     const [groupError, setGroupError] = useState<string | null>(null)
+    const [incomingInvites, setIncomingInvites] = useState<GroupIncomingInvite[]>([])
 
     useEffect(() => {
         let active = true
@@ -23,9 +30,13 @@ export function useDashboardGroups() {
         async function loadRemoteGroups() {
             try {
                 setGroupError(null)
-                const remoteGroups = await listGroups()
+                const [remoteGroups, remoteInvites] = await Promise.all([
+                    listGroups(),
+                    listIncomingGroupInvites(),
+                ])
                 if (!active) return
 
+                setIncomingInvites(remoteInvites)
                 if (remoteGroups.length > 0) {
                     setGroups(remoteGroups)
                     saveGroups([])
@@ -49,11 +60,15 @@ export function useDashboardGroups() {
                 }
 
                 saveGroups([])
-                if (active) setGroups(migratedGroups)
+                if (active) {
+                    setGroups(migratedGroups)
+                    setIncomingInvites(remoteInvites)
+                }
             } catch (error) {
                 if (active) {
                     setGroupError(error instanceof Error ? error.message : 'Could not load groups.')
                     setGroups([])
+                    setIncomingInvites([])
                 }
             }
         }
@@ -64,6 +79,16 @@ export function useDashboardGroups() {
             active = false
         }
     }, [])
+
+    async function refreshGroups() {
+        const [remoteGroups, remoteInvites] = await Promise.all([
+            listGroups(),
+            listIncomingGroupInvites(),
+        ])
+        setGroups(remoteGroups)
+        setIncomingInvites(remoteInvites)
+        return remoteGroups
+    }
 
     async function createGroup(name: string, defaultRole: GroupInviteRole) {
         try {
@@ -107,6 +132,62 @@ export function useDashboardGroups() {
         }
     }
 
+    async function acceptGroupInvite(inviteId: string) {
+        try {
+            setGroupError(null)
+            const acceptedInvite = incomingInvites.find((invite) => invite.id === inviteId)
+            await acceptRemoteGroupInvite(inviteId)
+            await refreshGroups()
+            if (!activeGroupId && acceptedInvite) setActiveGroupId(acceptedInvite.groupId)
+        } catch (error) {
+            setGroupError(error instanceof Error ? error.message : 'Could not accept group invite.')
+        }
+    }
+
+    async function declineGroupInvite(inviteId: string) {
+        try {
+            setGroupError(null)
+            await declineRemoteGroupInvite(inviteId)
+            await refreshGroups()
+        } catch (error) {
+            setGroupError(error instanceof Error ? error.message : 'Could not decline group invite.')
+        }
+    }
+
+    async function updateMemberRole(groupId: string, memberUserId: string, role: GroupInviteRole) {
+        try {
+            setGroupError(null)
+            await updateGroupMemberRole(groupId, memberUserId, role)
+            await refreshGroups()
+        } catch (error) {
+            setGroupError(error instanceof Error ? error.message : 'Could not update group member.')
+        }
+    }
+
+    async function removeGroupMember(groupId: string, memberUserId: string) {
+        try {
+            setGroupError(null)
+            await deleteGroupMember(groupId, memberUserId)
+            await refreshGroups()
+        } catch (error) {
+            setGroupError(error instanceof Error ? error.message : 'Could not remove group member.')
+        }
+    }
+
+    async function leaveGroup(groupId: string) {
+        try {
+            setGroupError(null)
+            await leaveRemoteGroup(groupId)
+            setGroups((prev) => prev.filter((group) => group.id !== groupId))
+            setActiveGroupId(null)
+            setGroupCreateOpen(false)
+            setGroupInviteOpen(false)
+            await refreshGroups()
+        } catch (error) {
+            setGroupError(error instanceof Error ? error.message : 'Could not leave group.')
+        }
+    }
+
     async function updateGroup(groupId: string, name: string, defaultRole: GroupInviteRole) {
         try {
             setGroupError(null)
@@ -116,6 +197,7 @@ export function useDashboardGroups() {
                     group.id === groupId
                         ? {
                               ...updated,
+                              members: group.members,
                               invites: group.invites,
                           }
                         : group,
@@ -160,6 +242,7 @@ export function useDashboardGroups() {
 
     return {
         groups,
+        incomingInvites,
         activeGroupId,
         groupCreateOpen,
         groupInviteOpen,
@@ -170,6 +253,11 @@ export function useDashboardGroups() {
         openGroup,
         backToGroups,
         addGroupInvite,
+        acceptGroupInvite,
+        declineGroupInvite,
+        updateMemberRole,
+        removeGroupMember,
+        leaveGroup,
         updateGroup,
         deleteGroup,
         removeGroupInvite,

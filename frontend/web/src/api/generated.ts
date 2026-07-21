@@ -185,11 +185,34 @@ export type GroupInvite = {
   "createdAt": string
 }
 
+export type GroupMember = {
+  "userId": string
+  "email": string
+  "displayName": string | null
+  "role": GroupRole
+  "joinedAt": string
+  "isOwner": boolean
+}
+
+export type GroupIncomingInvite = {
+  "id": string
+  "groupId": string
+  "groupName": string
+  "invitedByEmail": string
+  "role": GroupRole
+  "createdAt": string
+  "expiresAt": string
+}
+
 export type Group = {
   "id": string
   "name": string
   "defaultRole": GroupRole
   "createdAt": string
+  "ownerEmail": string
+  "ownedByMe": boolean
+  "myRole": GroupRole
+  "members": GroupMember[]
   "invites": GroupInvite[]
 }
 
@@ -265,6 +288,10 @@ export type GroupRequest = {
 
 export type GroupInviteRequest = {
   "email": string
+  "role": GroupRole
+}
+
+export type GroupMemberRoleRequest = {
   "role": GroupRole
 }
 
