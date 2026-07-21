@@ -90,6 +90,7 @@ export function FileNoteModal({ item, saving, onClose, onSave }: FileNoteModalPr
                 <TextFileEditor
                     canHighlightPython={false}
                     canRenderMarkdown
+                    highlightLanguage={null}
                     error={error}
                             saving={saving}
                             text={note}

@@ -110,6 +110,12 @@ export function isPythonFile(filename: string, mime: string | null) {
     return ['py', 'pyw', 'pyi'].includes(ext) || normalizedMime === 'text/x-python' || normalizedMime === 'application/x-python-code'
 }
 
+export function isTypeScriptFile(filename: string, mime: string | null) {
+    const ext = filename.split('.').pop()?.toLowerCase() ?? ''
+    const normalizedMime = mime?.toLowerCase() ?? ''
+    return ['ts', 'tsx'].includes(ext) || normalizedMime === 'text/typescript' || normalizedMime === 'application/typescript'
+}
+
 export const KIND_ACCENT: Record<FileKind, string> = {
     sheet: 'var(--signal)',
     document: 'var(--mist)',

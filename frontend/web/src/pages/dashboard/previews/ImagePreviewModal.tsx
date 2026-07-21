@@ -36,7 +36,7 @@ export function ImagePreviewModal({
     onDownload: (item: Item) => void
     onSaveText: (item: Item, text: string) => Promise<void>
 }) {
-    const { canHighlightPython, canRenderMarkdown, setTextMode, textMode } = useTextFilePreview(preview.item, preview.text)
+    const { canHighlightPython, canRenderMarkdown, highlightLanguage, setTextMode, textMode } = useTextFilePreview(preview.item, preview.text)
     const [isEditingText, setIsEditingText] = useState(Boolean(preview.startEditing))
     const [editDraft, setEditDraft] = useState(preview.text ?? '')
     const [manualSaving, setManualSaving] = useState(false)
@@ -259,6 +259,7 @@ export function ImagePreviewModal({
                             <TextFileEditor
                                 canHighlightPython={canHighlightPython}
                                 canRenderMarkdown={canRenderMarkdown}
+                                highlightLanguage={highlightLanguage}
                                 error={editError}
                                 autosaveStatus={autosaveStatus}
                                 saving={manualSaving}
@@ -273,6 +274,7 @@ export function ImagePreviewModal({
                             <TextFilePreview
                                 canHighlightPython={canHighlightPython}
                                 canRenderMarkdown={canRenderMarkdown}
+                                highlightLanguage={highlightLanguage}
                                 text={preview.text}
                                 textMode={textMode}
                             />

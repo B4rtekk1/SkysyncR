@@ -1,5 +1,5 @@
 import type { FileKind } from '../fileUtils'
-import { isPythonFile, KIND_ACCENT } from '../fileUtils'
+import { isPythonFile, isTypeScriptFile, KIND_ACCENT } from '../fileUtils'
 const DOCUMENT_ICON_PATH = 'M6 2.5h8l4 4v14a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V3.5a1 1 0 0 1 1-1Z'
 const DOCUMENT_FOLD_PATH = 'M14 2.5V7a1 1 0 0 0 1 1h4.5'
 
@@ -87,6 +87,17 @@ export function FileIcon({ filename, kind, mime }: { filename: string; kind: Fil
                     />
                     <circle cx="8.13" cy="8.4" r="1.05" fill="#f8fafc" />
                     <circle cx="15.87" cy="15.6" r="1.05" fill="#1f2937" />
+                </svg>
+            )
+        }
+        if (isTypeScriptFile(filename, mime)) {
+            return (
+                <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true">
+                    <rect x="3" y="3" width="18" height="18" rx="2.4" fill="#3178c6" />
+                    <path
+                        d="M7 10.1h6.2v1.65h-2.1V17H9.1v-5.25H7v-1.65ZM14.1 16.3c.55.48 1.32.72 2.2.72 1.5 0 2.55-.75 2.55-2.08 0-1.16-.66-1.67-2.08-2.08-.75-.22-1.02-.38-1.02-.72 0-.33.28-.54.78-.54.58 0 1.04.18 1.52.58l.7-1.28a3.2 3.2 0 0 0-2.18-.76c-1.48 0-2.48.82-2.48 2.04 0 1.28.78 1.74 2.16 2.12.7.2.94.38.94.7 0 .36-.31.56-.85.56-.68 0-1.24-.22-1.78-.68l-.46 1.42Z"
+                        fill="#ffffff"
+                    />
                 </svg>
             )
         }

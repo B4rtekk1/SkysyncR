@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { formatBytes, formatRelative, isMarkdownFile, isPythonFile, kindFromFile, scramble } from './fileUtils.ts'
+import { formatBytes, formatRelative, isMarkdownFile, isPythonFile, isTypeScriptFile, kindFromFile, scramble } from './fileUtils.ts'
 
 test('kindFromFile prefers MIME families for common media files', () => {
   assert.equal(kindFromFile('download.bin', 'image/png'), 'image')
@@ -34,6 +34,13 @@ test('isPythonFile accepts python MIME types and extensions', () => {
   assert.equal(isPythonFile('types.pyi', null), true)
   assert.equal(isPythonFile('script.txt', 'text/x-python'), true)
   assert.equal(isPythonFile('notes.txt', 'text/plain'), false)
+})
+
+test('isTypeScriptFile accepts typescript MIME types and extensions', () => {
+  assert.equal(isTypeScriptFile('component.tsx', null), true)
+  assert.equal(isTypeScriptFile('module.ts', 'text/plain'), true)
+  assert.equal(isTypeScriptFile('script.txt', 'text/typescript'), true)
+  assert.equal(isTypeScriptFile('script.js', 'text/javascript'), false)
 })
 
 test('formatBytes uses the smallest readable unit', () => {

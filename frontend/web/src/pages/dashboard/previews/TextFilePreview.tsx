@@ -9,8 +9,9 @@ import {
 } from '../pythonCompletion'
 import { highlightPython } from '../pythonHighlight'
 import { checkPythonTypes, type PythonTypeDiagnostic } from '../pythonTypeCheck'
+import { highlightTypeScript } from '../typescriptHighlight'
 import type { Item } from '../types'
-import type { TextPreviewMode } from './useTextFilePreview'
+import type { CodeHighlightLanguage, TextPreviewMode } from './useTextFilePreview'
 
 const MarkdownPreview = lazy(() => import('./MarkdownPreview').then((module) => ({ default: module.MarkdownPreview })))
 const INDENT_WIDTH = 4
@@ -72,7 +73,7 @@ function getCompletionPosition(textarea: HTMLTextAreaElement) {
     return { left, top }
 }
 
-function renderPythonHighlight(text: string) {
+function renderCodeHighlight(text: string, language: CodeHighlightLanguage) {
     const lines = text.split('\n')
     const indentLevels = lines.map((line) => {
         const indentText = line.match(/^[\t ]*/)?.[0] ?? ''
@@ -97,7 +98,8 @@ function renderPythonHighlight(text: string) {
                 />
             )
         })
-        const lineNodes: ReactNode[] = highlightPython(line).map((token, tokenIndex) => (
+        const tokens = language === 'python' ? highlightPython(line) : highlightTypeScript(line)
+        const lineNodes: ReactNode[] = tokens.map((token, tokenIndex) => (
             <span className={`syntax-token syntax-token--${token.type}`} key={tokenIndex}>
                 {token.text}
             </span>
@@ -264,11 +266,13 @@ export function TextFileCopyButton({ item, text }: { item: Item; text: string })
 export function TextFilePreview({
     canHighlightPython,
     canRenderMarkdown,
+    highlightLanguage,
     text,
     textMode,
 }: {
     canHighlightPython: boolean
     canRenderMarkdown: boolean
+    highlightLanguage: CodeHighlightLanguage | null
     text: string
     textMode: TextPreviewMode
 }) {
@@ -282,11 +286,11 @@ export function TextFilePreview({
         )
     }
 
-    if (canHighlightPython) {
+    if (highlightLanguage) {
         return (
             <>
                 <pre className="image-preview__text image-preview__text--highlight" tabIndex={0}>
-                    {text ? renderPythonHighlight(text) : 'This file is empty.'}
+                    {text ? renderCodeHighlight(text, highlightLanguage) : 'This file is empty.'}
                 </pre>
                 <PythonTypeDiagnostics diagnostics={typeDiagnostics} />
             </>
@@ -304,6 +308,7 @@ export function TextFileEditor({
     autosaveStatus,
     canHighlightPython,
     canRenderMarkdown,
+    highlightLanguage,
     error,
     onChange,
     onSave,
@@ -313,6 +318,7 @@ export function TextFileEditor({
     autosaveStatus?: 'idle' | 'pending' | 'saving' | 'saved' | 'error'
     canHighlightPython: boolean
     canRenderMarkdown: boolean
+    highlightLanguage: CodeHighlightLanguage | null
     error: string | null
     onChange: (text: string) => void
     onSave: () => void
@@ -333,7 +339,7 @@ export function TextFileEditor({
                 : autosaveStatus === 'error'
                   ? 'Autosave failed'
                   : null
-    const renderHighlightedText = (value: string) => (value ? renderPythonHighlight(value) : null)
+    const renderHighlightedText = (value: string) => (value && highlightLanguage ? renderCodeHighlight(value, highlightLanguage) : null)
     const updateCompletion = (textarea: HTMLTextAreaElement, value: string = textarea.value) => {
         if (!canHighlightPython) {
             setCompletion(null)
@@ -390,17 +396,17 @@ export function TextFileEditor({
         <div
             className={`image-preview__editor-wrap ${
                 canRenderMarkdown ? 'image-preview__editor-wrap--markdown' : ''
-            } ${canHighlightPython ? 'image-preview__editor-wrap--highlight' : ''}`}
+            } ${highlightLanguage ? 'image-preview__editor-wrap--highlight' : ''}`}
         >
             <div className="image-preview__editor-pane">
-                {canHighlightPython && (
+                {highlightLanguage && (
                     <pre className="image-preview__editor-highlight" ref={highlightRef} aria-hidden="true">
                         {renderHighlightedText(text)}
                     </pre>
                 )}
                 <textarea
                     ref={textareaRef}
-                    className={`image-preview__editor ${canHighlightPython ? 'image-preview__editor--highlight' : ''}`}
+                    className={`image-preview__editor ${highlightLanguage ? 'image-preview__editor--highlight' : ''}`}
                     value={text}
                     onChange={(e) => {
                         onChange(e.target.value)
