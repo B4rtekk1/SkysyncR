@@ -140,6 +140,7 @@ pub struct DownloadFileRecord {
 
 #[derive(FromRow)]
 pub struct UpdateFileContentTarget {
+    pub owner_id: Uuid,
     pub storage_path: String,
     pub size_bytes: i64,
     pub checksum: Option<String>,

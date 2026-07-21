@@ -354,7 +354,7 @@ pub async fn update_file_content(
 
     let size_delta =
         file_size.saturating_sub(target.size_bytes) - target.size_bytes.saturating_sub(file_size);
-    let quota_reserved = try_apply_storage_delta(&mut tx, auth.user_id, size_delta)
+    let quota_reserved = try_apply_storage_delta(&mut tx, target.owner_id, size_delta)
         .await
         .map_err(|e| internal_error("reserve updated file storage", e))?;
     if !quota_reserved {

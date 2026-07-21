@@ -127,6 +127,7 @@ pub async fn get_user_file_for_download(
                   FROM file_shares fs
                   WHERE fs.file_id = files.id
                     AND fs.recipient_user_id = $2
+                    AND fs.permission IN ('download', 'write')
               )
           )
           AND is_deleted = FALSE
@@ -170,10 +171,19 @@ pub async fn get_user_file_for_content_update_in_tx(
 ) -> Result<Option<UpdateFileContentTarget>, sqlx::Error> {
     sqlx::query_as::<_, UpdateFileContentTarget>(
         r#"
-        SELECT storage_path, size_bytes, checksum, encrypted_key, encryption_nonce
+        SELECT owner_id, storage_path, size_bytes, checksum, encrypted_key, encryption_nonce
         FROM files
         WHERE id = $1
-          AND owner_id = $2
+          AND (
+              owner_id = $2
+              OR EXISTS (
+                  SELECT 1
+                  FROM file_shares fs
+                  WHERE fs.file_id = files.id
+                    AND fs.recipient_user_id = $2
+                    AND fs.permission = 'write'
+              )
+          )
           AND is_deleted = FALSE
         FOR UPDATE
         "#,
@@ -285,11 +295,12 @@ pub async fn restore_user_file_version(
 
     let version = sqlx::query_as::<_, UpdateFileContentTarget>(
         r#"
-        SELECT storage_path, size_bytes, checksum, encrypted_key, encryption_nonce
-        FROM file_versions
-        WHERE id = $1
-          AND file_id = $2
-        FOR UPDATE
+        SELECT f.owner_id, fv.storage_path, fv.size_bytes, fv.checksum, f.encrypted_key, f.encryption_nonce
+        FROM file_versions fv
+        JOIN files f ON f.id = fv.file_id
+        WHERE fv.id = $1
+          AND fv.file_id = $2
+        FOR UPDATE OF fv
         "#,
     )
     .bind(version_id)
@@ -781,7 +792,16 @@ pub async fn rename_user_file(
         SET filename = $1,
             updated_at = NOW()
         WHERE id = $2
-          AND owner_id = $3
+          AND (
+              owner_id = $3
+              OR EXISTS (
+                  SELECT 1
+                  FROM file_shares fs
+                  WHERE fs.file_id = files.id
+                    AND fs.recipient_user_id = $3
+                    AND fs.permission = 'write'
+              )
+          )
           AND is_deleted = FALSE
         RETURNING
             id,
@@ -832,12 +852,21 @@ pub async fn update_user_file_content(
         UPDATE files
         SET storage_path = $1,
             size_bytes = $2,
-            encrypted_key = $3,
+            encrypted_key = CASE WHEN owner_id = $7 THEN $3 ELSE encrypted_key END,
             encryption_nonce = $4,
             checksum = $5,
             updated_at = NOW()
         WHERE id = $6
-          AND owner_id = $7
+          AND (
+              owner_id = $7
+              OR EXISTS (
+                  SELECT 1
+                  FROM file_shares fs
+                  WHERE fs.file_id = files.id
+                    AND fs.recipient_user_id = $7
+                    AND fs.permission = 'write'
+              )
+          )
           AND is_deleted = FALSE
         RETURNING
             id,
@@ -947,7 +976,16 @@ pub async fn update_user_file_note(
         SET note = $1,
             updated_at = NOW()
         WHERE id = $2
-          AND owner_id = $3
+          AND (
+              owner_id = $3
+              OR EXISTS (
+                  SELECT 1
+                  FROM file_shares fs
+                  WHERE fs.file_id = files.id
+                    AND fs.recipient_user_id = $3
+                    AND fs.permission = 'write'
+              )
+          )
           AND is_deleted = FALSE
         RETURNING
             id,

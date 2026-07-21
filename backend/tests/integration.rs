@@ -2,7 +2,9 @@ use chrono::{Duration, Utc};
 use skysyncr::crypto::jwt::{generate_access_token_capped, verify_access_token};
 use skysyncr::db::files::{
     NewFileRecord, NewFileShare, consume_public_file_share_for_download, create_file_record,
-    get_user_file_for_download, list_files_shared_with_user, upsert_user_file_share,
+    get_user_file_for_content_update_in_tx, get_user_file_for_download,
+    list_files_shared_with_user, rename_user_file, update_user_file_content, update_user_file_note,
+    upsert_user_file_share,
 };
 use skysyncr::db::refresh_tokens::{
     RefreshTokenAuth, authenticate_refresh_token, create_refresh_token, rotate_refresh_token,
@@ -492,6 +494,173 @@ async fn file_sharing_grants_recipient_access_without_self_share() {
     .await
     .unwrap();
     assert!(self_share.is_none());
+}
+
+#[tokio::test]
+async fn file_share_permissions_gate_download_access() {
+    let (_guard, pool) = test_pool().await;
+    let owner_id = insert_user(&pool, "download-owner@example.test").await;
+    let read_user_id = insert_user(&pool, "read-recipient@example.test").await;
+    let download_user_id = insert_user(&pool, "download-recipient@example.test").await;
+    let write_user_id = insert_user(&pool, "write-recipient@example.test").await;
+
+    let mut tx = pool.begin().await.unwrap();
+    let file = create_file_record(
+        &mut tx,
+        NewFileRecord {
+            owner_id,
+            filename: "permissioned.txt".to_string(),
+            storage_path: "permissioned.txt.enc".to_string(),
+            mime_type: Some("text/plain".to_string()),
+            size_bytes: 12,
+            encrypted_key: b"owner-key".to_vec(),
+            encryption_nonce: b"nonce".to_vec(),
+            checksum: "checksum".to_string(),
+            folder_id: None,
+        },
+    )
+    .await
+    .unwrap();
+    tx.commit().await.unwrap();
+
+    for (email, permission) in [
+        ("read-recipient@example.test", "read"),
+        ("download-recipient@example.test", "download"),
+        ("write-recipient@example.test", "write"),
+    ] {
+        upsert_user_file_share(
+            &pool,
+            NewFileShare {
+                owner_id,
+                file_id: file.id,
+                recipient_email: email.to_string(),
+                permission: permission.to_string(),
+                encrypted_key: format!("{permission}-wrapped-key").into_bytes(),
+            },
+        )
+        .await
+        .unwrap()
+        .expect("share should be created");
+    }
+
+    let owner_download = get_user_file_for_download(&pool, owner_id, file.id)
+        .await
+        .unwrap();
+    assert!(owner_download.is_some());
+
+    let read_download = get_user_file_for_download(&pool, read_user_id, file.id)
+        .await
+        .unwrap();
+    assert!(read_download.is_none());
+
+    let download_download = get_user_file_for_download(&pool, download_user_id, file.id)
+        .await
+        .unwrap();
+    assert!(download_download.is_some());
+
+    let write_download = get_user_file_for_download(&pool, write_user_id, file.id)
+        .await
+        .unwrap();
+    assert!(write_download.is_some());
+}
+
+#[tokio::test]
+async fn file_share_write_permission_gates_mutations_and_preserves_owner_key() {
+    let (_guard, pool) = test_pool().await;
+    let owner_id = insert_user(&pool, "write-owner@example.test").await;
+    let read_user_id = insert_user(&pool, "readonly-writer@example.test").await;
+    let writer_id = insert_user(&pool, "writer@example.test").await;
+
+    let mut tx = pool.begin().await.unwrap();
+    let file = create_file_record(
+        &mut tx,
+        NewFileRecord {
+            owner_id,
+            filename: "draft.txt".to_string(),
+            storage_path: "draft-v1.txt.enc".to_string(),
+            mime_type: Some("text/plain".to_string()),
+            size_bytes: 12,
+            encrypted_key: b"owner-wrapped-key".to_vec(),
+            encryption_nonce: b"nonce".to_vec(),
+            checksum: "checksum-v1".to_string(),
+            folder_id: None,
+        },
+    )
+    .await
+    .unwrap();
+    tx.commit().await.unwrap();
+
+    for (email, permission) in [
+        ("readonly-writer@example.test", "read"),
+        ("writer@example.test", "write"),
+    ] {
+        upsert_user_file_share(
+            &pool,
+            NewFileShare {
+                owner_id,
+                file_id: file.id,
+                recipient_email: email.to_string(),
+                permission: permission.to_string(),
+                encrypted_key: format!("{permission}-wrapped-key").into_bytes(),
+            },
+        )
+        .await
+        .unwrap()
+        .expect("share should be created");
+    }
+
+    let mut read_tx = pool.begin().await.unwrap();
+    let read_target = get_user_file_for_content_update_in_tx(&mut read_tx, read_user_id, file.id)
+        .await
+        .unwrap();
+    read_tx.commit().await.unwrap();
+    assert!(read_target.is_none());
+
+    let renamed = rename_user_file(&pool, writer_id, file.id, "draft-renamed.txt".to_string())
+        .await
+        .unwrap()
+        .expect("writer can rename");
+    assert_eq!(renamed.filename, "draft-renamed.txt");
+
+    let noted = update_user_file_note(&pool, writer_id, file.id, Some("reviewed".to_string()))
+        .await
+        .unwrap()
+        .expect("writer can update note");
+    assert_eq!(noted.note.as_deref(), Some("reviewed"));
+
+    let mut write_tx = pool.begin().await.unwrap();
+    let write_target = get_user_file_for_content_update_in_tx(&mut write_tx, writer_id, file.id)
+        .await
+        .unwrap()
+        .expect("writer can lock file for update");
+    assert_eq!(write_target.owner_id, owner_id);
+
+    let updated = update_user_file_content(
+        &mut write_tx,
+        writer_id,
+        file.id,
+        "draft-v2.txt.enc".to_string(),
+        24,
+        b"writer-wrapped-key".to_vec(),
+        b"nonce-v2".to_vec(),
+        Some("checksum-v2".to_string()),
+    )
+    .await
+    .unwrap()
+    .expect("writer can update content");
+    write_tx.commit().await.unwrap();
+
+    assert_eq!(updated.size_bytes, 24);
+    assert_eq!(updated.encrypted_key, b"owner-wrapped-key");
+    assert_eq!(updated.encryption_nonce, b"nonce-v2");
+
+    let stored_owner_key =
+        sqlx::query_scalar::<_, Vec<u8>>("SELECT encrypted_key FROM files WHERE id = $1")
+            .bind(file.id)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(stored_owner_key, b"owner-wrapped-key");
 }
 
 #[tokio::test]
