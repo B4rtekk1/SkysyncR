@@ -202,6 +202,14 @@ export const NOTE_ICON = (
     </svg>
 )
 
+export const MORE_ICON = (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <circle cx="5.5" cy="12" r="1.4" fill="currentColor" />
+        <circle cx="12" cy="12" r="1.4" fill="currentColor" />
+        <circle cx="18.5" cy="12" r="1.4" fill="currentColor" />
+    </svg>
+)
+
 export const CHECK_ICON = (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
         <path d="M5 12.5 9.3 17 19 7" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />

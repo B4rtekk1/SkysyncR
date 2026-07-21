@@ -318,7 +318,6 @@ function LoginForm() {
                   className="field__toggle-visibility"
                   onClick={() => setShowPassword((v) => !v)}
                   aria-label={showPassword ? 'Hide password' : 'Show password'}
-                  tabIndex={-1}
               >
                 <EyeIcon open={showPassword} />
               </button>

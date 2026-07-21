@@ -1,4 +1,4 @@
-import { type ChangeEvent, type RefObject } from 'react'
+import { useEffect, useRef, useState, type ChangeEvent, type RefObject } from 'react'
 import { FileFilterModal } from './FileFilterModal'
 import { GRID_VIEW_ICON, LIST_VIEW_ICON } from '../icons'
 import { FILE_SORT_LABELS } from '../fileFilters'
@@ -83,6 +83,30 @@ export function DashboardToolbar({
     onOpenFolderCreate,
     onUploadChange,
 }: DashboardToolbarProps) {
+    const [addMenuOpen, setAddMenuOpen] = useState(false)
+    const addMenuRef = useRef<HTMLDivElement>(null)
+    const uploadInputRef = useRef<HTMLInputElement>(null)
+
+    useEffect(() => {
+        if (!addMenuOpen) return
+
+        function closeOnOutsideClick(e: MouseEvent) {
+            if (addMenuRef.current?.contains(e.target as Node)) return
+            setAddMenuOpen(false)
+        }
+
+        function closeOnEscape(e: KeyboardEvent) {
+            if (e.key === 'Escape') setAddMenuOpen(false)
+        }
+
+        document.addEventListener('mousedown', closeOnOutsideClick)
+        window.addEventListener('keydown', closeOnEscape)
+        return () => {
+            document.removeEventListener('mousedown', closeOnOutsideClick)
+            window.removeEventListener('keydown', closeOnEscape)
+        }
+    }, [addMenuOpen])
+
     return (
         <div className="shell__content-actions">
             {view !== 'groups' && view !== 'calendar' && (
@@ -258,18 +282,61 @@ export function DashboardToolbar({
             )}
 
             {view === 'all' && (
-                <>
-                    <button className="btn btn--ghost" type="button" onClick={onOpenFileCreate}>
-                        New file
+                <div className="add-dropdown" ref={addMenuRef}>
+                    <button
+                        className={`btn btn--solid add-dropdown__trigger ${addMenuOpen ? 'is-open' : ''}`}
+                        type="button"
+                        onClick={() => setAddMenuOpen((open) => !open)}
+                        aria-haspopup="menu"
+                        aria-expanded={addMenuOpen}
+                    >
+                        Add
                     </button>
-                    <button className="btn btn--ghost" type="button" onClick={onOpenFolderCreate}>
-                        New folder
-                    </button>
-                    <label className="btn btn--solid">
-                        Upload
-                        <input type="file" multiple onChange={onUploadChange} style={{ display: 'none' }} />
-                    </label>
-                </>
+                    {addMenuOpen && (
+                        <div className="add-dropdown__menu" role="menu" aria-label="Add to vault">
+                            <button
+                                className="add-dropdown__item"
+                                type="button"
+                                role="menuitem"
+                                onClick={() => {
+                                    setAddMenuOpen(false)
+                                    onOpenFileCreate()
+                                }}
+                            >
+                                New file
+                            </button>
+                            <button
+                                className="add-dropdown__item"
+                                type="button"
+                                role="menuitem"
+                                onClick={() => {
+                                    setAddMenuOpen(false)
+                                    onOpenFolderCreate()
+                                }}
+                            >
+                                New folder
+                            </button>
+                            <button
+                                className="add-dropdown__item"
+                                type="button"
+                                role="menuitem"
+                                onClick={() => uploadInputRef.current?.click()}
+                            >
+                                Upload files
+                            </button>
+                            <input
+                                ref={uploadInputRef}
+                                className="add-dropdown__input"
+                                type="file"
+                                multiple
+                                onChange={(event) => {
+                                    setAddMenuOpen(false)
+                                    onUploadChange(event)
+                                }}
+                            />
+                        </div>
+                    )}
+                </div>
             )}
         </div>
     )

@@ -1,9 +1,10 @@
-import type { ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import {
     CANCEL_ICON,
     CHECK_ICON,
     DOWNLOAD_ICON,
     INFO_ICON,
+    MORE_ICON,
     NOTE_ICON,
     PREVIEW_ICON,
     RENAME_ICON,
@@ -37,6 +38,15 @@ type FileCardActionsProps = {
     onPermanentDelete?: ((id: string) => void) | undefined
 }
 
+type MenuAction = {
+    key: string
+    label: string
+    icon?: ReactNode
+    danger?: boolean
+    active?: boolean
+    onSelect: () => void
+}
+
 export function FileCardActions({
     item,
     view,
@@ -61,6 +71,87 @@ export function FileCardActions({
     onRestore,
     onPermanentDelete,
 }: FileCardActionsProps) {
+    const [menuOpen, setMenuOpen] = useState(false)
+    const menuRef = useRef<HTMLDivElement>(null)
+    const secondaryActions: MenuAction[] = []
+
+    if (canRename && !isRenaming) {
+        secondaryActions.push({
+            key: 'rename',
+            label: 'Rename',
+            icon: RENAME_ICON,
+            onSelect: onStartRename,
+        })
+    }
+
+    if (canShare) {
+        secondaryActions.push({
+            key: 'share',
+            label: item.is_public ? 'Manage share' : 'Share',
+            icon: SHARE_ICON,
+            active: item.is_public,
+            onSelect: () => void onShare?.(item),
+        })
+    }
+
+    if (canNote) {
+        secondaryActions.push({
+            key: 'note',
+            label: item.note ? 'Edit note' : 'Add note',
+            icon: NOTE_ICON,
+            active: Boolean(item.note),
+            onSelect: () => onNote?.(item),
+        })
+    }
+
+    if (view === 'all' && onDelete) {
+        secondaryActions.push({
+            key: 'trash',
+            label: 'Move to trash',
+            icon: TRASH_OPEN_ICON,
+            danger: true,
+            onSelect: () => onDelete(item.id),
+        })
+    }
+
+    if (view === 'trash' && onRestore) {
+        secondaryActions.push({
+            key: 'restore',
+            label: 'Restore',
+            onSelect: () => onRestore(item.id),
+        })
+    }
+
+    if (view === 'trash' && onPermanentDelete) {
+        secondaryActions.push({
+            key: 'delete-forever',
+            label: 'Delete forever',
+            icon: TRASH_OPEN_ICON,
+            danger: true,
+            onSelect: () => onPermanentDelete(item.id),
+        })
+    }
+
+    useEffect(() => {
+        if (!menuOpen) return
+
+        function closeOnOutsideClick(e: MouseEvent) {
+            if (menuRef.current?.contains(e.target as Node)) return
+            setMenuOpen(false)
+        }
+
+        function closeOnEscape(e: KeyboardEvent) {
+            if (e.key === 'Escape') setMenuOpen(false)
+        }
+
+        document.addEventListener('mousedown', closeOnOutsideClick)
+        window.addEventListener('keydown', closeOnEscape)
+        return () => {
+            document.removeEventListener('mousedown', closeOnOutsideClick)
+            window.removeEventListener('keydown', closeOnEscape)
+        }
+    }, [menuOpen])
+
     return (
         <div className="file-card__actions">
             {isRenaming && (
@@ -93,20 +184,7 @@ export function FileCardActions({
                     </button>
                 </>
             )}
-            {canRename && !isRenaming && (
-                <button
-                    className="file-card__action file-card__action--rename"
-                    onClick={(e) => {
-                        e.stopPropagation()
-                        onStartRename()
-                    }}
-                    aria-label={`Rename ${item.filename}`}
-                    title="Rename"
-                    type="button"
-                >
-                    {RENAME_ICON}
-                </button>
-            )}
+
             {canPreview && (
                 <button
                     className="file-card__action file-card__action--preview"
@@ -121,6 +199,7 @@ export function FileCardActions({
                     {PREVIEW_ICON}
                 </button>
             )}
+
             {!isRenaming && (
                 <div className="file-card__info-wrap">
                     <button
@@ -139,6 +218,7 @@ export function FileCardActions({
                     {infoPopover}
                 </div>
             )}
+
             {canDownload && (
                 <button
                     className="file-card__action file-card__action--download"
@@ -153,75 +233,44 @@ export function FileCardActions({
                     {DOWNLOAD_ICON}
                 </button>
             )}
-            {canShare && (
-                <button
-                    className={`file-card__action file-card__action--share ${item.is_public ? 'is-active' : ''}`}
-                    onClick={(e) => {
-                        e.stopPropagation()
-                        void onShare?.(item)
-                    }}
-                    aria-label={`Share ${item.filename}`}
-                    aria-pressed={item.is_public}
-                    title="Share"
-                    type="button"
-                >
-                    {SHARE_ICON}
-                </button>
-            )}
-            {canNote && (
-                <button
-                    className={`file-card__action file-card__action--note ${item.note ? 'is-active' : ''}`}
-                    onClick={(e) => {
-                        e.stopPropagation()
-                        onNote?.(item)
-                    }}
-                    aria-label={`${item.note ? 'Edit' : 'Add'} note for ${item.filename}`}
-                    aria-pressed={Boolean(item.note)}
-                    title={item.note ? 'Edit note' : 'Add note'}
-                    type="button"
-                >
-                    {NOTE_ICON}
-                </button>
-            )}
-            {view === 'all' && onDelete && (
-                <button
-                    className="file-card__action file-card__action--trash"
-                    onClick={(e) => {
-                        e.stopPropagation()
-                        onDelete(item.id)
-                    }}
-                    aria-label={`Move ${item.filename} to trash`}
-                    title="Move to trash"
-                    type="button"
-                >
-                    {TRASH_OPEN_ICON}
-                </button>
-            )}
-            {view === 'trash' && onRestore && (
-                <button
-                    className="file-card__action"
-                    onClick={(e) => {
-                        e.stopPropagation()
-                        onRestore(item.id)
-                    }}
-                    type="button"
-                >
-                    Restore
-                </button>
-            )}
-            {view === 'trash' && onPermanentDelete && (
-                <button
-                    className="file-card__action file-card__action--trash"
-                    onClick={(e) => {
-                        e.stopPropagation()
-                        onPermanentDelete(item.id)
-                    }}
-                    aria-label={`Permanently delete ${item.filename}`}
-                    title="Delete forever"
-                    type="button"
-                >
-                    {TRASH_OPEN_ICON}
-                </button>
+
+            {!isRenaming && secondaryActions.length > 0 && (
+                <div className="file-card__more" ref={menuRef}>
+                    <button
+                        className={`file-card__action file-card__action--more ${menuOpen ? 'is-active' : ''}`}
+                        type="button"
+                        onClick={(e) => {
+                            e.stopPropagation()
+                            setMenuOpen((open) => !open)
+                        }}
+                        aria-label={`More actions for ${item.filename}`}
+                        aria-haspopup="menu"
+                        aria-expanded={menuOpen}
+                        title="More actions"
+                    >
+                        {MORE_ICON}
+                    </button>
+                    {menuOpen && (
+                        <div className="file-card__more-menu" role="menu" aria-label={`More actions for ${item.filename}`}>
+                            {secondaryActions.map((action) => (
+                                <button
+                                    key={action.key}
+                                    className={`file-card__more-item ${action.danger ? 'is-danger' : ''} ${action.active ? 'is-active' : ''}`}
+                                    type="button"
+                                    role="menuitem"
+                                    onClick={(e) => {
+                                        e.stopPropagation()
+                                        setMenuOpen(false)
+                                        action.onSelect()
+                                    }}
+                                >
+                                    {action.icon && <span className="file-card__more-icon">{action.icon}</span>}
+                                    <span>{action.label}</span>
+                                </button>
+                            ))}
+                        </div>
+                    )}
+                </div>
             )}
         </div>
     )

@@ -32,6 +32,7 @@
 .file-card__action--share,
 .file-card__action--note,
 .file-card__action--info,
+.file-card__action--more,
 .file-card__action--confirm,
 .file-card__action--cancel {
     display: inline-flex;
@@ -56,6 +57,9 @@
 .file-card__action--info:hover,
 .file-card__action--info:focus-visible,
 .file-card__action--info.is-active,
+.file-card__action--more:hover,
+.file-card__action--more:focus-visible,
+.file-card__action--more.is-active,
 .file-card__action--confirm:hover,
 .file-card__action--confirm:focus-visible {
     color: var(--signal);
@@ -75,6 +79,68 @@
 .file-card__action--note.is-active {
     color: var(--amber);
     background: rgba(255, 176, 76, 0.08);
+}
+
+.file-card__more {
+    position: relative;
+    display: inline-flex;
+}
+
+.file-card__more-menu {
+    position: absolute;
+    right: 0;
+    top: calc(100% + 8px);
+    z-index: 30;
+    display: grid;
+    min-width: 162px;
+    padding: 6px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--panel);
+    box-shadow: 0 18px 42px rgba(0, 0, 0, 0.28);
+}
+
+.file-card__more-item {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    width: 100%;
+    min-height: 34px;
+    padding: 7px 9px;
+    border: none;
+    border-radius: 7px;
+    background: transparent;
+    color: var(--mist);
+    font: inherit;
+    font-size: 0.78rem;
+    text-align: left;
+    cursor: pointer;
+}
+
+.file-card__more-item:hover,
+.file-card__more-item:focus-visible {
+    outline: none;
+    background: rgba(var(--signal-rgb), 0.08);
+    color: var(--paper);
+}
+
+.file-card__more-item.is-active {
+    color: var(--signal);
+}
+
+.file-card__more-item.is-danger {
+    color: #ef4444;
+}
+
+.file-card__more-item.is-danger:hover,
+.file-card__more-item.is-danger:focus-visible {
+    background: rgba(239, 68, 68, 0.08);
+    color: #dc2626;
+}
+
+.file-card__more-icon {
+    display: inline-flex;
+    flex-shrink: 0;
 }
 
 /* file-card-info.css */
