@@ -1,14 +1,20 @@
+import { lazy, Suspense } from 'react'
 import type { CurrentUserResponse } from '../../../api/users'
 import type { ApiFolder } from '../../../api/files'
-import SettingsModal from '../../Settings'
 import { CreateFileModal } from './CreateFileModal'
 import { CreateFolderModal } from './CreateFolderModal'
 import { FileNoteModal } from './FileNoteModal'
-import { ImagePreviewModal } from '../previews/ImagePreviewModal'
-import { ShareFileModal } from './ShareFileModal'
 import { hasFileExtension } from '../createdFile'
 import type { FilePreviewState, Group, Item, ShareableItem } from '../types'
 import type { SettingsState } from '../../settingsPreferences'
+
+const ImagePreviewModal = lazy(() =>
+    import('../previews/ImagePreviewModal').then((module) => ({ default: module.ImagePreviewModal })),
+)
+const SettingsModal = lazy(() => import('../../Settings'))
+const ShareFileModal = lazy(() =>
+    import('./ShareFileModal').then((module) => ({ default: module.ShareFileModal })),
+)
 
 type DashboardModalsProps = {
     filePreview: FilePreviewState | null
@@ -45,6 +51,17 @@ type DashboardModalsProps = {
     onCloseShare: () => void
     onSetFileSharing: (item: Item, isPublic: boolean, expiresInSeconds?: number | null, downloadLimit?: number | null) => Promise<unknown>
     onSetFolderSharing: (folder: ApiFolder, isPublic: boolean) => Promise<unknown>
+}
+
+function ModalFallback() {
+    return (
+        <div className="image-preview" role="presentation">
+            <div className="image-preview__loading" role="status">
+                <span className="spinner" />
+                Loading...
+            </div>
+        </div>
+    )
 }
 
 export function DashboardModals({
@@ -86,20 +103,24 @@ export function DashboardModals({
     return (
         <>
             {filePreview && (
-                <ImagePreviewModal
-                    key={filePreview.item.id}
-                    preview={filePreview}
-                    onClose={onCloseFilePreview}
-                    onDownload={onDownload}
-                    onSaveText={onSaveTextFile}
-                />
+                <Suspense fallback={<ModalFallback />}>
+                    <ImagePreviewModal
+                        key={filePreview.item.id}
+                        preview={filePreview}
+                        onClose={onCloseFilePreview}
+                        onDownload={onDownload}
+                        onSaveText={onSaveTextFile}
+                    />
+                </Suspense>
             )}
             {settingsOpen && (
-                <SettingsModal
-                    currentUser={currentUser}
-                    onClose={onCloseSettings}
-                    onSave={onSaveSettings}
-                />
+                <Suspense fallback={<ModalFallback />}>
+                    <SettingsModal
+                        currentUser={currentUser}
+                        onClose={onCloseSettings}
+                        onSave={onSaveSettings}
+                    />
+                </Suspense>
             )}
             {fileCreateOpen && (
                 <CreateFileModal
@@ -133,33 +154,35 @@ export function DashboardModals({
                 />
             )}
             {shareItem && (
-                <ShareFileModal
-                    item={shareItem}
-                    itemKind={'filename' in shareItem ? 'file' : 'folder'}
-                    shareUrl={
-                        shareItem.is_public && shareItem.share_token
-                            ? `${window.location.origin}/share/${'filename' in shareItem ? '' : 'folders/'}${shareItem.share_token}`
-                            : null
-                    }
-                    loading={shareLoading}
-                    privateKey={privateKey}
-                    groups={groups}
-                    onClose={onCloseShare}
-                    onEnableShare={async (expiresInSeconds, downloadLimit) => {
-                        if ('filename' in shareItem) {
-                            await onSetFileSharing(shareItem, true, expiresInSeconds, downloadLimit)
-                        } else {
-                            await onSetFolderSharing(shareItem, true)
+                <Suspense fallback={<ModalFallback />}>
+                    <ShareFileModal
+                        item={shareItem}
+                        itemKind={'filename' in shareItem ? 'file' : 'folder'}
+                        shareUrl={
+                            shareItem.is_public && shareItem.share_token
+                                ? `${window.location.origin}/share/${'filename' in shareItem ? '' : 'folders/'}${shareItem.share_token}`
+                                : null
                         }
-                    }}
-                    onDisableShare={async () => {
-                        if ('filename' in shareItem) {
-                            await onSetFileSharing(shareItem, false)
-                        } else {
-                            await onSetFolderSharing(shareItem, false)
-                        }
-                    }}
-                />
+                        loading={shareLoading}
+                        privateKey={privateKey}
+                        groups={groups}
+                        onClose={onCloseShare}
+                        onEnableShare={async (expiresInSeconds, downloadLimit) => {
+                            if ('filename' in shareItem) {
+                                await onSetFileSharing(shareItem, true, expiresInSeconds, downloadLimit)
+                            } else {
+                                await onSetFolderSharing(shareItem, true)
+                            }
+                        }}
+                        onDisableShare={async () => {
+                            if ('filename' in shareItem) {
+                                await onSetFileSharing(shareItem, false)
+                            } else {
+                                await onSetFolderSharing(shareItem, false)
+                            }
+                        }}
+                    />
+                </Suspense>
             )}
         </>
     )

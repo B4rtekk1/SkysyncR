@@ -49,7 +49,8 @@ export function DashboardTopbar({
                 </svg>
                 <input
                     ref={searchInputRef}
-                    type="text"
+                    type="search"
+                    aria-label="Search your vault"
                     placeholder="Search your vault..."
                     value={query}
                     onChange={(e) => onQueryChange(e.target.value)}

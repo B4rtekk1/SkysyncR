@@ -335,24 +335,92 @@
         z-index: 30;
         height: auto;
         max-width: 100%;
-        flex-direction: row;
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr) auto auto;
+        grid-template-areas:
+            "logo storage footer toggle"
+            "nav nav nav nav";
         align-items: center;
-        gap: 16px;
-        overflow-x: auto;
-        overflow-y: hidden;
+        gap: 10px 12px;
+        padding: 12px 16px;
+        overflow: visible;
         border-right: none;
         border-bottom: 1px solid var(--line);
     }
 
-    .shell__navlist {
-        flex-direction: row;
+    .shell.is-sidebar-compact .shell__sidebar {
+        align-items: center;
+        gap: 10px 12px;
+        padding: 12px 16px;
+    }
+
+    .shell__logo,
+    .shell.is-sidebar-compact .shell__logo {
+        grid-area: logo;
+        justify-content: flex-start;
+        width: auto;
+        padding: 0;
+    }
+
+    .shell__sidebar-toggle,
+    .shell.is-sidebar-compact .shell__sidebar-toggle {
+        position: static;
+        grid-area: toggle;
+        width: 34px;
+        height: 34px;
+    }
+
+    .shell__resize-handle {
+        display: none;
+    }
+
+    .shell__navlist--primary,
+    .shell.is-sidebar-compact .shell__navlist--primary {
+        grid-area: nav;
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        align-items: stretch;
+        width: 100%;
+        gap: 6px;
     }
 
     .shell__navlist--footer {
+        grid-area: footer;
         margin-top: 0;
     }
 
+    .shell__navitem,
+    .shell.is-sidebar-compact .shell__navitem {
+        justify-content: center;
+        width: 100%;
+        height: 38px;
+        gap: 8px;
+        padding: 0 8px;
+    }
+
+    .shell.is-sidebar-compact .shell__sidebar-label,
+    .shell.is-sidebar-compact .shell__storage {
+        display: initial;
+    }
+
+    .shell__navicon--handle {
+        display: none;
+    }
+
     .shell__storage {
+        grid-area: storage;
+        display: block;
+        min-width: 0;
+        padding: 0;
+        border-top: none;
+    }
+
+    .shell__storage-row,
+    .shell__storage-summary {
+        margin-bottom: 5px;
+    }
+
+    .shell__storage-breakdown {
         display: none;
     }
 
@@ -388,6 +456,25 @@
 }
 
 @media (max-width: 560px) {
+    .shell__sidebar {
+        grid-template-columns: minmax(0, 1fr) auto;
+        grid-template-areas:
+            "logo toggle"
+            "storage storage"
+            "nav nav"
+            "footer footer";
+        padding: 12px;
+    }
+
+    .shell__navlist--primary,
+    .shell.is-sidebar-compact .shell__navlist--primary {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .shell__navlist--footer .shell__navitem {
+        justify-content: center;
+    }
+
     .shell__search {
         min-width: 0;
     }
