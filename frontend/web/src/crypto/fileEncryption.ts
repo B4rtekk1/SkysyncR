@@ -52,6 +52,20 @@ export async function exportRawKey(key: CryptoKey): Promise<ArrayBuffer> {
     return crypto.subtle.exportKey('raw', key)
 }
 
+export async function importRawFileKey(rawKey: ArrayBuffer | Uint8Array): Promise<CryptoKey> {
+    const keyBytes = rawKey instanceof Uint8Array
+        ? new Uint8Array(rawKey).buffer as ArrayBuffer
+        : rawKey
+
+    return crypto.subtle.importKey(
+        'raw',
+        keyBytes,
+        { name: 'AES-GCM', length: 256 },
+        false,
+        ['encrypt', 'decrypt'],
+    )
+}
+
 export async function importRsaPublicKey(publicKeyBase64: string): Promise<CryptoKey> {
     return crypto.subtle.importKey(
         'spki',
@@ -78,13 +92,7 @@ export async function unwrapFileKeyForUser(
         base64ToBuffer(encryptedKeyBase64) as BufferSource,
     )
 
-    return crypto.subtle.importKey(
-        'raw',
-        rawKey,
-        { name: 'AES-GCM', length: 256 },
-        false,
-        ['encrypt', 'decrypt'],
-    )
+    return importRawFileKey(rawKey)
 }
 
 export async function decryptFile(
@@ -238,6 +246,15 @@ function base64ToBuffer(base64: string): Uint8Array {
     const bytes = new Uint8Array(binary.length)
     for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
     return bytes
+}
+
+export function arrayBufferToBase64Url(buffer: ArrayBuffer | Uint8Array): string {
+    return arrayBufferToBase64(buffer).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '')
+}
+
+export function base64UrlToBuffer(base64Url: string): Uint8Array {
+    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/')
+    return base64ToBuffer(base64.padEnd(Math.ceil(base64.length / 4) * 4, '='))
 }
 
 function bytesEqual(a: Uint8Array, b: Uint8Array): boolean {

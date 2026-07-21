@@ -1,6 +1,7 @@
-import { lazy, Suspense } from 'react'
+import { lazy, Suspense, useEffect, useState } from 'react'
 import type { CurrentUserResponse } from '../../../api/users'
 import type { ApiFolder } from '../../../api/files'
+import { arrayBufferToBase64Url, exportRawKey, unwrapFileKeyForUser } from '../../../crypto/fileEncryption'
 import { CreateFileModal } from './CreateFileModal'
 import { CreateFolderModal } from './CreateFolderModal'
 import { FileNoteModal } from './FileNoteModal'
@@ -100,6 +101,47 @@ export function DashboardModals({
     onSetFileSharing,
     onSetFolderSharing,
 }: DashboardModalsProps) {
+    const [publicShareUrl, setPublicShareUrl] = useState<string | null>(null)
+
+    useEffect(() => {
+        let active = true
+
+        async function buildShareUrl() {
+            if (!shareItem?.is_public || !shareItem.share_token) {
+                setPublicShareUrl(null)
+                return
+            }
+
+            if (!('filename' in shareItem)) {
+                setPublicShareUrl(`${window.location.origin}/share/folders/${shareItem.share_token}`)
+                return
+            }
+
+            if (!privateKey) {
+                setPublicShareUrl(null)
+                return
+            }
+
+            try {
+                const fileKey = await unwrapFileKeyForUser(shareItem.encrypted_key, privateKey)
+                const rawKey = await exportRawKey(fileKey)
+                if (active) {
+                    setPublicShareUrl(
+                        `${window.location.origin}/share/${shareItem.share_token}#key=${arrayBufferToBase64Url(rawKey)}`,
+                    )
+                }
+            } catch {
+                if (active) setPublicShareUrl(null)
+            }
+        }
+
+        void buildShareUrl()
+
+        return () => {
+            active = false
+        }
+    }, [privateKey, shareItem])
+
     return (
         <>
             {filePreview && (
@@ -158,11 +200,7 @@ export function DashboardModals({
                     <ShareFileModal
                         item={shareItem}
                         itemKind={'filename' in shareItem ? 'file' : 'folder'}
-                        shareUrl={
-                            shareItem.is_public && shareItem.share_token
-                                ? `${window.location.origin}/share/${'filename' in shareItem ? '' : 'folders/'}${shareItem.share_token}`
-                                : null
-                        }
+                        shareUrl={publicShareUrl}
                         loading={shareLoading}
                         privateKey={privateKey}
                         groups={groups}

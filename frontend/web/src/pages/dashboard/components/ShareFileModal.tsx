@@ -66,7 +66,13 @@ export function ShareFileModal({
     const qr = useMemo(() => (shareUrl ? createQrPath(shareUrl) : null), [shareUrl])
     const isFileShare = 'filename' in item
     const title = isFileShare ? item.filename : item.name
-    const linkInputValue = shareUrl ?? (item.is_public || loading ? 'Generating link...' : 'Link is inactive')
+    const linkInputValue =
+        shareUrl ??
+        (item.is_public || loading
+            ? itemKind === 'file' && !privateKey
+                ? 'Unlock your private key to create a secure link'
+                : 'Generating link...'
+            : 'Link is inactive')
     const selectedExpiresAt = shareDuration === null ? null : new Date(sharePreviewBaseTime + shareDuration * 1000)
     const expiryLabel = selectedExpiresAt
         ? `Expires ${selectedExpiresAt.toLocaleString([], {

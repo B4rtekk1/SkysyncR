@@ -117,7 +117,7 @@ pub async fn get_user_file_for_download(
 ) -> Result<Option<DownloadFileRecord>, sqlx::Error> {
     sqlx::query_as::<_, DownloadFileRecord>(
         r#"
-        SELECT filename, storage_path, size_bytes, checksum
+        SELECT filename, mime_type, storage_path, size_bytes, checksum, encryption_nonce
         FROM files
         WHERE id = $1
           AND (
@@ -155,7 +155,7 @@ pub async fn consume_public_file_share_for_download(
               share_download_limit IS NULL
               OR share_download_count < share_download_limit
           )
-        RETURNING filename, storage_path, size_bytes, checksum
+        RETURNING filename, mime_type, storage_path, size_bytes, checksum, encryption_nonce
         "#,
     )
     .bind(share_token)

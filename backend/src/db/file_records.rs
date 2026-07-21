@@ -131,9 +131,11 @@ pub struct NewFileShare {
 #[derive(FromRow)]
 pub struct DownloadFileRecord {
     pub filename: String,
+    pub mime_type: Option<String>,
     pub storage_path: String,
     pub size_bytes: i64,
     pub checksum: Option<String>,
+    pub encryption_nonce: Vec<u8>,
 }
 
 #[derive(FromRow)]

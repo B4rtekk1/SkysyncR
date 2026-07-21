@@ -397,6 +397,8 @@ export async function verifyBlobChecksum(blob: Blob, expectedChecksum: string | 
 export type PublicDownload = {
     blob: Blob
     filename: string
+    mimeType: string | null
+    encryptionNonce: string | null
     checksum: string | null
 }
 
@@ -408,7 +410,12 @@ export async function downloadPublicFile(shareToken: string): Promise<PublicDown
 
     return {
         blob: await res.blob(),
-        filename: filenameFromContentDisposition(res.headers.get('content-disposition')) ?? 'download.bin',
+        filename:
+            filenameFromBase64Header(res.headers.get('x-skysyncr-filename-b64')) ??
+            filenameFromContentDisposition(res.headers.get('content-disposition')) ??
+            'download.bin',
+        mimeType: res.headers.get('x-skysyncr-mime-type'),
+        encryptionNonce: res.headers.get('x-skysyncr-encryption-nonce'),
         checksum: res.headers.get('x-skysyncr-sha256'),
     }
 }
@@ -418,6 +425,15 @@ function filenameFromContentDisposition(value: string | null): string | null {
     const match = /filename="([^"]+)"/i.exec(value)
     const filename = match?.[1]?.trim()
     return filename || null
+}
+
+function filenameFromBase64Header(value: string | null): string | null {
+    if (!value) return null
+    try {
+        return new TextDecoder().decode(Uint8Array.from(atob(value), (char) => char.charCodeAt(0))) || null
+    } catch {
+        return null
+    }
 }
 
 function arrayBufferToBase64(buf: ArrayBuffer | Uint8Array): string {

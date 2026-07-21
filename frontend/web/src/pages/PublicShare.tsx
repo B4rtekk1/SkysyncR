@@ -3,6 +3,16 @@ import { Link, useParams } from 'react-router-dom'
 import '../App.css'
 import ThemeToggle from '../components/ThemeToggle'
 import { downloadPublicFile, verifyBlobChecksum } from '../api/files'
+import {
+  base64UrlToBuffer,
+  decryptFile,
+  decryptFileStream,
+  decryptTextEnvelope,
+  importRawFileKey,
+  isChunkedFileNonce,
+  isEncryptedTextEnvelope,
+  streamToBlob,
+} from '../crypto/fileEncryption'
 
 type ShareStatus = 'loading' | 'ready' | 'error'
 
@@ -15,6 +25,17 @@ function saveBlob(blob: Blob, filename: string) {
   anchor.click()
   anchor.remove()
   window.setTimeout(() => URL.revokeObjectURL(url), 1000)
+}
+
+function fileKeyFromLocationHash(): string | null {
+  const hash = window.location.hash.startsWith('#') ? window.location.hash.slice(1) : window.location.hash
+  const params = new URLSearchParams(hash)
+  return params.get('key')
+}
+
+async function decryptMaybeEncryptedMetadata(value: string, fileKey: CryptoKey): Promise<string> {
+  if (!isEncryptedTextEnvelope(value)) return value
+  return decryptTextEnvelope(value, fileKey)
 }
 
 function PublicShare() {
@@ -33,10 +54,28 @@ function PublicShare() {
       }
 
       try {
+        const rawFileKey = fileKeyFromLocationHash()
+        if (!rawFileKey) {
+          throw new Error('This secure share link is missing its decryption key.')
+        }
+
         const file = await downloadPublicFile(token)
         await verifyBlobChecksum(file.blob, file.checksum)
+        if (!file.encryptionNonce) {
+          throw new Error('This secure share link is missing encryption metadata.')
+        }
+
+        const fileKey = await importRawFileKey(base64UrlToBuffer(rawFileKey))
+        const [filename, mimeType] = await Promise.all([
+          decryptMaybeEncryptedMetadata(file.filename, fileKey),
+          file.mimeType ? decryptMaybeEncryptedMetadata(file.mimeType, fileKey) : Promise.resolve(null),
+        ])
+        const decryptedBlob = isChunkedFileNonce(file.encryptionNonce)
+          ? await streamToBlob(decryptFileStream(file.blob, fileKey, file.encryptionNonce), mimeType)
+          : await decryptFile(file.blob, fileKey, file.encryptionNonce, mimeType)
+
         if (!active) return
-        saveBlob(file.blob, file.filename)
+        saveBlob(decryptedBlob, filename)
         setStatus('ready')
         setMessage('Your download has started.')
       } catch (err) {

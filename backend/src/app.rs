@@ -81,7 +81,14 @@ fn cors_layer() -> CorsLayer {
             Method::OPTIONS,
         ])
         .allow_headers([header::AUTHORIZATION, header::CONTENT_TYPE])
-        .expose_headers([header::CONTENT_TYPE, header::CONTENT_DISPOSITION])
+        .expose_headers([
+            header::CONTENT_TYPE,
+            header::CONTENT_DISPOSITION,
+            HeaderName::from_static("x-skysyncr-sha256"),
+            HeaderName::from_static("x-skysyncr-filename-b64"),
+            HeaderName::from_static("x-skysyncr-encryption-nonce"),
+            HeaderName::from_static("x-skysyncr-mime-type"),
+        ])
         .allow_credentials(true)
 }
 
