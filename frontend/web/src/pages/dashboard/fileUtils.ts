@@ -116,6 +116,17 @@ export function isTypeScriptFile(filename: string, mime: string | null) {
     return ['ts', 'tsx'].includes(ext) || normalizedMime === 'text/typescript' || normalizedMime === 'application/typescript'
 }
 
+export function isJavaScriptFile(filename: string, mime: string | null) {
+    const ext = filename.split('.').pop()?.toLowerCase() ?? ''
+    const normalizedMime = mime?.toLowerCase() ?? ''
+    return (
+        ['js', 'jsx', 'mjs', 'cjs'].includes(ext) ||
+        normalizedMime === 'text/javascript' ||
+        normalizedMime === 'application/javascript' ||
+        normalizedMime === 'application/x-javascript'
+    )
+}
+
 export const KIND_ACCENT: Record<FileKind, string> = {
     sheet: 'var(--signal)',
     document: 'var(--mist)',
