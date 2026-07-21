@@ -47,22 +47,29 @@ function PublicShare() {
     let active = true
 
     async function download() {
-      if (!token) {
+      function showError(errorMessage: string) {
+        if (!active) return
         setStatus('error')
-        setMessage('This share link is invalid.')
+        setMessage(errorMessage)
+      }
+
+      if (!token) {
+        showError('This share link is invalid.')
         return
       }
 
       try {
         const rawFileKey = fileKeyFromLocationHash()
         if (!rawFileKey) {
-          throw new Error('This secure share link is missing its decryption key.')
+          showError('This secure share link is missing its decryption key.')
+          return
         }
 
         const file = await downloadPublicFile(token)
         await verifyBlobChecksum(file.blob, file.checksum)
         if (!file.encryptionNonce) {
-          throw new Error('This secure share link is missing encryption metadata.')
+          showError('This secure share link is missing encryption metadata.')
+          return
         }
 
         const fileKey = await importRawFileKey(base64UrlToBuffer(rawFileKey))
