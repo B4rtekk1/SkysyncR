@@ -53,8 +53,8 @@ export async function exportRawKey(key: CryptoKey): Promise<ArrayBuffer> {
 }
 
 export async function importRawFileKey(rawKey: ArrayBuffer | Uint8Array): Promise<CryptoKey> {
-    const keyBytes = rawKey instanceof Uint8Array
-        ? new Uint8Array(rawKey).buffer as ArrayBuffer
+    const keyBytes = ArrayBuffer.isView(rawKey)
+        ? rawKey.buffer.slice(rawKey.byteOffset, rawKey.byteOffset + rawKey.byteLength) as ArrayBuffer
         : rawKey
 
     return crypto.subtle.importKey(
