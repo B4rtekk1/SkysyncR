@@ -4,6 +4,7 @@ import {
     createCalendarEntry,
     deleteCalendarEntry,
     listCalendarEntries,
+    updateCalendarEntry,
     type CalendarEntryKind,
 } from '../../../api/calendar'
 import { formatBytes, kindFromFile, KIND_LABELS } from '../fileUtils'
@@ -55,6 +56,7 @@ export function CalendarPanel({ files, onPreview, onDownload }: CalendarPanelPro
     const [entryTime, setEntryTime] = useState('09:00')
     const [entryReminder, setEntryReminder] = useState('')
     const [entryFileId, setEntryFileId] = useState('')
+    const [editingEntryId, setEditingEntryId] = useState<string | null>(null)
     const [openDropdown, setOpenDropdown] = useState<CalendarDropdownId>(null)
     const [entrySyncError, setEntrySyncError] = useState<string | null>(null)
 
@@ -242,28 +244,55 @@ export function CalendarPanel({ files, onPreview, onDownload }: CalendarPanelPro
         if (viewMode === 'week') setVisibleDate(day.date)
     }
 
-    async function handleCreateEntry(event: SubmitEvent<HTMLFormElement>) {
+    function resetEntryForm() {
+        setEntryKind('event')
+        setEntryTitle('')
+        setEntryNote('')
+        setEntryTime('09:00')
+        setEntryReminder('')
+        setEntryFileId('')
+        setEditingEntryId(null)
+        setOpenDropdown(null)
+    }
+
+    function editEntry(entry: CalendarEntry) {
+        setEditingEntryId(entry.id)
+        setEntryKind(entry.kind)
+        setEntryTitle(entry.title)
+        setEntryNote(entry.note)
+        setEntryTime(entry.time)
+        setEntryReminder(entry.reminder)
+        setEntryFileId(entry.fileId ?? '')
+        setSelectedDateKey(entry.date)
+        setEntrySyncError(null)
+        setOpenDropdown(null)
+    }
+
+    async function handleSaveEntry(event: SubmitEvent<HTMLFormElement>) {
         event.preventDefault()
         const title = entryTitle.trim() || (linkedFile ? linkedFile.filename : '')
         if (!title) return
+        const payload = {
+            kind: entryKind,
+            date: selectedDateKey,
+            time: entryTime,
+            title,
+            note: entryNote.trim(),
+            reminder: entryReminder,
+            file_id: entryFileId || null,
+        }
 
         try {
             setEntrySyncError(null)
-            const created = await createCalendarEntry({
-                kind: entryKind,
-                date: selectedDateKey,
-                time: entryTime,
-                title,
-                note: entryNote.trim(),
-                reminder: entryReminder,
-                file_id: entryFileId || null,
-            })
+            if (editingEntryId) {
+                const updated = await updateCalendarEntry(editingEntryId, payload)
+                setEntries((current) => current.map((entry) => (entry.id === editingEntryId ? fromApiEntry(updated) : entry)))
+            } else {
+                const created = await createCalendarEntry(payload)
+                setEntries((current) => [...current, fromApiEntry(created)])
+            }
 
-            setEntries((current) => [...current, fromApiEntry(created)])
-            setEntryTitle('')
-            setEntryNote('')
-            setEntryReminder('')
-            setEntryFileId('')
+            resetEntryForm()
         } catch (error) {
             setEntrySyncError(error instanceof Error ? error.message : 'Could not save calendar entry.')
         }
@@ -276,6 +305,7 @@ export function CalendarPanel({ files, onPreview, onDownload }: CalendarPanelPro
         try {
             setEntrySyncError(null)
             await deleteCalendarEntry(id)
+            if (editingEntryId === id) resetEntryForm()
         } catch (error) {
             setEntries(previousEntries)
             setEntrySyncError(error instanceof Error ? error.message : 'Could not delete calendar entry.')
@@ -436,7 +466,7 @@ export function CalendarPanel({ files, onPreview, onDownload }: CalendarPanelPro
                         <span>{selectedFiles.length} files</span>
                     </div>
 
-                    <form className="calendar-panel__form" onSubmit={handleCreateEntry}>
+                    <form className="calendar-panel__form" onSubmit={handleSaveEntry}>
                         {entrySyncError && (
                             <p className="calendar-panel__sync-error" role="alert">
                                 {entrySyncError}
@@ -496,9 +526,16 @@ export function CalendarPanel({ files, onPreview, onDownload }: CalendarPanelPro
                                 </svg>
                             }
                         />
-                        <button className="calendar-panel__submit" type="submit">
-                            Add {entryKind}
-                        </button>
+                        <div className="calendar-panel__form-actions">
+                            {editingEntryId && (
+                                <button className="calendar-panel__secondary" type="button" onClick={resetEntryForm}>
+                                    Cancel
+                                </button>
+                            )}
+                            <button className="calendar-panel__submit" type="submit">
+                                {editingEntryId ? 'Save changes' : `Add ${entryKind}`}
+                            </button>
+                        </div>
                     </form>
 
                     <div className="calendar-panel__section">
@@ -527,6 +564,9 @@ export function CalendarPanel({ files, onPreview, onDownload }: CalendarPanelPro
                                                         Preview
                                                     </button>
                                                 )}
+                                                <button type="button" onClick={() => editEntry(entry)}>
+                                                    Edit
+                                                </button>
                                                 <button type="button" onClick={() => void deleteEntry(entry.id)}>
                                                     Delete
                                                 </button>

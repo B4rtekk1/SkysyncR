@@ -9,6 +9,7 @@
 .calendar-panel__filters,
 .calendar-panel__period,
 .calendar-panel__segments,
+.calendar-panel__form-actions,
 .calendar-panel__event-actions {
     display: flex;
     align-items: center;
@@ -69,6 +70,7 @@
 .calendar-panel__today,
 .calendar-panel__segments button,
 .calendar-panel__event-actions button,
+.calendar-panel__secondary,
 .calendar-panel__submit {
     display: inline-flex;
     align-items: center;
@@ -147,6 +149,7 @@
 .calendar-panel__today,
 .calendar-panel__segments button,
 .calendar-panel__event-actions button,
+.calendar-panel__secondary,
 .calendar-panel__submit {
     padding: 0 11px;
 }
@@ -155,11 +158,13 @@
 .calendar-panel__today:hover,
 .calendar-panel__segments button:hover,
 .calendar-panel__event-actions button:hover,
+.calendar-panel__secondary:hover,
 .calendar-panel__submit:hover,
 .calendar-panel__period button:focus-visible,
 .calendar-panel__today:focus-visible,
 .calendar-panel__segments button:focus-visible,
 .calendar-panel__event-actions button:focus-visible,
+.calendar-panel__secondary:focus-visible,
 .calendar-panel__submit:focus-visible {
     border-color: rgba(var(--signal-rgb), 0.48);
     color: var(--signal);
@@ -568,8 +573,12 @@
     min-width: 0;
 }
 
+.calendar-panel__form-actions {
+    justify-content: flex-end;
+    flex-wrap: wrap;
+}
+
 .calendar-panel__submit {
-    justify-self: end;
     border-color: rgba(var(--signal-rgb), 0.44);
     background: rgba(var(--signal-rgb), 0.12);
     color: var(--signal);

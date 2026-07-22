@@ -44,6 +44,18 @@ export async function createCalendarEntry(payload: CalendarEntryPayload): Promis
     return readJson(res, calendarEntry, 'CalendarEntry')
 }
 
+export async function updateCalendarEntry(id: string, payload: CalendarEntryPayload): Promise<CalendarEntryRecord> {
+    const res = await authenticatedFetch(`${API_BASE}calendar-entries/${id}`, {
+        method: 'PUT',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+    })
+    if (!res.ok) throw new Error(await parseErrorMessage(res))
+    return readJson(res, calendarEntry, 'CalendarEntry')
+}
+
 export async function deleteCalendarEntry(id: string): Promise<void> {
     const res = await authenticatedFetch(`${API_BASE}calendar-entries/${id}`, {
         method: 'DELETE',
