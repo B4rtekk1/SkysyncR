@@ -85,6 +85,9 @@ export function FileCard({
     const display = useDecryptReveal(item.filename, index * 60)
     const kind = kindFromFile(item.filename, item.mime_type)
     const typeLabel = KIND_LABELS[kind]
+    const shared = isShared(item)
+    const updatedRelative = formatRelative(item.updated_at)
+    const updatedTitle = new Date(item.updated_at).toLocaleString()
     const [favouriteTouched, setFavouriteTouched] = useState(false)
     const [isRenaming, setIsRenaming] = useState(false)
     const [isInfoOpen, setIsInfoOpen] = useState(false)
@@ -94,11 +97,11 @@ export function FileCard({
     const renameInputRef = useRef<HTMLInputElement>(null)
     const cardRef = useRef<HTMLElement>(null)
     const infoPositionFrameRef = useRef<number | null>(null)
-    const canToggleFavourite = Boolean(onToggleFavourite && !isShared(item))
-    const canRename = Boolean(onRename && !isShared(item) && view !== 'trash' && !pending)
-    const canShare = Boolean(onShare && !isShared(item) && view !== 'trash' && !pending)
-    const canNote = Boolean(onNote && !isShared(item) && view !== 'trash' && !pending)
-    const canMove = Boolean(onMove && !isShared(item) && view === 'all' && !pending)
+    const canToggleFavourite = Boolean(onToggleFavourite && !shared)
+    const canRename = Boolean(onRename && !shared && view !== 'trash' && !pending)
+    const canShare = Boolean(onShare && !shared && view !== 'trash' && !pending)
+    const canNote = Boolean(onNote && !shared && view !== 'trash' && !pending)
+    const canMove = Boolean(onMove && !shared && view === 'all' && !pending)
     const canDownload = Boolean(onDownload && view !== 'trash')
     const canPreview = Boolean(onPreview && ['image', 'video', 'pdf', 'text', 'code'].includes(kind) && view !== 'trash' && !pending && !isRenaming)
     const hasAction = Boolean(
@@ -233,13 +236,15 @@ export function FileCard({
     return (
         <article
             ref={cardRef}
-            className={`file-card ${canPreview ? 'file-card--can-preview' : ''} ${
+            className={`file-card file-card--${kind} ${canPreview ? 'file-card--can-preview' : ''} ${
                 canToggleFavourite ? 'file-card--has-favourite' : ''
             } ${
                 hasAction ? 'file-card--has-action' : ''
-            } ${selected ? 'is-selected' : ''} ${pending ? 'file-card--pending' : ''} ${isDragging ? 'is-dragging-card' : ''} ${isDropTarget ? 'is-drop-target' : ''} ${
+            } ${shared ? 'file-card--shared' : ''} ${item.is_public ? 'file-card--public' : ''} ${item.note ? 'file-card--has-note' : ''} ${selected ? 'is-selected' : ''} ${pending ? 'file-card--pending' : ''} ${isDragging ? 'is-dragging-card' : ''} ${isDropTarget ? 'is-drop-target' : ''} ${
                 isSearchExiting ? 'is-search-exiting' : ''
             }`}
+            data-file-kind={kind}
+            data-file-id={item.id}
             style={style}
             draggable={draggable && !pending && !isRenaming}
             tabIndex={canPreview || reorderable ? 0 : undefined}
@@ -319,10 +324,38 @@ export function FileCard({
                     </p>
                 )}
             </div>
-            <p className="file-card__meta">
-                {typeLabel} · {formatBytes(item.size_bytes)} · {formatRelative(item.updated_at)}
-                {isShared(item) && item.shared_by_user_name ? ` · shared by ${item.shared_by_user_name}` : ''}
-            </p>
+            <div className="file-card__meta" aria-label={`${typeLabel}, ${formatBytes(item.size_bytes)}, updated ${updatedRelative}`}>
+                <span className="file-card__meta-type">
+                    <span className="file-card__meta-dot" aria-hidden="true" />
+                    {typeLabel}
+                </span>
+                <span className="file-card__meta-divider" aria-hidden="true" />
+                <span>{formatBytes(item.size_bytes)}</span>
+                <span className="file-card__meta-divider" aria-hidden="true" />
+                <time dateTime={item.updated_at} title={updatedTitle}>{updatedRelative}</time>
+            </div>
+            {(shared || item.is_public || item.note) && (
+                <div className="file-card__context" aria-label="File status">
+                    {shared && (
+                        <span className="file-card__context-item file-card__context-item--shared">
+                            <span className="file-card__context-icon" aria-hidden="true">↗</span>
+                            {item.shared_by_user_name ? `Shared by ${item.shared_by_user_name}` : 'Shared with you'}
+                        </span>
+                    )}
+                    {!shared && item.is_public && (
+                        <span className="file-card__context-item file-card__context-item--public">
+                            <span className="file-card__context-icon" aria-hidden="true">◎</span>
+                            Public link
+                        </span>
+                    )}
+                    {item.note && (
+                        <span className="file-card__context-item file-card__context-item--note">
+                            <span className="file-card__context-icon" aria-hidden="true">≡</span>
+                            Note
+                        </span>
+                    )}
+                </div>
+            )}
             {hasAction && (
                 <FileCardActions
                     item={item}

@@ -1,7 +1,7 @@
 use base64::{Engine as _, engine::general_purpose};
 use chrono::{DateTime, Utc};
 use serde::{Serialize, Serializer};
-use sqlx::{FromRow, PgPool};
+use sqlx::{FromRow, PgPool, Row};
 use uuid::Uuid;
 
 fn serialize_optional_bytes_base64<S>(
@@ -47,6 +47,7 @@ pub async fn list_user_folders(
     pool: &PgPool,
     user_id: Uuid,
     parent_folder_id: Option<Uuid>,
+    trashed: bool,
 ) -> Result<Vec<FolderRecord>, sqlx::Error> {
     sqlx::query_as::<_, FolderRecord>(
         r#"
@@ -59,8 +60,8 @@ pub async fn list_user_folders(
             f.share_token,
             f.created_at,
             f.updated_at,
-            FALSE AS is_deleted,
-            NULL::timestamptz AS deleted_at,
+            f.is_deleted,
+            f.deleted_at,
             COUNT(files.id)::bigint AS file_count,
             EXISTS (
                 SELECT 1
@@ -71,11 +72,11 @@ pub async fn list_user_folders(
             f.encrypted_key
         FROM folders f
         LEFT JOIN files
-          ON files.folder_id = f.id
+         ON files.folder_id = f.id
          AND files.owner_id = f.owner_id
-         AND files.is_deleted = FALSE
+         AND files.is_deleted = f.is_deleted
         WHERE f.owner_id = $1
-          AND f.is_deleted = FALSE
+          AND f.is_deleted = $3
           AND (
               ($2::uuid IS NULL AND f.parent_folder_id IS NULL)
               OR f.parent_folder_id = $2
@@ -95,6 +96,7 @@ pub async fn list_user_folders(
     )
     .bind(user_id)
     .bind(parent_folder_id)
+    .bind(trashed)
     .fetch_all(pool)
     .await
 }
@@ -460,4 +462,253 @@ pub async fn remove_user_folder_favourite(
     .await?;
 
     Ok(())
+}
+
+pub async fn soft_delete_user_folder(
+    pool: &PgPool,
+    user_id: Uuid,
+    folder_id: Uuid,
+) -> Result<u64, sqlx::Error> {
+    let mut tx = pool.begin().await?;
+
+    let row = sqlx::query(
+        r#"
+        WITH RECURSIVE folder_tree AS (
+            SELECT id
+            FROM folders
+            WHERE id = $1
+              AND owner_id = $2
+              AND is_deleted = FALSE
+
+            UNION ALL
+
+            SELECT f.id
+            FROM folders f
+            JOIN folder_tree ft ON f.parent_folder_id = ft.id
+            WHERE f.owner_id = $2
+              AND f.is_deleted = FALSE
+        ),
+        updated_folders AS (
+            UPDATE folders
+            SET is_deleted = TRUE,
+                deleted_at = NOW(),
+                updated_at = NOW()
+            WHERE owner_id = $2
+              AND id IN (SELECT id FROM folder_tree)
+              AND is_deleted = FALSE
+            RETURNING id
+        ),
+        updated_files AS (
+            UPDATE files
+            SET is_deleted = TRUE,
+                deleted_at = NOW(),
+                updated_at = NOW()
+            WHERE owner_id = $2
+              AND folder_id IN (SELECT id FROM folder_tree)
+              AND is_deleted = FALSE
+            RETURNING size_bytes
+        )
+        SELECT
+            (SELECT COUNT(*)::bigint FROM updated_folders) AS folder_count,
+            COALESCE((SELECT SUM(size_bytes)::bigint FROM updated_files), 0)::bigint AS file_bytes
+        "#,
+    )
+    .bind(folder_id)
+    .bind(user_id)
+    .fetch_one(&mut *tx)
+    .await?;
+
+    let folder_count: i64 = row.try_get("folder_count")?;
+    let file_bytes: i64 = row.try_get("file_bytes")?;
+    if file_bytes > 0 {
+        super::storage::try_apply_storage_delta(&mut tx, user_id, -file_bytes).await?;
+    }
+
+    tx.commit().await?;
+    Ok(folder_count as u64)
+}
+
+pub async fn restore_user_folder(
+    pool: &PgPool,
+    user_id: Uuid,
+    folder_id: Uuid,
+) -> Result<u64, sqlx::Error> {
+    let mut tx = pool.begin().await?;
+
+    let target = sqlx::query_scalar::<_, bool>(
+        r#"
+        SELECT EXISTS (
+            SELECT 1
+            FROM folders
+            WHERE id = $1
+              AND owner_id = $2
+              AND is_deleted = TRUE
+        )
+        "#,
+    )
+    .bind(folder_id)
+    .bind(user_id)
+    .fetch_one(&mut *tx)
+    .await?;
+
+    if !target {
+        tx.commit().await?;
+        return Ok(0);
+    }
+
+    let file_bytes = sqlx::query_scalar::<_, i64>(
+        r#"
+        WITH RECURSIVE folder_tree AS (
+            SELECT id
+            FROM folders
+            WHERE id = $1
+              AND owner_id = $2
+              AND is_deleted = TRUE
+
+            UNION ALL
+
+            SELECT f.id
+            FROM folders f
+            JOIN folder_tree ft ON f.parent_folder_id = ft.id
+            WHERE f.owner_id = $2
+              AND f.is_deleted = TRUE
+        )
+        SELECT COALESCE(SUM(size_bytes), 0)::bigint
+        FROM files
+        WHERE owner_id = $2
+          AND folder_id IN (SELECT id FROM folder_tree)
+          AND is_deleted = TRUE
+        "#,
+    )
+    .bind(folder_id)
+    .bind(user_id)
+    .fetch_one(&mut *tx)
+    .await?;
+
+    if file_bytes > 0
+        && !super::storage::try_apply_storage_delta(&mut tx, user_id, file_bytes).await?
+    {
+        tx.commit().await?;
+        return Ok(0);
+    }
+
+    let row = sqlx::query(
+        r#"
+        WITH RECURSIVE folder_tree AS (
+            SELECT id
+            FROM folders
+            WHERE id = $1
+              AND owner_id = $2
+              AND is_deleted = TRUE
+
+            UNION ALL
+
+            SELECT f.id
+            FROM folders f
+            JOIN folder_tree ft ON f.parent_folder_id = ft.id
+            WHERE f.owner_id = $2
+              AND f.is_deleted = TRUE
+        ),
+        updated_folders AS (
+            UPDATE folders
+            SET is_deleted = FALSE,
+                deleted_at = NULL,
+                updated_at = NOW()
+            WHERE owner_id = $2
+              AND id IN (SELECT id FROM folder_tree)
+              AND is_deleted = TRUE
+            RETURNING id
+        ),
+        updated_files AS (
+            UPDATE files
+            SET is_deleted = FALSE,
+                deleted_at = NULL,
+                updated_at = NOW()
+            WHERE owner_id = $2
+              AND folder_id IN (SELECT id FROM folder_tree)
+              AND is_deleted = TRUE
+            RETURNING id
+        )
+        SELECT (SELECT COUNT(*)::bigint FROM updated_folders) AS folder_count
+        "#,
+    )
+    .bind(folder_id)
+    .bind(user_id)
+    .fetch_one(&mut *tx)
+    .await?;
+
+    let folder_count: i64 = row.try_get("folder_count")?;
+    tx.commit().await?;
+    Ok(folder_count as u64)
+}
+
+pub async fn list_deleted_folder_file_targets(
+    pool: &PgPool,
+    user_id: Uuid,
+    folder_id: Uuid,
+) -> Result<Vec<super::files::FilePurgeTarget>, sqlx::Error> {
+    sqlx::query_as::<_, super::files::FilePurgeTarget>(
+        r#"
+        WITH RECURSIVE folder_tree AS (
+            SELECT id
+            FROM folders
+            WHERE id = $1
+              AND owner_id = $2
+              AND is_deleted = TRUE
+
+            UNION ALL
+
+            SELECT f.id
+            FROM folders f
+            JOIN folder_tree ft ON f.parent_folder_id = ft.id
+            WHERE f.owner_id = $2
+              AND f.is_deleted = TRUE
+        )
+        SELECT id, storage_path
+        FROM files
+        WHERE owner_id = $2
+          AND folder_id IN (SELECT id FROM folder_tree)
+          AND is_deleted = TRUE
+        "#,
+    )
+    .bind(folder_id)
+    .bind(user_id)
+    .fetch_all(pool)
+    .await
+}
+
+pub async fn hard_delete_folder_tree(
+    pool: &PgPool,
+    user_id: Uuid,
+    folder_id: Uuid,
+) -> Result<u64, sqlx::Error> {
+    let result = sqlx::query(
+        r#"
+        WITH RECURSIVE folder_tree AS (
+            SELECT id
+            FROM folders
+            WHERE id = $1
+              AND owner_id = $2
+              AND is_deleted = TRUE
+
+            UNION ALL
+
+            SELECT f.id
+            FROM folders f
+            JOIN folder_tree ft ON f.parent_folder_id = ft.id
+            WHERE f.owner_id = $2
+              AND f.is_deleted = TRUE
+        )
+        DELETE FROM folders
+        WHERE owner_id = $2
+          AND id IN (SELECT id FROM folder_tree)
+          AND is_deleted = TRUE
+        "#,
+    )
+    .bind(folder_id)
+    .bind(user_id)
+    .execute(pool)
+    .await?;
+
+    Ok(result.rows_affected())
 }

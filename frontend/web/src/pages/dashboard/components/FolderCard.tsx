@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState, type CSSProperties, type Drag
 import type { ApiFolder } from '../../../api/files'
 import { formatRelative } from '../fileUtils'
 import { FILE_CARD_DRAG_MIME } from '../hooks/useManualCardOrdering'
-import { CANCEL_ICON, CHECK_ICON, INFO_ICON, RENAME_ICON, SHARE_ICON, STAR_ICON_FILLED, STAR_ICON_OUTLINE } from '../icons'
+import { CANCEL_ICON, CHECK_ICON, DOWNLOAD_ICON, INFO_ICON, RENAME_ICON, SHARE_ICON, STAR_ICON_FILLED, STAR_ICON_OUTLINE } from '../icons'
 import { FileRenameInput } from './FileRenameInput'
 import { FileInfoPopover, type InfoPopoverPosition } from './FileInfoPopover'
 
@@ -11,6 +11,7 @@ export function FolderCard({
     index,
     onOpen,
     onShare,
+    onDownload,
     onRename,
     isFavourite,
     onToggleFavourite,
@@ -26,6 +27,7 @@ export function FolderCard({
     index: number
     onOpen: (folder: ApiFolder) => void
     onShare?: (folder: ApiFolder) => void | Promise<void>
+    onDownload?: ((folder: ApiFolder) => void | Promise<void>) | undefined
     onRename?: (folder: ApiFolder, name: string, description: string | null) => Promise<void>
     isFavourite?: boolean
     onToggleFavourite?: ((id: string) => void | Promise<void>) | undefined
@@ -282,7 +284,7 @@ export function FolderCard({
             <p className="file-card__meta">
                 {fileCountLabel} · Updated {formatRelative(folder.updated_at)}
             </p>
-            {(onRename || onShare || !isRenaming) && (
+            {(onRename || onShare || onDownload || !isRenaming) && (
                 <div className="file-card__actions">
                     {isRenaming && (
                         <>
@@ -341,6 +343,20 @@ export function FolderCard({
                             title="Share"
                         >
                             {SHARE_ICON}
+                        </button>
+                    )}
+                    {onDownload && !isRenaming && (
+                        <button
+                            className="file-card__action file-card__action--download"
+                            type="button"
+                            onClick={(event) => {
+                                event.stopPropagation()
+                                void onDownload(folder)
+                            }}
+                            aria-label={`Download folder ${folder.name} as ZIP`}
+                            title="Download ZIP"
+                        >
+                            {DOWNLOAD_ICON}
                         </button>
                     )}
                     {!isRenaming && (

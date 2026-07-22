@@ -24,6 +24,7 @@ type DashboardFileGridProps = {
     selectedFolderIds: Set<string>
     onOpenFolder: (folder: ApiFolder) => void
     onShareFolder: (folder: ApiFolder) => void
+    onDownloadFolder: (folder: ApiFolder) => void | Promise<void>
     onRenameFolder: (folder: ApiFolder, name: string, description: string | null) => Promise<void>
     onToggleFolderFavourite: (id: string) => void | Promise<void>
     onDelete: (id: string) => void | Promise<void>
@@ -69,6 +70,7 @@ export function DashboardFileGrid({
     selectedFolderIds,
     onOpenFolder,
     onShareFolder,
+    onDownloadFolder,
     onRenameFolder,
     onToggleFolderFavourite,
     onDelete,
@@ -109,6 +111,7 @@ export function DashboardFileGrid({
                     index={i}
                     onOpen={onOpenFolder}
                     onShare={onShareFolder}
+                    onDownload={view === 'all' || view === 'favourites' ? onDownloadFolder : undefined}
                     onRename={onRenameFolder}
                     isFavourite={folderFavouriteIds.has(folder.id)}
                     onToggleFavourite={view === 'all' || view === 'favourites' ? onToggleFolderFavourite : undefined}

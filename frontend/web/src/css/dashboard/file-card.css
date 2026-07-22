@@ -1,6 +1,6 @@
 /* file-card-actions.css */
 .file-card__action {
-    margin-top: 12px;
+    margin-top: 0;
     background: transparent;
     border: none;
     padding: 0;
@@ -8,14 +8,16 @@
     font-family: inherit;
     color: var(--mist);
     cursor: pointer;
-    transition: color 0.15s ease;
+    transition: color 0.15s ease, background 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
 }
 
 .file-card__actions {
     display: flex;
     align-items: center;
-    gap: 6px;
-    margin-top: 12px;
+    gap: 5px;
+    margin-top: auto;
+    padding-top: 10px;
+    border-top: none;
 }
 
 .file-card__actions .file-card__action {
@@ -38,10 +40,18 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 32px;
-    height: 32px;
+    width: 34px;
+    height: 34px;
     border-radius: 8px;
+    border: 1px solid transparent;
+    background: transparent;
     color: var(--mist);
+}
+
+.file-card__action--preview {
+    border-color: color-mix(in srgb, var(--line) 78%, var(--file-accent) 22%);
+    background: var(--panel-2);
+    color: color-mix(in srgb, var(--file-accent) 68%, var(--paper));
 }
 
 .file-card__action--download:hover,
@@ -71,6 +81,11 @@
     color: var(--signal);
 }
 
+.file-card__action:focus-visible {
+    outline: 2px solid var(--signal);
+    outline-offset: 2px;
+}
+
 .file-card__action--share.is-active {
     color: var(--signal);
     background: rgba(var(--signal-rgb), 0.08);
@@ -92,12 +107,13 @@
     top: calc(100% + 8px);
     z-index: 30;
     display: grid;
-    min-width: 162px;
-    padding: 6px;
-    border: 1px solid var(--line);
-    border-radius: 8px;
-    background: var(--panel);
-    box-shadow: 0 18px 42px rgba(0, 0, 0, 0.28);
+    min-width: 176px;
+    padding: 7px;
+    border: 1px solid color-mix(in srgb, var(--line) 88%, var(--signal) 12%);
+    border-radius: 10px;
+    background: color-mix(in srgb, var(--panel) 92%, transparent);
+    box-shadow: 0 24px 54px rgba(0, 0, 0, 0.34);
+    backdrop-filter: blur(18px);
 }
 
 .file-card__more-item {
@@ -105,10 +121,10 @@
     align-items: center;
     gap: 9px;
     width: 100%;
-    min-height: 34px;
-    padding: 7px 9px;
+    min-height: 38px;
+    padding: 8px 10px;
     border: none;
-    border-radius: 7px;
+    border-radius: 8px;
     background: transparent;
     color: var(--mist);
     font: inherit;
@@ -141,6 +157,31 @@
 .file-card__more-icon {
     display: inline-flex;
     flex-shrink: 0;
+}
+
+.file-grid--list .file-card__actions {
+    margin-top: 0;
+    padding-top: 0;
+    border-top: none;
+}
+
+@media (max-width: 560px) {
+    .file-card__actions {
+        gap: 3px;
+    }
+
+    .file-card__action--download,
+    .file-card__action--rename,
+    .file-card__action--preview,
+    .file-card__action--share,
+    .file-card__action--note,
+    .file-card__action--info,
+    .file-card__action--more,
+    .file-card__action--confirm,
+    .file-card__action--cancel {
+        width: 32px;
+        height: 32px;
+    }
 }
 
 /* file-card-info.css */

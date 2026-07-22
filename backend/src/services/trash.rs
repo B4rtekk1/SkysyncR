@@ -7,6 +7,7 @@ use crate::db::files::{
     FilePurgeTarget, get_user_file_for_permanent_delete, hard_delete_file_record,
     list_expired_deleted_files, list_file_version_storage_paths,
 };
+use crate::db::folders::{hard_delete_folder_tree, list_deleted_folder_file_targets};
 
 const PURGE_BATCH_SIZE: i64 = 100;
 
@@ -48,6 +49,20 @@ pub async fn permanently_delete_user_file(
 
     purge_target(pool, target, false).await?;
     Ok(true)
+}
+
+pub async fn permanently_delete_user_folder(
+    pool: &PgPool,
+    user_id: Uuid,
+    folder_id: Uuid,
+) -> Result<bool, TrashPurgeError> {
+    let targets = list_deleted_folder_file_targets(pool, user_id, folder_id).await?;
+    for target in targets {
+        purge_target(pool, target, false).await?;
+    }
+
+    let deleted_folders = hard_delete_folder_tree(pool, user_id, folder_id).await?;
+    Ok(deleted_folders > 0)
 }
 
 pub fn spawn_trash_purge_worker(pool: PgPool, retention_days: i64, interval_hours: u64) {

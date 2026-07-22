@@ -12,8 +12,9 @@ use crate::db::folders::{
     FolderRecord, NewFolderRecord, add_user_folder_favourite, create_folder_record,
     folder_belongs_to_user, folder_is_descendant_of, list_user_favourite_folders,
     list_user_folders, move_user_folder, remove_user_folder_favourite, rename_user_folder,
-    update_user_folder_share, user_folder_exists,
+    restore_user_folder, soft_delete_user_folder, update_user_folder_share, user_folder_exists,
 };
+use crate::services::trash::permanently_delete_user_folder;
 use crate::state::AppState;
 use crate::utils::errors::{ApiError, internal_error};
 
@@ -22,6 +23,8 @@ pub struct ListFoldersQuery {
     pub parent_folder_id: Option<String>,
     #[serde(default)]
     pub favourite: bool,
+    #[serde(default)]
+    pub trashed: bool,
 }
 
 #[derive(Deserialize)]
@@ -60,9 +63,14 @@ pub async fn list_folders(
     } else {
         let parent_folder_id =
             parse_optional_uuid(query.parent_folder_id.as_deref(), "parent_folder_id")?;
-        list_user_folders(&state.db_pool, auth.user_id, parent_folder_id)
-            .await
-            .map_err(|e| internal_error("list folders", e))?
+        list_user_folders(
+            &state.db_pool,
+            auth.user_id,
+            parent_folder_id,
+            query.trashed,
+        )
+        .await
+        .map_err(|e| internal_error("list folders", e))?
     };
 
     Ok(Json(folders))
@@ -207,6 +215,56 @@ pub async fn remove_folder_favourite(
     remove_user_folder_favourite(&state.db_pool, auth.user_id, folder_id)
         .await
         .map_err(|e| internal_error("remove folder favourite", e))?;
+
+    Ok(StatusCode::NO_CONTENT)
+}
+
+pub async fn soft_delete_folder(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Path(folder_id): Path<Uuid>,
+) -> Result<StatusCode, ApiError> {
+    let rows = soft_delete_user_folder(&state.db_pool, auth.user_id, folder_id)
+        .await
+        .map_err(|e| internal_error("soft delete folder", e))?;
+
+    if rows == 0 {
+        return Err(ApiError::BadRequest("Folder not found".into()));
+    }
+
+    Ok(StatusCode::NO_CONTENT)
+}
+
+pub async fn restore_folder(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Path(folder_id): Path<Uuid>,
+) -> Result<StatusCode, ApiError> {
+    let rows = restore_user_folder(&state.db_pool, auth.user_id, folder_id)
+        .await
+        .map_err(|e| internal_error("restore folder", e))?;
+
+    if rows == 0 {
+        return Err(ApiError::BadRequest(
+            "Folder not found in trash or storage quota exceeded".into(),
+        ));
+    }
+
+    Ok(StatusCode::NO_CONTENT)
+}
+
+pub async fn permanent_delete_folder(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Path(folder_id): Path<Uuid>,
+) -> Result<StatusCode, ApiError> {
+    let deleted = permanently_delete_user_folder(&state.db_pool, auth.user_id, folder_id)
+        .await
+        .map_err(|e| internal_error("permanently delete folder", e))?;
+
+    if !deleted {
+        return Err(ApiError::BadRequest("Folder not found in trash".into()));
+    }
 
     Ok(StatusCode::NO_CONTENT)
 }

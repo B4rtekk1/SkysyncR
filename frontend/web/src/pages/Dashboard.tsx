@@ -28,6 +28,7 @@ import { useFilePreview } from './dashboard/hooks/useFilePreview'
 import { useFileFilterControls } from './dashboard/hooks/useFileFilterControls'
 import { useFileUpload } from './dashboard/hooks/useFileUpload'
 import { useFolderActions } from './dashboard/hooks/useFolderActions'
+import { useFolderDownload } from './dashboard/hooks/useFolderDownload'
 import { useLayoutModeSwitch } from './dashboard/hooks/useLayoutModeSwitch'
 import { FILE_CARD_DRAG_MIME, useManualCardOrdering } from './dashboard/hooks/useManualCardOrdering'
 import { useDashboardMenus } from './dashboard/hooks/useDashboardMenus'
@@ -137,6 +138,7 @@ function Dashboard() {
         setError,
         handleFileUpdated,
     )
+    const { downloadFolder } = useFolderDownload(privateKey, setError)
     const {
         menuOpen,
         setMenuOpen,
@@ -293,7 +295,6 @@ function Dashboard() {
         openFolder,
         openFolderRoot,
         openFolderAt,
-        openFolderParent,
         closeFolderCreate,
         handleCreateFolder,
         handleRenameFolder,
@@ -454,11 +455,6 @@ function Dashboard() {
         openFolderAt(folder, index)
     }
 
-    function openFolderParentWithSelectionReset() {
-        clearSelection()
-        openFolderParent()
-    }
-
     function toggleFileSelected(id: string) {
         setSelectedFileIds((current) => {
             const next = new Set(current)
@@ -537,8 +533,12 @@ function Dashboard() {
 
     async function bulkDownload() {
         const selectedFiles = renderedItems.filter((item) => selectedFileIds.has(item.id))
+        const selectedFolders = visibleFolders.filter((folder) => selectedFolderIds.has(folder.id))
         for (const item of selectedFiles) {
             await handleDownload(item)
+        }
+        for (const folder of selectedFolders) {
+            await downloadFolder(folder)
         }
     }
 
@@ -722,6 +722,7 @@ function Dashboard() {
                     moveTargets={moveTargets}
                     onOpenFolder={openFolderWithSelectionReset}
                     onShareFolder={handleShareFolder}
+                    onDownloadFolder={downloadFolder}
                     onRenameFolder={handleRenameFolder}
                     onToggleFolderFavourite={toggleFolderFavourite}
                     onDelete={handleDelete}
