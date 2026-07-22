@@ -7,6 +7,7 @@ import {
     formatSizeFromKb,
     formatSizeInputValue,
 } from '../fileFilters'
+import type { Tag } from '../../../api/tags'
 import type { FileFilters, FileTypeFilterKey, FileVisibilityFilterKey } from '../types'
 
 type SizeFilterField = 'minSizeMb' | 'maxSizeMb'
@@ -18,6 +19,7 @@ type FileFilterModalProps = {
     filterSummary: string
     query: string
     fileFilters: FileFilters
+    tags: Tag[]
     hasActiveFilter: boolean
     sizeSliderMax: number
     sizeSliderMinValue: number
@@ -29,6 +31,7 @@ type FileFilterModalProps = {
     onClearFileTypes: () => void
     onToggleFileType: (type: FileTypeFilterKey) => void
     onVisibilityChange: (visibility: FileVisibilityFilterKey) => void
+    onTagChange: (tagId: string) => void
     onSizeInputChange: (field: SizeFilterField, value: string) => void
     onSizeSliderChange: (field: SizeFilterField, value: string) => void
     onExcludedExtensionsChange: (value: string) => void
@@ -42,6 +45,7 @@ export function FileFilterModal({
     filterSummary,
     query,
     fileFilters,
+    tags,
     hasActiveFilter,
     sizeSliderMax,
     sizeSliderMinValue,
@@ -53,6 +57,7 @@ export function FileFilterModal({
     onClearFileTypes,
     onToggleFileType,
     onVisibilityChange,
+    onTagChange,
     onSizeInputChange,
     onSizeSliderChange,
     onExcludedExtensionsChange,
@@ -164,6 +169,25 @@ export function FileFilterModal({
                                     </button>
                                 ))}
                             </div>
+                        </div>
+
+                        <div className="file-filter__section">
+                            <div className="file-filter__section-head">
+                                <span>Tag</span>
+                            </div>
+                            <select
+                                className="file-filter__select"
+                                value={fileFilters.tagId}
+                                onChange={(e) => onTagChange(e.target.value)}
+                                aria-label="Tag filter"
+                            >
+                                <option value="">Any tag</option>
+                                {tags.map((tag) => (
+                                    <option key={tag.id} value={tag.id}>
+                                        {tag.name}
+                                    </option>
+                                ))}
+                            </select>
                         </div>
 
                         <div className="file-filter__section">

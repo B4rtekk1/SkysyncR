@@ -614,6 +614,12 @@
     transform: translateY(-2px);
 }
 
+.file-card:has(.file-card__more-menu),
+.file-card:has(.file-card__tag-menu) {
+    z-index: 20;
+    overflow: visible;
+}
+
 /* folder-cards.css */
 .folder-card {
     cursor: pointer;

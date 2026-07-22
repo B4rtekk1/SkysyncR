@@ -7,11 +7,13 @@ export function useAnimatedItems({
     view,
     favouriteIds,
     normalizedQuery,
+    searchTextByItemId = new Map(),
 }: {
     items: Item[]
     view: ViewKey
     favouriteIds: Set<string>
     normalizedQuery: string
+    searchTextByItemId?: Map<string, string>
 }) {
     const previousSearchQueryRef = useRef(normalizedQuery)
     const [animatedFiles, setAnimatedFiles] = useState<{ ids: string[]; exitingIds: Set<string> }>({
@@ -22,9 +24,9 @@ export function useAnimatedItems({
     const visibleItems = useMemo(
         () =>
             items
-                .filter((i) => i.filename.toLowerCase().includes(normalizedQuery))
+                .filter((i) => `${i.filename} ${searchTextByItemId.get(i.id) ?? ''}`.toLowerCase().includes(normalizedQuery))
                 .filter((i) => (view === 'favourites' ? favouriteIds.has(i.id) : true)),
-        [favouriteIds, items, normalizedQuery, view],
+        [favouriteIds, items, normalizedQuery, searchTextByItemId, view],
     )
     const itemById = useMemo(() => new Map(items.map((item) => [item.id, item])), [items])
 

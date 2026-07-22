@@ -165,6 +165,168 @@
     border-top: none;
 }
 
+.file-card__tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    min-height: 24px;
+    margin-top: 8px;
+}
+
+.file-card__tag,
+.file-card__tag-add {
+    display: inline-flex;
+    align-items: center;
+    max-width: 100%;
+    min-height: 22px;
+    border: 1px solid color-mix(in srgb, var(--tag-color, var(--signal)) 42%, transparent);
+    border-radius: 7px;
+    background: color-mix(in srgb, var(--tag-color, var(--signal)) 13%, transparent);
+    color: var(--paper);
+    font-size: 0.68rem;
+    line-height: 1;
+}
+
+.file-card__tag {
+    min-width: 0;
+    padding: 0 7px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.file-card__tag-add {
+    justify-content: center;
+    width: 24px;
+    padding: 0;
+    border-color: var(--line);
+    background: var(--panel-2);
+    color: var(--mist);
+    font: inherit;
+    cursor: pointer;
+}
+
+.file-card__tag-add:hover,
+.file-card__tag-add:focus-visible {
+    border-color: rgba(var(--signal-rgb), 0.42);
+    color: var(--signal);
+    outline: none;
+}
+
+.file-card__tag-menu-wrap {
+    position: relative;
+    display: inline-flex;
+}
+
+.file-card__tag-menu {
+    position: absolute;
+    left: 0;
+    top: calc(100% + 8px);
+    z-index: 32;
+    display: grid;
+    gap: 8px;
+    width: min(260px, calc(100vw - 32px));
+    padding: 8px;
+    border: 1px solid color-mix(in srgb, var(--line) 88%, var(--signal) 12%);
+    border-radius: 10px;
+    background: var(--panel);
+    box-shadow: 0 24px 54px rgba(0, 0, 0, 0.34);
+}
+
+.file-card__tag-options {
+    display: grid;
+    gap: 4px;
+    max-height: 180px;
+    overflow: auto;
+}
+
+.file-card__tag-option {
+    display: grid;
+    grid-template-columns: 16px 12px minmax(0, 1fr);
+    align-items: center;
+    gap: 8px;
+    min-height: 30px;
+    padding: 5px 6px;
+    border-radius: 7px;
+    color: var(--mist);
+    font-size: 0.74rem;
+    cursor: pointer;
+}
+
+.file-card__tag-option:hover,
+.file-card__tag-option:focus-within {
+    background: rgba(var(--signal-rgb), 0.08);
+    color: var(--paper);
+}
+
+.file-card__tag-option input {
+    width: 14px;
+    height: 14px;
+    accent-color: var(--signal);
+}
+
+.file-card__tag-option span:last-child {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.file-card__tag-swatch {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--tag-color, var(--signal));
+}
+
+.file-card__tag-empty {
+    padding: 6px;
+    color: var(--mist);
+    font-size: 0.72rem;
+}
+
+.file-card__tag-create {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 6px;
+    padding-top: 8px;
+    border-top: 1px solid rgba(148, 163, 184, 0.14);
+}
+
+.file-card__tag-create input,
+.file-card__tag-create button {
+    min-height: 32px;
+    border: 1px solid var(--line);
+    border-radius: 7px;
+    background: var(--panel-2);
+    color: var(--paper);
+    font: inherit;
+    font-size: 0.74rem;
+}
+
+.file-card__tag-create input {
+    min-width: 0;
+    padding: 0 8px;
+    outline: none;
+}
+
+.file-card__tag-create input:focus {
+    border-color: rgba(var(--signal-rgb), 0.52);
+    box-shadow: 0 0 0 3px rgba(var(--signal-rgb), 0.12);
+}
+
+.file-card__tag-create button {
+    padding: 0 10px;
+    color: var(--signal);
+    cursor: pointer;
+}
+
+.file-card__tag-create button:disabled {
+    color: var(--mist);
+    cursor: default;
+    opacity: 0.55;
+}
+
 @media (max-width: 560px) {
     .file-card__actions {
         gap: 3px;

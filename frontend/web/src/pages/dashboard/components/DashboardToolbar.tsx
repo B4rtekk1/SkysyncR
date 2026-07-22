@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect, useRef, useState, type ChangeEvent, type RefObject } from 'react'
 import { GRID_VIEW_ICON, LIST_VIEW_ICON } from '../icons'
 import { FILE_SORT_LABELS } from '../fileFilters'
+import type { Tag } from '../../../api/tags'
 import type { FileFilters, FileSortKey, FileTypeFilterKey, FileVisibilityFilterKey, LayoutMode, ViewKey } from '../types'
 
 const FileFilterModal = lazy(() => import('./FileFilterModal').then((module) => ({ default: module.FileFilterModal })))
@@ -19,6 +20,7 @@ type DashboardToolbarProps = {
     filterSummary: string
     query: string
     fileFilters: FileFilters
+    tags: Tag[]
     hasActiveFilter: boolean
     sizeSliderMax: number
     sizeSliderMinValue: number
@@ -34,6 +36,7 @@ type DashboardToolbarProps = {
     onClearFileTypes: () => void
     onToggleFileType: (type: FileTypeFilterKey) => void
     onVisibilityChange: (visibility: FileVisibilityFilterKey) => void
+    onTagChange: (tagId: string) => void
     onSizeInputChange: (field: 'minSizeMb' | 'maxSizeMb', value: string) => void
     onSizeSliderChange: (field: 'minSizeMb' | 'maxSizeMb', value: string) => void
     onExcludedExtensionsChange: (value: string) => void
@@ -59,6 +62,7 @@ export function DashboardToolbar({
     filterSummary,
     query,
     fileFilters,
+    tags,
     hasActiveFilter,
     sizeSliderMax,
     sizeSliderMinValue,
@@ -74,6 +78,7 @@ export function DashboardToolbar({
     onClearFileTypes,
     onToggleFileType,
     onVisibilityChange,
+    onTagChange,
     onSizeInputChange,
     onSizeSliderChange,
     onExcludedExtensionsChange,
@@ -233,6 +238,7 @@ export function DashboardToolbar({
                                 filterSummary={filterSummary}
                                 query={query}
                                 fileFilters={fileFilters}
+                                tags={tags}
                                 hasActiveFilter={hasActiveFilter}
                                 sizeSliderMax={sizeSliderMax}
                                 sizeSliderMinValue={sizeSliderMinValue}
@@ -244,6 +250,7 @@ export function DashboardToolbar({
                                 onClearFileTypes={onClearFileTypes}
                                 onToggleFileType={onToggleFileType}
                                 onVisibilityChange={onVisibilityChange}
+                                onTagChange={onTagChange}
                                 onSizeInputChange={onSizeInputChange}
                                 onSizeSliderChange={onSizeSliderChange}
                                 onExcludedExtensionsChange={onExcludedExtensionsChange}

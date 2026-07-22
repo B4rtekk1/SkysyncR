@@ -14,6 +14,7 @@ import type { FileFilters, Item } from './types.ts'
 const emptyFilters: FileFilters = {
   types: [],
   visibility: 'any',
+  tagId: '',
   minSizeMb: '',
   maxSizeMb: '',
   excludedExtensions: '',
@@ -69,6 +70,8 @@ test('filter summary and active state reflect selected criteria', () => {
   const filters = { ...emptyFilters, types: ['pdf'], visibility: 'public', excludedExtensions: '.tmp, bak' } satisfies FileFilters
   assert.equal(hasActiveFileFilters(filters), true)
   assert.equal(getFilterSummary(filters), '1 type · Shared · 2 excluded')
+
+  assert.equal(getFilterSummary({ ...emptyFilters, tagId: 'tag-1' }, [{ id: 'tag-1', owner_id: 'user-1', name: 'Finance', color: null, created_at: '2026-07-12T10:00:00Z' }]), 'Tag: Finance')
 })
 
 test('parseExcludedExtensions handles dots, whitespace, commas and semicolons', () => {
@@ -96,6 +99,14 @@ test('matchesFileFilters distinguishes public and private files', () => {
   assert.equal(matchesFileFilters(item({ is_public: true }), { ...emptyFilters, visibility: 'public' }), true)
   assert.equal(matchesFileFilters(item({ is_public: true }), { ...emptyFilters, visibility: 'private' }), false)
   assert.equal(matchesFileFilters(item({ is_public: false }), { ...emptyFilters, visibility: 'private' }), true)
+})
+
+test('matchesFileFilters applies selected tag filter', () => {
+  const base = item({})
+  const tags = [{ file_id: base.id, tag_id: 'tag-1', name: 'Finance', color: null, created_at: null }]
+
+  assert.equal(matchesFileFilters(base, { ...emptyFilters, tagId: 'tag-1' }, tags), true)
+  assert.equal(matchesFileFilters(base, { ...emptyFilters, tagId: 'tag-2' }, tags), false)
 })
 
 test('sortFiles keeps manual order by reference and sorts copies for computed keys', () => {

@@ -25,6 +25,7 @@ export type FileVisibilityFilterKey = 'any' | 'public' | 'private'
 export type FileFilters = {
     types: FileTypeFilterKey[]
     visibility: FileVisibilityFilterKey
+    tagId: string
     minSizeMb: string
     maxSizeMb: string
     excludedExtensions: string

@@ -1,5 +1,6 @@
 import React, { type DragEvent } from 'react'
 import type { ApiFolder } from '../../../api/files'
+import type { FileTag, Tag } from '../../../api/tags'
 import { FileCard } from './FileCard'
 import { FolderCard } from './FolderCard'
 import type { UploadTransfer } from '../hooks/useFileUpload'
@@ -13,6 +14,8 @@ type DashboardFileGridProps = {
     uploadTransfers: UploadTransfer[]
     favouriteIds: Set<string>
     folderFavouriteIds: Set<string>
+    tags: Tag[]
+    fileTagsByFileId: Map<string, FileTag[]>
     view: ViewKey
     layoutMode: LayoutMode
     layoutSwitchTarget: LayoutMode | null
@@ -38,6 +41,9 @@ type DashboardFileGridProps = {
     onNote: (item: Item) => void
     onMoveFile: (item: Item) => void | Promise<void>
     onToggleFavourite: (id: string) => void | Promise<void>
+    onCreateTag: (name: string) => Promise<Tag | null>
+    onAddTagToFile: (fileId: string, tagId: string) => void | Promise<void>
+    onRemoveTagFromFile: (fileId: string, tagId: string) => void | Promise<void>
     onDragStartCard: (id: string, e: DragEvent<HTMLElement>) => void
     onDragEnterCard: (id: string) => void
     onDragLeaveCard: (id: string) => void
@@ -59,6 +65,8 @@ export function DashboardFileGrid({
     uploadTransfers,
     favouriteIds,
     folderFavouriteIds,
+    tags,
+    fileTagsByFileId,
     view,
     layoutMode,
     layoutSwitchTarget,
@@ -84,6 +92,9 @@ export function DashboardFileGrid({
     onNote,
     onMoveFile,
     onToggleFavourite,
+    onCreateTag,
+    onAddTagToFile,
+    onRemoveTagFromFile,
     onDragStartCard,
     onDragEnterCard,
     onDragLeaveCard,
@@ -147,6 +158,11 @@ export function DashboardFileGrid({
                         onMove={view === 'all' ? onMoveFile : undefined}
                         isFavourite={favouriteIds.has(item.id)}
                         onToggleFavourite={view === 'all' || view === 'favourites' ? onToggleFavourite : undefined}
+                        tags={view === 'all' || view === 'favourites' ? fileTagsByFileId.get(item.id) ?? [] : []}
+                        allTags={view === 'all' || view === 'favourites' ? tags : []}
+                        onCreateTag={view === 'all' || view === 'favourites' ? onCreateTag : undefined}
+                        onAddTag={view === 'all' || view === 'favourites' ? onAddTagToFile : undefined}
+                        onRemoveTag={view === 'all' || view === 'favourites' ? onRemoveTagFromFile : undefined}
                         draggable={(sortKey === 'manual' || view === 'all' || view === 'favourites') && !pendingIds.has(item.id) && !isSearchExiting}
                         reorderable={sortKey === 'manual'}
                         isDragging={draggedCardId === item.id}

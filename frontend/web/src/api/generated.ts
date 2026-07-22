@@ -157,6 +157,22 @@ export type FileAudit = {
   "created_at": string
 }
 
+export type Tag = {
+  "id": string
+  "owner_id": string
+  "name": string
+  "color": string | null
+  "created_at": string
+}
+
+export type FileTag = {
+  "file_id": string
+  "tag_id": string
+  "name": string
+  "color": string | null
+  "created_at": string | null
+}
+
 export type Folder = {
   "id": string
   "name": string

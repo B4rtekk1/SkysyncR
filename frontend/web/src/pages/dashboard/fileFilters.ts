@@ -1,4 +1,5 @@
 import { kindFromFile } from './fileUtils.ts'
+import type { FileTag, Tag } from '../../api/tags'
 import type { FileFilters, FileSortKey, FileTypeFilterKey, FileVisibilityFilterKey, Item } from './types'
 
 export const FILE_SORT_LABELS: Record<FileSortKey, string> = {
@@ -96,6 +97,7 @@ export function hasActiveFileFilters(filters: FileFilters) {
     return (
         filters.types.length > 0 ||
         filters.visibility !== 'any' ||
+        filters.tagId !== '' ||
         filters.minSizeMb.trim() !== '' ||
         filters.maxSizeMb.trim() !== '' ||
         filters.excludedExtensions.trim() !== '' ||
@@ -104,11 +106,13 @@ export function hasActiveFileFilters(filters: FileFilters) {
     )
 }
 
-export function getFilterSummary(filters: FileFilters) {
+export function getFilterSummary(filters: FileFilters, tags: Tag[] = []) {
     const excludedExtensions = parseExcludedExtensions(filters.excludedExtensions)
+    const selectedTag = filters.tagId ? tags.find((tag) => tag.id === filters.tagId) : null
     const activeParts = [
         filters.types.length > 0 ? `${filters.types.length} type${filters.types.length > 1 ? 's' : ''}` : null,
         filters.visibility !== 'any' ? FILE_VISIBILITY_LABELS[filters.visibility] : null,
+        selectedTag ? `Tag: ${selectedTag.name}` : filters.tagId ? 'Tag' : null,
         filters.minSizeMb.trim() || filters.maxSizeMb.trim() ? 'Size' : null,
         excludedExtensions.length > 0 ? `${excludedExtensions.length} excluded` : null,
         filters.modifiedFrom || filters.modifiedTo ? 'Modified' : null,
@@ -117,12 +121,13 @@ export function getFilterSummary(filters: FileFilters) {
     return activeParts.length > 0 ? activeParts.join(' · ') : 'All files'
 }
 
-export function matchesFileFilters(item: Item, filters: FileFilters) {
+export function matchesFileFilters(item: Item, filters: FileFilters, fileTags: FileTag[] = []) {
     if (filters.types.length > 0 && !filters.types.includes(kindFromFile(item.filename, item.mime_type))) {
         return false
     }
     if (filters.visibility === 'public' && !item.is_public) return false
     if (filters.visibility === 'private' && item.is_public) return false
+    if (filters.tagId && !fileTags.some((tag) => tag.tag_id === filters.tagId)) return false
 
     const minSizeMb = parseSizeMb(filters.minSizeMb)
     const maxSizeMb = parseSizeMb(filters.maxSizeMb)

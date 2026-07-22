@@ -1,6 +1,7 @@
 import { useMemo, useState, type ChangeEvent, type DragEvent, type RefObject } from 'react'
 import type { CurrentUserResponse } from '../../../api/users'
 import type { ApiFile, ApiFolder } from '../../../api/files'
+import type { FileTag, Tag } from '../../../api/tags'
 import { CalendarPanel } from './CalendarPanel'
 import { DashboardFileGrid } from './DashboardFileGrid'
 import { DashboardToolbar } from './DashboardToolbar'
@@ -39,6 +40,7 @@ type DashboardContentProps = {
     filterSummary: string
     query: string
     fileFilters: FileFilters
+    tags: Tag[]
     hasActiveFilter: boolean
     sizeSliderMax: number
     sizeSliderMinValue: number
@@ -54,6 +56,7 @@ type DashboardContentProps = {
     onClearFileTypes: () => void
     onToggleFileType: (type: FileTypeFilterKey) => void
     onVisibilityChange: (visibility: FileVisibilityFilterKey) => void
+    onTagChange: (tagId: string) => void
     onSizeInputChange: (field: 'minSizeMb' | 'maxSizeMb', value: string) => void
     onSizeSliderChange: (field: 'minSizeMb' | 'maxSizeMb', value: string) => void
     onExcludedExtensionsChange: (value: string) => void
@@ -83,6 +86,7 @@ type DashboardContentProps = {
     pendingIds: Set<string>
     favouriteIds: Set<string>
     folderFavouriteIds: Set<string>
+    fileTagsByFileId: Map<string, FileTag[]>
     currentUser: CurrentUserResponse | null
     groups: Group[]
     incomingGroupInvites: GroupIncomingInvite[]
@@ -131,6 +135,9 @@ type DashboardContentProps = {
     onNote: (item: Item) => void
     onMoveFile: (item: Item) => void | Promise<void>
     onToggleFavourite: (id: string) => void | Promise<void>
+    onCreateTag: (name: string) => Promise<Tag | null>
+    onAddTagToFile: (fileId: string, tagId: string) => void | Promise<void>
+    onRemoveTagFromFile: (fileId: string, tagId: string) => void | Promise<void>
     onDragStartCard: (id: string, event: DragEvent<HTMLElement>) => void
     onDragEnterCard: (id: string) => void
     onDragLeaveCard: (id: string) => void
@@ -184,6 +191,7 @@ export function DashboardContent({
     filterSummary,
     query,
     fileFilters,
+    tags,
     hasActiveFilter,
     sizeSliderMax,
     sizeSliderMinValue,
@@ -199,6 +207,7 @@ export function DashboardContent({
     onClearFileTypes,
     onToggleFileType,
     onVisibilityChange,
+    onTagChange,
     onSizeInputChange,
     onSizeSliderChange,
     onExcludedExtensionsChange,
@@ -228,6 +237,7 @@ export function DashboardContent({
     pendingIds,
     favouriteIds,
     folderFavouriteIds,
+    fileTagsByFileId,
     currentUser,
     groups,
     incomingGroupInvites,
@@ -276,6 +286,9 @@ export function DashboardContent({
     onNote,
     onMoveFile,
     onToggleFavourite,
+    onCreateTag,
+    onAddTagToFile,
+    onRemoveTagFromFile,
     onDragStartCard,
     onDragEnterCard,
     onDragLeaveCard,
@@ -378,6 +391,7 @@ export function DashboardContent({
                     filterSummary={filterSummary}
                     query={query}
                     fileFilters={fileFilters}
+                    tags={tags}
                     hasActiveFilter={hasActiveFilter}
                     sizeSliderMax={sizeSliderMax}
                     sizeSliderMinValue={sizeSliderMinValue}
@@ -393,6 +407,7 @@ export function DashboardContent({
                     onClearFileTypes={onClearFileTypes}
                     onToggleFileType={onToggleFileType}
                     onVisibilityChange={onVisibilityChange}
+                    onTagChange={onTagChange}
                     onSizeInputChange={onSizeInputChange}
                     onSizeSliderChange={onSizeSliderChange}
                     onExcludedExtensionsChange={onExcludedExtensionsChange}
@@ -597,6 +612,8 @@ export function DashboardContent({
                     uploadTransfers={uploadTransfers}
                     favouriteIds={favouriteIds}
                     folderFavouriteIds={folderFavouriteIds}
+                    tags={tags}
+                    fileTagsByFileId={fileTagsByFileId}
                     view={view}
                     layoutMode={layoutMode}
                     layoutSwitchTarget={layoutSwitchTarget}
@@ -622,6 +639,9 @@ export function DashboardContent({
                     onNote={onNote}
                     onMoveFile={onMoveFile}
                     onToggleFavourite={onToggleFavourite}
+                    onCreateTag={onCreateTag}
+                    onAddTagToFile={onAddTagToFile}
+                    onRemoveTagFromFile={onRemoveTagFromFile}
                     onDragStartCard={onDragStartCard}
                     onDragEnterCard={onDragEnterCard}
                     onDragLeaveCard={onDragLeaveCard}

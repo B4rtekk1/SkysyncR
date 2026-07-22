@@ -10,6 +10,7 @@ import '../App.css'
 import '../css/dashboard.css'
 import type { Item, ShareableItem, ViewKey } from './dashboard/types'
 import { moveFile, moveFolder, permanentlyDeleteFile, type ApiFolder } from '../api/files'
+import { addFileTag, createTag, removeFileTag, type Tag } from '../api/tags'
 import { DashboardContent } from './dashboard/components/DashboardContent'
 import { DashboardModals } from './dashboard/components/DashboardModals'
 import { DashboardSidebar } from './dashboard/components/DashboardSidebar'
@@ -124,12 +125,16 @@ function Dashboard() {
         quota,
         storageItems,
         setStorageItems,
+        tags,
+        setTags,
+        fileTagsByFileId,
         favouriteIds,
         setFavouriteIds,
         folderFavouriteIds,
         setFolderFavouriteIds,
         refreshQuota,
         handleFileUpdated,
+        updateFileTags,
     } = useDashboardData({ view, activeFolderId, privateKey })
 
     const { filePreview, closeFilePreview, handleDownload, handleFilePreview, handleSaveTextFile } = useFilePreview(
@@ -178,17 +183,27 @@ function Dashboard() {
         clearFileTypes,
         toggleFileTypeFilter,
         updateVisibilityFilter,
+        updateTagFilter,
         updateSizeFilter,
         updateSizeSlider,
         updateExcludedExtensions,
         updateModifiedDateFilter,
         clearFileFilters,
-    } = useFileFilterControls(items)
+    } = useFileFilterControls(items, tags, fileTagsByFileId)
+    const tagSearchTextByItemId = useMemo(() => {
+        return new Map(
+            Array.from(fileTagsByFileId.entries()).map(([fileId, fileTags]) => [
+                fileId,
+                fileTags.map((tag) => tag.name).join(' '),
+            ]),
+        )
+    }, [fileTagsByFileId])
     const { visibleItems, renderedItems, animatedFiles } = useAnimatedItems({
         items: sortedItems,
         view,
         favouriteIds,
         normalizedQuery,
+        searchTextByItemId: tagSearchTextByItemId,
     })
     const visibleFileIds = useMemo(() => renderedItems.filter((item) => !pendingIds.has(item.id)).map((item) => item.id), [pendingIds, renderedItems])
     const visibleFolderIds = useMemo(() => visibleFolders.map((folder) => folder.id), [visibleFolders])
@@ -432,6 +447,62 @@ function Dashboard() {
         }
     }
 
+    async function createDashboardTag(name: string): Promise<Tag | null> {
+        setError(null)
+        try {
+            const created = await createTag(name)
+            setTags((current) => (current.some((tag) => tag.id === created.id) ? current : [...current, created]))
+            return created
+        } catch (e) {
+            const existing = tags.find((tag) => tag.name.toLowerCase() === name.trim().toLowerCase())
+            if (existing) return existing
+            setError(e instanceof Error ? e.message : 'Could not create that tag.')
+            return null
+        }
+    }
+
+    async function addTagToFile(fileId: string, tagId: string) {
+        const tag = tags.find((current) => current.id === tagId)
+        if (!tag) return
+
+        setError(null)
+        updateFileTags(fileId, (current) =>
+            current.some((fileTag) => fileTag.tag_id === tagId)
+                ? current
+                : [
+                      ...current,
+                      {
+                          file_id: fileId,
+                          tag_id: tag.id,
+                          name: tag.name,
+                          color: tag.color,
+                          created_at: null,
+                      },
+                  ],
+        )
+
+        try {
+            const saved = await addFileTag(fileId, tagId)
+            updateFileTags(fileId, (current) => current.map((fileTag) => (fileTag.tag_id === tagId ? saved : fileTag)))
+        } catch (e) {
+            updateFileTags(fileId, (current) => current.filter((fileTag) => fileTag.tag_id !== tagId))
+            setError(e instanceof Error ? e.message : 'Could not add that tag.')
+        }
+    }
+
+    async function removeTagFromFile(fileId: string, tagId: string) {
+        const previousTags = fileTagsByFileId.get(fileId) ?? []
+        setError(null)
+        updateFileTags(fileId, (current) => current.filter((fileTag) => fileTag.tag_id !== tagId))
+
+        try {
+            await removeFileTag(fileId, tagId)
+        } catch (e) {
+            updateFileTags(fileId, () => previousTags)
+            setError(e instanceof Error ? e.message : 'Could not remove that tag.')
+        }
+    }
+
     function selectNavView(key: ViewKey) {
         clearSelection()
         if (key === 'all') {
@@ -638,6 +709,7 @@ function Dashboard() {
                     filterSummary={filterSummary}
                     query={query}
                     fileFilters={fileFilters}
+                    tags={tags}
                     hasActiveFilter={hasActiveFilter}
                     sizeSliderMax={sizeSliderMax}
                     sizeSliderMinValue={sizeSliderMinValue}
@@ -653,6 +725,7 @@ function Dashboard() {
                     onClearFileTypes={clearFileTypes}
                     onToggleFileType={toggleFileTypeFilter}
                     onVisibilityChange={updateVisibilityFilter}
+                    onTagChange={updateTagFilter}
                     onSizeInputChange={updateSizeFilter}
                     onSizeSliderChange={updateSizeSlider}
                     onExcludedExtensionsChange={updateExcludedExtensions}
@@ -682,6 +755,7 @@ function Dashboard() {
                     pendingIds={pendingIds}
                     favouriteIds={favouriteIds}
                     folderFavouriteIds={folderFavouriteIds}
+                    fileTagsByFileId={fileTagsByFileId}
                     currentUser={currentUser}
                     groups={groups}
                     incomingGroupInvites={incomingInvites}
@@ -736,6 +810,9 @@ function Dashboard() {
                     onNote={setNoteItem}
                     onMoveFile={openMoveFile}
                     onToggleFavourite={toggleFavourite}
+                    onCreateTag={createDashboardTag}
+                    onAddTagToFile={addTagToFile}
+                    onRemoveTagFromFile={removeTagFromFile}
                     onDragStartCard={handleCardDragStart}
                     onDragEnterCard={handleCardDragEnter}
                     onDragLeaveCard={handleCardDragLeave}

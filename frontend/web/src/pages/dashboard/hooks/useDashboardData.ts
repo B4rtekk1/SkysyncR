@@ -9,6 +9,7 @@ import {
     type ApiFolder,
     type StorageQuota,
 } from '../../../api/files'
+import { listFileTags, listTags, type FileTag, type Tag } from '../../../api/tags'
 import { applySavedOrder, clearLegacyLocalFileMetadata, loadFavouriteIds } from '../storage'
 import { decryptFilesMetadata, decryptFoldersMetadata } from '../encryptedMetadata'
 import { migratePlaintextFileMetadata } from '../metadataMigration'
@@ -32,6 +33,8 @@ export function useDashboardData({ view, activeFolderId, privateKey }: UseDashbo
     const [error, setError] = useState<string | null>(null)
     const [quota, setQuota] = useState<StorageQuota | null>(null)
     const [storageItems, setStorageItems] = useState<ApiFile[]>([])
+    const [tags, setTags] = useState<Tag[]>([])
+    const [fileTagsByFileId, setFileTagsByFileId] = useState<Map<string, FileTag[]>>(new Map())
     const [favouriteIds, setFavouriteIds] = useState<Set<string>>(() => loadFavouriteIds())
     const [folderFavouriteIds, setFolderFavouriteIds] = useState<Set<string>>(new Set())
     const migratedMetadataIdsRef = useRef<Set<string>>(new Set())
@@ -47,6 +50,14 @@ export function useDashboardData({ view, activeFolderId, privateKey }: UseDashbo
         window.setTimeout(() => {
             void migratePlaintextFileMetadata(pendingFiles, key)
         }, 1000)
+    }, [])
+
+    const loadTagsForFiles = useCallback(async (files: ApiFile[]) => {
+        const [tagData, fileTagEntries] = await Promise.all([
+            listTags(),
+            Promise.all(files.map(async (file) => [file.id, await listFileTags(file.id)] as const)),
+        ])
+        return { tagData, fileTagsByFileId: new Map(fileTagEntries) }
     }, [])
 
     const refreshQuota = useCallback(async (options: RefreshQuotaOptions = {}) => {
@@ -121,6 +132,21 @@ export function useDashboardData({ view, activeFolderId, privateKey }: UseDashbo
                 }
 
                 if (active) {
+                    if (view === 'all' || view === 'favourites') {
+                        void loadTagsForFiles(fileData).then(({ tagData, fileTagsByFileId }) => {
+                            if (active) {
+                                setTags(tagData)
+                                setFileTagsByFileId(fileTagsByFileId)
+                            }
+                        }).catch(() => {
+                            if (active) {
+                                setTags([])
+                                setFileTagsByFileId(new Map())
+                            }
+                        })
+                    } else {
+                        setFileTagsByFileId(new Map())
+                    }
                     const [visibleFileData, visibleFolderData] = await Promise.all([
                         decryptFilesMetadata(fileData, privateKey),
                         decryptFoldersMetadata(folderData, privateKey),
@@ -150,7 +176,7 @@ export function useDashboardData({ view, activeFolderId, privateKey }: UseDashbo
         return () => {
             active = false
         }
-    }, [activeFolderId, privateKey, scheduleMetadataMigration, view])
+    }, [activeFolderId, loadTagsForFiles, privateKey, scheduleMetadataMigration, view])
 
     function handleFileUpdated(updated: ApiFile) {
         const previousSize = storageItems.find((item) => item.id === updated.id)?.size_bytes ?? updated.size_bytes
@@ -175,6 +201,14 @@ export function useDashboardData({ view, activeFolderId, privateKey }: UseDashbo
         )
     }
 
+    function updateFileTags(fileId: string, updater: (current: FileTag[]) => FileTag[]) {
+        setFileTagsByFileId((current) => {
+            const next = new Map(current)
+            next.set(fileId, updater(next.get(fileId) ?? []))
+            return next
+        })
+    }
+
     return {
         items,
         setItems,
@@ -189,11 +223,16 @@ export function useDashboardData({ view, activeFolderId, privateKey }: UseDashbo
         setQuota,
         storageItems,
         setStorageItems,
+        tags,
+        setTags,
+        fileTagsByFileId,
+        setFileTagsByFileId,
         favouriteIds,
         setFavouriteIds,
         folderFavouriteIds,
         setFolderFavouriteIds,
         refreshQuota,
         handleFileUpdated,
+        updateFileTags,
     }
 }

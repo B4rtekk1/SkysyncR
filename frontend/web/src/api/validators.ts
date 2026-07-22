@@ -18,6 +18,8 @@ import type {
   ShareRecipient,
   SharedFile,
   StorageQuota,
+  FileTag,
+  Tag,
   TokenPair,
   UserSettings,
 } from './generated'
@@ -267,6 +269,28 @@ export const fileAudit: Validator<FileAudit> = (value, path) => {
   }
 }
 
+export const tag: Validator<Tag> = (value, path) => {
+  const item = object(value, path)
+  return {
+    id: string(prop(item, 'id', path), `${path}.id`),
+    owner_id: string(prop(item, 'owner_id', path), `${path}.owner_id`),
+    name: string(prop(item, 'name', path), `${path}.name`),
+    color: nullableString(prop(item, 'color', path), `${path}.color`),
+    created_at: string(prop(item, 'created_at', path), `${path}.created_at`),
+  }
+}
+
+export const fileTag: Validator<FileTag> = (value, path) => {
+  const item = object(value, path)
+  return {
+    file_id: string(prop(item, 'file_id', path), `${path}.file_id`),
+    tag_id: string(prop(item, 'tag_id', path), `${path}.tag_id`),
+    name: string(prop(item, 'name', path), `${path}.name`),
+    color: nullableString(prop(item, 'color', path), `${path}.color`),
+    created_at: nullableString(prop(item, 'created_at', path), `${path}.created_at`),
+  }
+}
+
 export const folder: Validator<Folder> = (value, path) => {
   const item = object(value, path)
   return {
@@ -374,6 +398,8 @@ export const sharedFiles = arrayOf(sharedFile)
 export const fileShares = arrayOf(fileShare)
 export const fileVersions = arrayOf(fileVersion)
 export const fileActivity = arrayOf(fileAudit)
+export const tags = arrayOf(tag)
+export const fileTags = arrayOf(fileTag)
 export const folders = arrayOf(folder)
 export const groups = arrayOf(group)
 export const groupIncomingInvites = arrayOf(groupIncomingInvite)

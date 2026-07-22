@@ -15,6 +15,7 @@ import { DRAG_HANDLE_ICON, STAR_ICON_FILLED, STAR_ICON_OUTLINE } from '../icons'
 import type { Item, ViewKey } from '../types'
 import { KIND_LABELS, formatBytes, formatRelative, kindFromFile, useDecryptReveal } from '../fileUtils'
 import { isShared } from '../fileCardUtils'
+import type { FileTag, Tag } from '../../../api/tags'
 import type { UploadTransferStatus } from '../hooks/useFileUpload'
 
 export function FileCard({
@@ -35,6 +36,11 @@ export function FileCard({
                       view,
                       isFavourite,
                       onToggleFavourite,
+                      tags = [],
+                      allTags = [],
+                      onCreateTag,
+                      onAddTag,
+                      onRemoveTag,
                       draggable,
                       reorderable,
                       isDragging,
@@ -67,6 +73,11 @@ export function FileCard({
     view: ViewKey
     isFavourite?: boolean
     onToggleFavourite?: ((id: string) => void | Promise<void>) | undefined
+    tags?: FileTag[]
+    allTags?: Tag[]
+    onCreateTag?: ((name: string) => Promise<Tag | null>) | undefined
+    onAddTag?: ((fileId: string, tagId: string) => void | Promise<void>) | undefined
+    onRemoveTag?: ((fileId: string, tagId: string) => void | Promise<void>) | undefined
     draggable?: boolean
     reorderable?: boolean
     isDragging?: boolean
@@ -91,6 +102,9 @@ export function FileCard({
     const [favouriteTouched, setFavouriteTouched] = useState(false)
     const [isRenaming, setIsRenaming] = useState(false)
     const [isInfoOpen, setIsInfoOpen] = useState(false)
+    const [tagMenuOpen, setTagMenuOpen] = useState(false)
+    const [tagDraft, setTagDraft] = useState('')
+    const [tagSaving, setTagSaving] = useState(false)
     const [infoPosition, setInfoPosition] = useState<InfoPopoverPosition>({ left: 14, top: 14 })
     const [renameDraft, setRenameDraft] = useState(item.filename)
     const [renameSaving, setRenameSaving] = useState(false)
@@ -102,6 +116,7 @@ export function FileCard({
     const canShare = Boolean(onShare && !shared && view !== 'trash' && !pending)
     const canNote = Boolean(onNote && !shared && view !== 'trash' && !pending)
     const canMove = Boolean(onMove && !shared && view === 'all' && !pending)
+    const canTag = Boolean((onAddTag || onRemoveTag || onCreateTag) && !shared && view !== 'trash' && !pending)
     const canDownload = Boolean(onDownload && view !== 'trash')
     const canPreview = Boolean(onPreview && ['image', 'video', 'pdf', 'text', 'code'].includes(kind) && view !== 'trash' && !pending && !isRenaming)
     const hasAction = Boolean(
@@ -109,6 +124,7 @@ export function FileCard({
             canShare ||
             canNote ||
             canMove ||
+            canTag ||
             canDownload ||
             (view === 'all' && onDelete) ||
             (view === 'trash' && (onRestore || onPermanentDelete)) ||
@@ -154,6 +170,17 @@ export function FileCard({
             updateInfoPosition()
         })
     }, [updateInfoPosition])
+
+    useEffect(() => {
+        if (!tagMenuOpen) return
+
+        const handleKeyDown = (event: KeyboardEvent) => {
+            if (event.key === 'Escape') setTagMenuOpen(false)
+        }
+
+        window.addEventListener('keydown', handleKeyDown)
+        return () => window.removeEventListener('keydown', handleKeyDown)
+    }, [tagMenuOpen])
 
     useEffect(() => {
         if (!isInfoOpen) return
@@ -230,6 +257,22 @@ export function FileCard({
         if (canPreview && (e.key === 'Enter' || e.key === ' ')) {
             e.preventDefault()
             onPreview?.(item)
+        }
+    }
+    const assignedTagIds = new Set(tags.map((tag) => tag.tag_id))
+    const saveTagDraft = async () => {
+        const name = tagDraft.trim()
+        if (!name || tagSaving) return
+
+        setTagSaving(true)
+        try {
+            const created = await onCreateTag?.(name)
+            if (created) {
+                await onAddTag?.(item.id, created.id)
+                setTagDraft('')
+            }
+        } finally {
+            setTagSaving(false)
         }
     }
 
@@ -353,6 +396,79 @@ export function FileCard({
                             <span className="file-card__context-icon" aria-hidden="true">≡</span>
                             Note
                         </span>
+                    )}
+                </div>
+            )}
+            {(tags.length > 0 || canTag) && (
+                <div className="file-card__tags" onClick={(event) => event.stopPropagation()}>
+                    {tags.map((tag) => (
+                        <span
+                            key={tag.tag_id}
+                            className="file-card__tag"
+                            style={{ '--tag-color': tag.color ?? '#38bdf8' } as CSSProperties}
+                            title={tag.name}
+                        >
+                            {tag.name}
+                        </span>
+                    ))}
+                    {canTag && (
+                        <div className="file-card__tag-menu-wrap">
+                            <button
+                                className="file-card__tag-add"
+                                type="button"
+                                onClick={() => setTagMenuOpen((open) => !open)}
+                                aria-haspopup="menu"
+                                aria-expanded={tagMenuOpen}
+                                aria-label={`Manage tags for ${item.filename}`}
+                            >
+                                +
+                            </button>
+                            {tagMenuOpen && (
+                                <div className="file-card__tag-menu" role="menu" aria-label="File tags">
+                                    <div className="file-card__tag-options">
+                                        {allTags.length === 0 && <span className="file-card__tag-empty">No tags yet</span>}
+                                        {allTags.map((tag) => {
+                                            const selectedTag = assignedTagIds.has(tag.id)
+                                            return (
+                                                <label key={tag.id} className="file-card__tag-option">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={selectedTag}
+                                                        onChange={() => {
+                                                            if (selectedTag) void onRemoveTag?.(item.id, tag.id)
+                                                            else void onAddTag?.(item.id, tag.id)
+                                                        }}
+                                                    />
+                                                    <span
+                                                        className="file-card__tag-swatch"
+                                                        style={{ '--tag-color': tag.color ?? '#38bdf8' } as CSSProperties}
+                                                        aria-hidden="true"
+                                                    />
+                                                    <span>{tag.name}</span>
+                                                </label>
+                                            )
+                                        })}
+                                    </div>
+                                    <div className="file-card__tag-create">
+                                        <input
+                                            type="text"
+                                            value={tagDraft}
+                                            placeholder="New tag"
+                                            onChange={(event) => setTagDraft(event.target.value)}
+                                            onKeyDown={(event) => {
+                                                if (event.key === 'Enter') {
+                                                    event.preventDefault()
+                                                    void saveTagDraft()
+                                                }
+                                            }}
+                                        />
+                                        <button type="button" onClick={() => void saveTagDraft()} disabled={tagSaving || !tagDraft.trim()}>
+                                            Add
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
                     )}
                 </div>
             )}

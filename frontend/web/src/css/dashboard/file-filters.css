@@ -24,7 +24,8 @@
 
 .file-filter__search input,
 .file-filter__size-row input,
-.file-filter__text-input {
+.file-filter__text-input,
+.file-filter__select {
     width: 100%;
     min-width: 0;
     border: none;
@@ -232,7 +233,8 @@
 }
 
 .file-filter__size-row input,
-.file-filter__text-input {
+.file-filter__text-input,
+.file-filter__select {
     min-height: 36px;
     padding: 0 10px;
     border: 1px solid var(--line);
@@ -240,12 +242,19 @@
     background: var(--panel-2);
 }
 
+.file-filter__select {
+    color: var(--paper);
+    font: inherit;
+    outline: none;
+}
+
 .file-filter__size-row input[type='date'] {
     color-scheme: dark;
 }
 
 .file-filter__size-row input:focus,
-.file-filter__text-input:focus {
+.file-filter__text-input:focus,
+.file-filter__select:focus {
     border-color: rgba(var(--signal-rgb), 0.52);
     box-shadow: 0 0 0 3px rgba(var(--signal-rgb), 0.12);
 }

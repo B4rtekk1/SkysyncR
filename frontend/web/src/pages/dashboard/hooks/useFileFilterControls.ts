@@ -9,16 +9,17 @@ import {
     sortFiles,
 } from '../fileFilters'
 import { loadFileFilter, loadFileSort, saveFileFilter, saveFileSort } from '../storage'
+import type { FileTag, Tag } from '../../../api/tags'
 import type { FileTypeFilterKey, FileVisibilityFilterKey, Item } from '../types'
 
-export function useFileFilterControls(items: Item[]) {
+export function useFileFilterControls(items: Item[], tags: Tag[] = [], fileTagsByFileId: Map<string, FileTag[]> = new Map()) {
     const [sortKey, setSortKey] = useState(() => loadFileSort())
     const [fileFilters, setFileFilters] = useState(() => loadFileFilter())
     const hasActiveFilter = hasActiveFileFilters(fileFilters)
-    const filterSummary = getFilterSummary(fileFilters)
+    const filterSummary = getFilterSummary(fileFilters, tags)
     const filteredItems = useMemo(
-        () => items.filter((item) => matchesFileFilters(item, fileFilters)),
-        [fileFilters, items],
+        () => items.filter((item) => matchesFileFilters(item, fileFilters, fileTagsByFileId.get(item.id) ?? [])),
+        [fileFilters, fileTagsByFileId, items],
     )
     const sortedItems = useMemo(() => sortFiles(filteredItems, sortKey), [filteredItems, sortKey])
     const sizeSliderMax = useMemo(() => {
@@ -59,6 +60,10 @@ export function useFileFilterControls(items: Item[]) {
         setFileFilters((current) => ({ ...current, visibility }))
     }
 
+    function updateTagFilter(tagId: string) {
+        setFileFilters((current) => ({ ...current, tagId }))
+    }
+
     function updateSizeFilter(field: 'minSizeMb' | 'maxSizeMb', value: string) {
         const nextSizeMb = parseSizeInputToMb(value)
         if (nextSizeMb === null) return
@@ -95,6 +100,7 @@ export function useFileFilterControls(items: Item[]) {
         setFileFilters({
             types: [],
             visibility: 'any',
+            tagId: '',
             minSizeMb: '',
             maxSizeMb: '',
             excludedExtensions: '',
@@ -118,6 +124,7 @@ export function useFileFilterControls(items: Item[]) {
         clearFileTypes,
         toggleFileTypeFilter,
         updateVisibilityFilter,
+        updateTagFilter,
         updateSizeFilter,
         updateSizeSlider,
         updateExcludedExtensions,

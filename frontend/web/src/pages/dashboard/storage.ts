@@ -81,6 +81,7 @@ function isFileSortKey(value: string | null): value is FileSortKey {
 export const DEFAULT_FILE_FILTERS: FileFilters = {
     types: [],
     visibility: 'any',
+    tagId: '',
     minSizeMb: '',
     maxSizeMb: '',
     excludedExtensions: '',
@@ -107,6 +108,7 @@ export function loadFileFilter(): FileFilters {
                 parsed.visibility === 'public' || parsed.visibility === 'private' || parsed.visibility === 'any'
                     ? parsed.visibility
                     : 'any',
+            tagId: typeof parsed.tagId === 'string' ? parsed.tagId : '',
             minSizeMb: typeof parsed.minSizeMb === 'string' ? parsed.minSizeMb : '',
             maxSizeMb: typeof parsed.maxSizeMb === 'string' ? parsed.maxSizeMb : '',
             excludedExtensions: typeof parsed.excludedExtensions === 'string' ? parsed.excludedExtensions : '',
