@@ -7,10 +7,12 @@ use tower_http::limit::RequestBodyLimitLayer;
 use tower_http::timeout::TimeoutLayer;
 
 use crate::handlers::files::{
-    add_file_favourite, create_file_share, delete_file_share, download_file, download_public_file,
-    get_file_share_recipient_profile, list_file_activity, list_file_shares, list_file_versions,
-    list_files, list_shared_files_with_me, move_file, permanent_delete_file, remove_file_favourite,
-    rename_file, restore_file, restore_file_version, share_file, soft_delete_file,
+    add_file_favourite, append_resumable_upload_chunk, cancel_resumable_upload,
+    complete_resumable_upload, create_file_share, delete_file_share, download_file,
+    download_public_file, get_file_share_recipient_profile, list_file_activity, list_file_shares,
+    list_file_versions, list_files, list_shared_files_with_me, move_file, permanent_delete_file,
+    remove_file_favourite, rename_file, restore_file, restore_file_version,
+    resumable_upload_status, share_file, soft_delete_file, start_resumable_upload,
     update_file_content, update_file_note, upload_file,
 };
 use crate::state::AppState;
@@ -24,6 +26,14 @@ pub fn files_routes(
 
     Router::new()
         .route("/files", get(list_files).post(upload_file))
+        .route("/files/uploads", post(start_resumable_upload))
+        .route(
+            "/files/uploads/{upload_id}",
+            get(resumable_upload_status)
+                .patch(append_resumable_upload_chunk)
+                .post(complete_resumable_upload)
+                .delete(cancel_resumable_upload),
+        )
         .route("/files/shared-with-me", get(list_shared_files_with_me))
         .route("/share/{token}/download", get(download_public_file))
         .route("/files/{id}/download", get(download_file))

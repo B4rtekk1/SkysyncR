@@ -13,6 +13,69 @@ export function encryptedFileFormatNonce(): Uint8Array {
     return FILE_FORMAT_V2_BYTES
 }
 
+export function encryptedFileHeader(): Uint8Array {
+    return FILE_STREAM_MAGIC
+}
+
+export function encryptedPlaintextChunkSize(): number {
+    return FILE_CHUNK_SIZE
+}
+
+export function resumableUploadNonceSeed(): Uint8Array {
+    return crypto.getRandomValues(new Uint8Array(8))
+}
+
+export async function encryptFileChunk(
+    chunk: Blob,
+    key: CryptoKey,
+    nonceSeed: Uint8Array,
+    chunkIndex: number,
+): Promise<Uint8Array> {
+    if (nonceSeed.byteLength !== 8) {
+        throw new Error('Invalid upload nonce seed')
+    }
+
+    const nonce = new Uint8Array(GCM_NONCE_BYTES)
+    nonce.set(nonceSeed, 0)
+    new DataView(nonce.buffer).setUint32(8, chunkIndex, false)
+
+    const ciphertext = new Uint8Array(
+        await crypto.subtle.encrypt({ name: 'AES-GCM', iv: nonce }, key, await chunk.arrayBuffer()),
+    )
+    const length = new Uint8Array(CHUNK_LENGTH_BYTES)
+    new DataView(length.buffer).setUint32(0, ciphertext.byteLength, false)
+
+    const framed = new Uint8Array(nonce.byteLength + length.byteLength + ciphertext.byteLength)
+    framed.set(nonce, 0)
+    framed.set(length, nonce.byteLength)
+    framed.set(ciphertext, nonce.byteLength + length.byteLength)
+    return framed
+}
+
+export function deterministicEncryptedFileSize(fileSize: number): number {
+    if (fileSize === 0) return FILE_STREAM_MAGIC.byteLength
+
+    const fullChunks = Math.floor(fileSize / FILE_CHUNK_SIZE)
+    const lastChunkBytes = fileSize % FILE_CHUNK_SIZE
+    const chunkCount = fullChunks + (lastChunkBytes > 0 ? 1 : 0)
+    return FILE_STREAM_MAGIC.byteLength + fileSize + chunkCount * (GCM_NONCE_BYTES + CHUNK_LENGTH_BYTES + 16)
+}
+
+export function resumableChunkIndexForOffset(fileSize: number, encryptedOffset: number): number {
+    if (encryptedOffset <= FILE_STREAM_MAGIC.byteLength) return 0
+
+    let offset = FILE_STREAM_MAGIC.byteLength
+    let chunkIndex = 0
+    while (chunkIndex * FILE_CHUNK_SIZE < fileSize) {
+        const plaintextBytes = Math.min(FILE_CHUNK_SIZE, fileSize - chunkIndex * FILE_CHUNK_SIZE)
+        const frameBytes = GCM_NONCE_BYTES + CHUNK_LENGTH_BYTES + plaintextBytes + 16
+        if (offset + frameBytes > encryptedOffset) break
+        offset += frameBytes
+        chunkIndex += 1
+    }
+    return chunkIndex
+}
+
 export function encryptFileStream(file: Blob, key: CryptoKey): ReadableStream<Uint8Array> {
     let headerSent = false
     let offset = 0

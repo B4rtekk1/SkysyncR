@@ -1,6 +1,6 @@
 use axum::{
     Json,
-    body::Body,
+    body::{Body, Bytes},
     extract::{Extension, Multipart, Path, Query, State},
     http::{
         HeaderMap, HeaderValue, StatusCode,
@@ -10,11 +10,11 @@ use axum::{
 };
 use base64::{Engine as _, engine::general_purpose};
 use chrono::{Duration, Utc};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::path::{Path as FsPath, PathBuf};
 use tokio::fs;
-use tokio::io::AsyncWriteExt;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio_util::io::ReaderStream;
 use uuid::Uuid;
 
@@ -78,6 +78,27 @@ pub struct UpdateFileNoteRequest {
     pub note: String,
 }
 
+#[derive(Deserialize)]
+pub struct StartUploadRequest {
+    pub upload_id: Uuid,
+}
+
+#[derive(Deserialize)]
+pub struct CompleteUploadRequest {
+    pub filename: String,
+    pub mime_type: Option<String>,
+    pub folder_id: Option<Uuid>,
+    pub encrypted_key: String,
+    pub encryption_nonce: String,
+    pub size_bytes: u64,
+}
+
+#[derive(Serialize)]
+pub struct UploadSessionStatus {
+    pub upload_id: Uuid,
+    pub offset: u64,
+}
+
 struct UploadPayload {
     filename: String,
     mime_type: Option<String>,
@@ -86,6 +107,257 @@ struct UploadPayload {
     encrypted_key: Vec<u8>,
     encryption_nonce: Vec<u8>,
     folder_id: Option<Uuid>,
+}
+
+pub async fn start_resumable_upload(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Json(payload): Json<StartUploadRequest>,
+) -> Result<(StatusCode, Json<UploadSessionStatus>), ApiError> {
+    let temp_path =
+        resumable_temp_storage_path_for(&state.config.upload_dir, auth.user_id, payload.upload_id);
+    if let Some(parent) = temp_path.parent() {
+        fs::create_dir_all(parent)
+            .await
+            .map_err(|e| internal_error("create upload directory", e))?;
+    }
+
+    if !fs::try_exists(&temp_path)
+        .await
+        .map_err(|e| internal_error("check resumable upload", e))?
+    {
+        fs::File::create(&temp_path)
+            .await
+            .map_err(|e| internal_error("create resumable upload", e))?;
+    }
+
+    resumable_upload_status(State(state), auth, Path(payload.upload_id))
+        .await
+        .map(|status| (StatusCode::CREATED, status))
+}
+
+pub async fn resumable_upload_status(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Path(upload_id): Path<Uuid>,
+) -> Result<Json<UploadSessionStatus>, ApiError> {
+    let temp_path =
+        resumable_temp_storage_path_for(&state.config.upload_dir, auth.user_id, upload_id);
+    let offset = match fs::metadata(&temp_path).await {
+        Ok(metadata) => metadata.len(),
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => 0,
+        Err(err) => return Err(internal_error("read resumable upload status", err)),
+    };
+
+    Ok(Json(UploadSessionStatus { upload_id, offset }))
+}
+
+pub async fn append_resumable_upload_chunk(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Path(upload_id): Path<Uuid>,
+    headers: HeaderMap,
+    chunk: Bytes,
+) -> Result<Json<UploadSessionStatus>, ApiError> {
+    if chunk.is_empty() {
+        return Err(ApiError::BadRequest("Upload chunk is empty".into()));
+    }
+
+    let expected_offset = header_u64(&headers, "upload-offset")?;
+    let temp_path =
+        resumable_temp_storage_path_for(&state.config.upload_dir, auth.user_id, upload_id);
+    if let Some(parent) = temp_path.parent() {
+        fs::create_dir_all(parent)
+            .await
+            .map_err(|e| internal_error("create upload directory", e))?;
+    }
+
+    let current_offset = match fs::metadata(&temp_path).await {
+        Ok(metadata) => metadata.len(),
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => 0,
+        Err(err) => return Err(internal_error("read resumable upload offset", err)),
+    };
+
+    if current_offset != expected_offset {
+        return Err(ApiError::Conflict(format!(
+            "Upload offset mismatch: expected {current_offset}"
+        )));
+    }
+
+    let next_offset = current_offset
+        .checked_add(chunk.len() as u64)
+        .ok_or_else(|| ApiError::BadRequest("File is too large".into()))?;
+    if next_offset > state.config.max_file_size_bytes {
+        return Err(ApiError::BadRequest("File is too large".into()));
+    }
+
+    let mut file = fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&temp_path)
+        .await
+        .map_err(|e| internal_error("open resumable upload", e))?;
+    file.write_all(&chunk)
+        .await
+        .map_err(|e| internal_error("write resumable upload chunk", e))?;
+    file.flush()
+        .await
+        .map_err(|e| internal_error("flush resumable upload chunk", e))?;
+
+    Ok(Json(UploadSessionStatus {
+        upload_id,
+        offset: next_offset,
+    }))
+}
+
+pub async fn complete_resumable_upload(
+    State(state): State<AppState>,
+    Extension(request_id): Extension<RequestId>,
+    headers: HeaderMap,
+    auth: AuthUser,
+    Path(upload_id): Path<Uuid>,
+    Json(payload): Json<CompleteUploadRequest>,
+) -> Result<(StatusCode, Json<FileRecord>), ApiError> {
+    let temp_path =
+        resumable_temp_storage_path_for(&state.config.upload_dir, auth.user_id, upload_id);
+    let metadata = fs::metadata(&temp_path)
+        .await
+        .map_err(|_| ApiError::BadRequest("Upload session not found".into()))?;
+    if metadata.len() == 0 {
+        return Err(ApiError::BadRequest("File is empty".into()));
+    }
+    if metadata.len() != payload.size_bytes {
+        return Err(ApiError::BadRequest("Upload is incomplete".into()));
+    }
+    if payload.size_bytes > state.config.max_file_size_bytes {
+        return Err(ApiError::BadRequest("File is too large".into()));
+    }
+
+    let filename = validate_upload_metadata("filename", &payload.filename)?;
+    let mime_type = payload
+        .mime_type
+        .as_deref()
+        .map(|value| validate_upload_metadata("mime_type", value))
+        .transpose()?;
+    let encrypted_key = decode_base64_field("encrypted_key", &payload.encrypted_key)?;
+    if encrypted_key.len() < 128 {
+        return Err(ApiError::BadRequest(
+            "encrypted_key must be wrapped locally".into(),
+        ));
+    }
+    let encryption_nonce = decode_base64_field("encryption_nonce", &payload.encryption_nonce)?;
+    if !is_valid_file_encryption_nonce(&encryption_nonce) {
+        return Err(ApiError::BadRequest("Invalid encryption_nonce".into()));
+    }
+
+    if let Some(folder_id) = payload.folder_id {
+        let folder_exists = folder_belongs_to_user(&state.db_pool, auth.user_id, folder_id)
+            .await
+            .map_err(|e| internal_error("check upload folder", e))?;
+        if !folder_exists {
+            return Err(ApiError::BadRequest("Folder not found".into()));
+        }
+    }
+
+    let checksum = sha256_file(&temp_path).await?;
+    let file_size = i64::try_from(payload.size_bytes)
+        .map_err(|_| ApiError::BadRequest("File is too large".into()))?;
+    let mut tx = state
+        .db_pool
+        .begin()
+        .await
+        .map_err(|e| internal_error("begin resumable upload transaction", e))?;
+
+    let quota_reserved = try_apply_storage_delta(&mut tx, auth.user_id, file_size)
+        .await
+        .map_err(|e| internal_error("reserve upload storage", e))?;
+    if !quota_reserved {
+        return Err(ApiError::BadRequest("Storage quota exceeded".into()));
+    }
+
+    let provisional_storage_path =
+        storage_path_for(&state.config.upload_dir, auth.user_id, upload_id);
+    let provisional_storage_path_string = provisional_storage_path.to_string_lossy().into_owned();
+    let mut record = match create_file_record(
+        &mut tx,
+        NewFileRecord {
+            owner_id: auth.user_id,
+            filename,
+            storage_path: provisional_storage_path_string,
+            mime_type,
+            size_bytes: file_size,
+            encrypted_key,
+            encryption_nonce,
+            checksum: checksum.clone(),
+            folder_id: payload.folder_id,
+        },
+    )
+    .await
+    {
+        Ok(record) => record,
+        Err(err) => return Err(internal_error("create resumable file record", err)),
+    };
+
+    let storage_path = storage_path_for(&state.config.upload_dir, auth.user_id, record.id);
+    let storage_path_string = storage_path.to_string_lossy().into_owned();
+    let updated_record = update_user_file_content(
+        &mut tx,
+        auth.user_id,
+        record.id,
+        storage_path_string.clone(),
+        file_size,
+        record.encrypted_key.clone(),
+        record.encryption_nonce.clone(),
+        Some(checksum),
+    )
+    .await
+    .map_err(|e| internal_error("align resumable file storage path", e))?;
+    if let Some(updated_record) = updated_record {
+        record = updated_record;
+    }
+
+    if let Err(err) = fs::rename(&temp_path, &storage_path).await {
+        return Err(internal_error("promote resumable uploaded file", err));
+    }
+
+    if let Err(err) = tx.commit().await {
+        let _ = fs::remove_file(&storage_path).await;
+        return Err(internal_error("commit resumable upload transaction", err));
+    }
+
+    tracing::info!(
+        request_id = %request_id.0,
+        transfer_direction = "upload",
+        user_id = %auth.user_id,
+        file_id = %record.id,
+        bytes = file_size,
+        "file_transfer"
+    );
+
+    log_file_audit(
+        &state,
+        auth.user_id,
+        "file.upload",
+        record.id,
+        device_label_from_headers(&headers).as_deref(),
+    )
+    .await;
+
+    Ok((StatusCode::CREATED, Json(record)))
+}
+
+pub async fn cancel_resumable_upload(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Path(upload_id): Path<Uuid>,
+) -> Result<StatusCode, ApiError> {
+    let temp_path =
+        resumable_temp_storage_path_for(&state.config.upload_dir, auth.user_id, upload_id);
+    match fs::remove_file(&temp_path).await {
+        Ok(()) => Ok(StatusCode::NO_CONTENT),
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(StatusCode::NO_CONTENT),
+        Err(err) => Err(internal_error("cancel resumable upload", err)),
+    }
 }
 
 struct UpdateContentPayload {
@@ -1127,10 +1399,45 @@ fn temp_storage_path_for(upload_dir: &FsPath, user_id: Uuid, file_id: Uuid) -> P
         .join(format!("{file_id}.{}.tmp", Uuid::new_v4()))
 }
 
+fn resumable_temp_storage_path_for(upload_dir: &FsPath, user_id: Uuid, upload_id: Uuid) -> PathBuf {
+    upload_dir
+        .join(user_id.to_string())
+        .join(format!("{upload_id}.upload.tmp"))
+}
+
 fn updated_storage_path_for(upload_dir: &FsPath, user_id: Uuid, file_id: Uuid) -> PathBuf {
     upload_dir
         .join(user_id.to_string())
         .join(format!("{file_id}.{}.bin", Uuid::new_v4()))
+}
+
+fn header_u64(headers: &HeaderMap, name: &str) -> Result<u64, ApiError> {
+    headers
+        .get(name)
+        .and_then(|value| value.to_str().ok())
+        .and_then(|value| value.parse::<u64>().ok())
+        .ok_or_else(|| ApiError::BadRequest(format!("Missing {name} header")))
+}
+
+async fn sha256_file(path: &FsPath) -> Result<String, ApiError> {
+    let mut file = fs::File::open(path)
+        .await
+        .map_err(|e| internal_error("open uploaded file for checksum", e))?;
+    let mut hasher = Sha256::new();
+    let mut buffer = vec![0_u8; 1024 * 1024];
+
+    loop {
+        let read = file
+            .read(&mut buffer)
+            .await
+            .map_err(|e| internal_error("read uploaded file for checksum", e))?;
+        if read == 0 {
+            break;
+        }
+        hasher.update(&buffer[..read]);
+    }
+
+    Ok(hex::encode(hasher.finalize()))
 }
 
 fn validate_upload_metadata(field_name: &str, value: &str) -> Result<String, ApiError> {

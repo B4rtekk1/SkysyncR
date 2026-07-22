@@ -218,6 +218,88 @@ export async function uploadFile(params: {
     return readJson(res, file, 'File')
 }
 
+export type UploadSessionStatus = {
+    upload_id: string
+    offset: number
+}
+
+export async function startResumableUpload(uploadId: string): Promise<UploadSessionStatus> {
+    const res = await authenticatedRequest(`${API_BASE}files/uploads`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ upload_id: uploadId }),
+    })
+    if (!res.ok) throw new Error(await parseErrorMessage(res))
+    return res.json()
+}
+
+export async function getResumableUploadStatus(uploadId: string): Promise<UploadSessionStatus> {
+    const res = await authenticatedRequest(`${API_BASE}files/uploads/${encodeURIComponent(uploadId)}`, {
+        method: 'GET',
+    })
+    if (!res.ok) throw new Error(await parseErrorMessage(res))
+    return res.json()
+}
+
+export async function appendResumableUploadChunk(params: {
+    uploadId: string
+    offset: number
+    chunk: Blob | Uint8Array
+    signal?: AbortSignal
+}): Promise<UploadSessionStatus> {
+    const init: RequestInit = {
+        method: 'PATCH',
+        headers: {
+            'Content-Type': 'application/octet-stream',
+            'Upload-Offset': String(params.offset),
+        },
+        body: params.chunk instanceof Blob
+            ? params.chunk
+            : new Blob([params.chunk.slice().buffer], { type: 'application/octet-stream' }),
+    }
+    if (params.signal) init.signal = params.signal
+
+    const res = await authenticatedRequest(`${API_BASE}files/uploads/${encodeURIComponent(params.uploadId)}`, init)
+    if (!res.ok) throw new Error(await parseErrorMessage(res))
+    return res.json()
+}
+
+export async function completeResumableUpload(params: {
+    uploadId: string
+    storedFilename: string
+    storedMimeType: string | null
+    folderId?: string | null
+    wrappedKey: ArrayBuffer | Uint8Array | string
+    encryptionNonce: ArrayBuffer | Uint8Array
+    sizeBytes: number
+    signal?: AbortSignal
+}): Promise<ApiFile> {
+    const init: RequestInit = {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            filename: params.storedFilename,
+            mime_type: params.storedMimeType,
+            folder_id: params.folderId ?? null,
+            encrypted_key: typeof params.wrappedKey === 'string' ? params.wrappedKey : arrayBufferToBase64(params.wrappedKey),
+            encryption_nonce: arrayBufferToBase64(params.encryptionNonce),
+            size_bytes: params.sizeBytes,
+        }),
+    }
+    if (params.signal) init.signal = params.signal
+
+    const res = await authenticatedRequest(`${API_BASE}files/uploads/${encodeURIComponent(params.uploadId)}`, init)
+    if (!res.ok) throw new Error(await parseErrorMessage(res))
+    return readJson(res, file, 'File')
+}
+
+export async function cancelResumableUpload(uploadId: string): Promise<void> {
+    const res = await authenticatedRequest(`${API_BASE}files/uploads/${encodeURIComponent(uploadId)}`, {
+        method: 'DELETE',
+    })
+    if (!res.ok) throw new Error(await parseErrorMessage(res))
+}
+
 export async function softDeleteFile(id: string): Promise<void> {
     const res = await authenticatedFetch(`${API_BASE}files/${id}`, {
         method: 'DELETE',

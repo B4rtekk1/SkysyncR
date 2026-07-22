@@ -1,10 +1,24 @@
 import { useCallback, useEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react'
-import { uploadFile, type ApiFile } from '../../../api/files'
 import {
+    appendResumableUploadChunk,
+    cancelResumableUpload,
+    completeResumableUpload,
+    getResumableUploadStatus,
+    startResumableUpload,
+    type ApiFile,
+} from '../../../api/files'
+import {
+    deterministicEncryptedFileSize,
     encryptedFileFormatNonce,
-    encryptFileStream,
+    encryptedFileHeader,
+    encryptedPlaintextChunkSize,
+    encryptFileChunk,
     encryptTextEnvelope,
+    exportRawKey,
     generateFileKey,
+    importRawFileKey,
+    resumableChunkIndexForOffset,
+    resumableUploadNonceSeed,
     wrapFileKeyForUser,
 } from '../../../crypto/fileEncryption'
 import type { Item } from '../types'
@@ -23,11 +37,21 @@ export type UploadTransfer = {
     updatedAt: number
 }
 
-type UploadJob = {
+type PersistedUploadJob = {
     id: string
     tempId: string
     file: File
     folderId: string | null
+    rawKeyBase64: string
+    nonceSeedBase64: string
+    storedFilename: string
+    storedMimeType: string | null
+    wrappedKeyBase64: string
+    encryptedSize: number
+    transfer: UploadTransfer
+}
+
+type UploadJob = PersistedUploadJob & {
     controller: AbortController | null
     resolve: (file: ApiFile) => void
     reject: (error: Error) => void
@@ -42,12 +66,16 @@ type UseFileUploadOptions = {
     refreshQuota: () => Promise<void>
 }
 
+const DB_NAME = 'skysyncr-transfer-queue'
+const DB_VERSION = 1
+const STORE_NAME = 'uploads'
+
 function createAbortError() {
     return new DOMException('Transfer paused', 'AbortError')
 }
 
 function transferId() {
-    return `transfer-${Date.now()}-${Math.random().toString(36).slice(2)}`
+    return crypto.randomUUID?.() ?? `transfer-${Date.now()}-${Math.random().toString(36).slice(2)}`
 }
 
 function pendingFile(file: File, tempId: string, folderId: string | null): ApiFile {
@@ -79,6 +107,63 @@ function isAbortError(error: unknown) {
     return error instanceof DOMException && error.name === 'AbortError'
 }
 
+function arrayBufferToBase64(buffer: ArrayBuffer | Uint8Array): string {
+    return btoa(String.fromCharCode(...new Uint8Array(buffer)))
+}
+
+function base64ToBuffer(base64: string): Uint8Array {
+    const binary = atob(base64)
+    const bytes = new Uint8Array(binary.length)
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
+    return bytes
+}
+
+function openQueueDb(): Promise<IDBDatabase> {
+    return new Promise((resolve, reject) => {
+        const request = indexedDB.open(DB_NAME, DB_VERSION)
+        request.onupgradeneeded = () => {
+            request.result.createObjectStore(STORE_NAME, { keyPath: 'id' })
+        }
+        request.onsuccess = () => resolve(request.result)
+        request.onerror = () => reject(request.error ?? new Error('Unable to open transfer queue'))
+    })
+}
+
+async function queueStore<T>(mode: IDBTransactionMode, run: (store: IDBObjectStore) => IDBRequest<T>): Promise<T> {
+    const db = await openQueueDb()
+    return new Promise((resolve, reject) => {
+        const tx = db.transaction(STORE_NAME, mode)
+        const request = run(tx.objectStore(STORE_NAME))
+        request.onsuccess = () => resolve(request.result)
+        request.onerror = () => reject(request.error ?? new Error('Unable to update transfer queue'))
+        tx.oncomplete = () => db.close()
+        tx.onerror = () => {
+            db.close()
+            reject(tx.error ?? new Error('Unable to update transfer queue'))
+        }
+    })
+}
+
+function loadPersistedJobs() {
+    return queueStore<PersistedUploadJob[]>('readonly', (store) => store.getAll())
+}
+
+function savePersistedJob(job: PersistedUploadJob) {
+    return queueStore<IDBValidKey>('readwrite', (store) => store.put(job))
+}
+
+function deletePersistedJob(id: string) {
+    return queueStore<undefined>('readwrite', (store) => store.delete(id))
+}
+
+function toPersistedJob(job: UploadJob): PersistedUploadJob {
+    const { controller, resolve, reject, ...persisted } = job
+    void controller
+    void resolve
+    void reject
+    return persisted
+}
+
 export function useFileUpload({
     publicKey,
     folderId,
@@ -102,11 +187,18 @@ export function useFileUpload({
     }, [refreshQuota])
 
     const updateTransfer = useCallback((id: string, patch: Partial<UploadTransfer>) => {
+        const updatedAt = Date.now()
         setTransfers((prev) =>
             prev.map((transfer) =>
-                transfer.id === id ? { ...transfer, ...patch, updatedAt: Date.now() } : transfer,
+                transfer.id === id ? { ...transfer, ...patch, updatedAt } : transfer,
             ),
         )
+
+        const job = jobsRef.current.get(id)
+        if (job) {
+            job.transfer = { ...job.transfer, ...patch, updatedAt }
+            void savePersistedJob(toPersistedJob(job))
+        }
     }, [])
 
     const removePlaceholder = useCallback(
@@ -121,6 +213,56 @@ export function useFileUpload({
         [setItems, setPendingIds],
     )
 
+    useEffect(() => {
+        let cancelled = false
+        void loadPersistedJobs()
+            .then((persistedJobs) => {
+                if (cancelled) return
+
+                const restored = persistedJobs
+                    .filter((job) => job.transfer.status !== 'completed')
+                    .map((job): UploadJob => {
+                        const status =
+                            job.transfer.status === 'uploading' || job.transfer.status === 'encrypting'
+                                ? 'queued'
+                                : job.transfer.status
+                        const transfer = { ...job.transfer, status, updatedAt: Date.now() }
+                        return {
+                            ...job,
+                            transfer,
+                            controller: null,
+                            resolve: () => {},
+                            reject: () => {},
+                        }
+                    })
+
+                restored.forEach((job) => {
+                    jobsRef.current.set(job.id, job)
+                    void savePersistedJob(toPersistedJob(job))
+                })
+                setTransfers(restored.map((job) => job.transfer))
+                setItems((prev) => {
+                    const existing = new Set(prev.map((item) => item.id))
+                    const placeholders = restored
+                        .filter((job) => !existing.has(job.tempId))
+                        .map((job) => pendingFile(job.file, job.tempId, job.folderId))
+                    return [...placeholders, ...prev]
+                })
+                setPendingIds((prev) => {
+                    const next = new Set(prev)
+                    restored.forEach((job) => next.add(job.tempId))
+                    return next
+                })
+            })
+            .catch(() => {
+                setError('Unable to restore the upload queue.')
+            })
+
+        return () => {
+            cancelled = true
+        }
+    }, [setError, setItems, setPendingIds])
+
     const runJob = useCallback(
         async (job: UploadJob) => {
             activeRef.current = job.id
@@ -128,27 +270,54 @@ export function useFileUpload({
             job.controller = controller
 
             try {
-                const key = await generateFileKey()
-                controller.signal.throwIfAborted()
-                updateTransfer(job.id, { status: 'encrypting', error: null })
-
-                const encryptedFilename = await encryptTextEnvelope(job.file.name, key)
-                const wrappedKey = await wrapFileKeyForUser(key, publicKeyRef.current ?? '')
-                const encryptedMimeType = job.file.type ? await encryptTextEnvelope(job.file.type, key) : null
-                controller.signal.throwIfAborted()
-
                 updateTransfer(job.id, { status: 'uploading', error: null })
-                const uploadParams = {
-                    encryptedFile: encryptFileStream(job.file, key),
-                    storedFilename: encryptedFilename,
-                    storedMimeType: encryptedMimeType,
-                    wrappedKey,
-                    encryptionNonce: encryptedFileFormatNonce(),
-                    signal: controller.signal,
+                await startResumableUpload(job.id)
+                let { offset } = await getResumableUploadStatus(job.id)
+                controller.signal.throwIfAborted()
+
+                const key = await importRawFileKey(base64ToBuffer(job.rawKeyBase64))
+                const header = encryptedFileHeader()
+                if (offset < header.byteLength) {
+                    const result = await appendResumableUploadChunk({
+                        uploadId: job.id,
+                        offset,
+                        chunk: header.slice(offset),
+                        signal: controller.signal,
+                    })
+                    offset = result.offset
                 }
-                const saved = await uploadFile(
-                    job.folderId ? { ...uploadParams, folderId: job.folderId } : uploadParams,
-                )
+
+                let chunkIndex = resumableChunkIndexForOffset(job.file.size, offset)
+                const plaintextChunkSize = encryptedPlaintextChunkSize()
+                while (chunkIndex * plaintextChunkSize < job.file.size) {
+                    controller.signal.throwIfAborted()
+                    const start = chunkIndex * plaintextChunkSize
+                    const encryptedChunk = await encryptFileChunk(
+                        job.file.slice(start, start + plaintextChunkSize),
+                        key,
+                        base64ToBuffer(job.nonceSeedBase64),
+                        chunkIndex,
+                    )
+                    const result = await appendResumableUploadChunk({
+                        uploadId: job.id,
+                        offset,
+                        chunk: encryptedChunk,
+                        signal: controller.signal,
+                    })
+                    offset = result.offset
+                    chunkIndex += 1
+                }
+
+                const saved = await completeResumableUpload({
+                    uploadId: job.id,
+                    storedFilename: job.storedFilename,
+                    storedMimeType: job.storedMimeType,
+                    folderId: job.folderId,
+                    wrappedKey: job.wrappedKeyBase64,
+                    encryptionNonce: encryptedFileFormatNonce(),
+                    sizeBytes: job.encryptedSize,
+                    signal: controller.signal,
+                })
 
                 const visibleSaved = {
                     ...saved,
@@ -164,6 +333,7 @@ export function useFileUpload({
                 })
                 updateTransfer(job.id, { status: 'completed', error: null })
                 jobsRef.current.delete(job.id)
+                await deletePersistedJob(job.id)
                 job.resolve(visibleSaved)
                 void refreshQuotaRef.current()
             } catch (error) {
@@ -194,15 +364,9 @@ export function useFileUpload({
         const job = jobsRef.current.get(next.id)
         if (!job) return
 
-        setTransfers((prev) =>
-            prev.map((transfer) =>
-                transfer.id === next.id
-                    ? { ...transfer, status: 'encrypting', attempts: transfer.attempts + 1, error: null, updatedAt: Date.now() }
-                    : transfer,
-            ),
-        )
+        updateTransfer(next.id, { status: 'uploading', attempts: next.attempts + 1, error: null })
         void runJob(job)
-    }, [runJob, transfers])
+    }, [runJob, transfers, updateTransfer])
 
     const ingestFileArray = useCallback(
         async (files: File[]) => {
@@ -211,10 +375,16 @@ export function useFileUpload({
                 return []
             }
 
-            const queued = files.map((file) => {
+            const queued = await Promise.all(files.map(async (file) => {
                 const id = transferId()
                 const tempId = `pending-${id}`
                 const currentFolderId = folderId ?? null
+                const key = await generateFileKey()
+                const rawKeyBase64 = arrayBufferToBase64(await exportRawKey(key))
+                const nonceSeedBase64 = arrayBufferToBase64(resumableUploadNonceSeed())
+                const storedFilename = await encryptTextEnvelope(file.name, key)
+                const storedMimeType = file.type ? await encryptTextEnvelope(file.type, key) : null
+                const wrappedKeyBase64 = arrayBufferToBase64(await wrapFileKeyForUser(key, publicKeyRef.current ?? ''))
                 const transfer: UploadTransfer = {
                     id,
                     tempId,
@@ -228,22 +398,31 @@ export function useFileUpload({
                 }
 
                 const promise = new Promise<ApiFile>((resolve, reject) => {
-                    jobsRef.current.set(id, {
+                    const job: UploadJob = {
                         id,
                         tempId,
                         file,
                         folderId: currentFolderId,
+                        rawKeyBase64,
+                        nonceSeedBase64,
+                        storedFilename,
+                        storedMimeType,
+                        wrappedKeyBase64,
+                        encryptedSize: deterministicEncryptedFileSize(file.size),
+                        transfer,
                         controller: null,
                         resolve,
                         reject,
-                    })
+                    }
+                    jobsRef.current.set(id, job)
+                    void savePersistedJob(toPersistedJob(job))
                 })
 
                 setItems((prev) => [pendingFile(file, tempId, currentFolderId), ...prev])
                 setPendingIds((prev) => new Set(prev).add(tempId))
 
                 return { transfer, promise }
-            })
+            }))
 
             setTransfers((prev) => [...queued.map((entry) => entry.transfer), ...prev])
             const settled = await Promise.allSettled(queued.map((entry) => entry.promise))
@@ -300,6 +479,8 @@ export function useFileUpload({
             jobsRef.current.delete(id)
             removePlaceholder(job.tempId)
             setTransfers((prev) => prev.filter((transfer) => transfer.id !== id))
+            void deletePersistedJob(id)
+            void cancelResumableUpload(id)
             job.reject(new Error('Transfer removed.'))
         },
         [removePlaceholder],
