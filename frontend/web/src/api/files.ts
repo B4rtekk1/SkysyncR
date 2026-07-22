@@ -285,6 +285,30 @@ export async function renameFolder(id: string, name: string, description?: strin
     return readJson(res, folder, 'Folder')
 }
 
+export async function moveFile(id: string, folderId: string | null): Promise<ApiFile> {
+    const res = await authenticatedFetch(`${API_BASE}files/${id}/move`, {
+        method: 'PUT',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ folder_id: folderId }),
+    })
+    if (!res.ok) throw new Error(await parseErrorMessage(res))
+    return readJson(res, file, 'File')
+}
+
+export async function moveFolder(id: string, parentFolderId: string | null): Promise<ApiFolder> {
+    const res = await authenticatedFetch(`${API_BASE}folders/${id}/move`, {
+        method: 'PUT',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ parent_folder_id: parentFolderId }),
+    })
+    if (!res.ok) throw new Error(await parseErrorMessage(res))
+    return readJson(res, folder, 'Folder')
+}
+
 export async function updateFileContent(params: {
     id: string
     encryptedFile: Blob | ReadableStream<Uint8Array>

@@ -410,6 +410,7 @@ pub async fn folder_belongs_to_user(
             FROM folders
             WHERE id = $1
               AND owner_id = $2
+              AND is_deleted = FALSE
         )
         "#,
     )
@@ -844,6 +845,54 @@ pub async fn rename_user_file(
         "#,
     )
     .bind(filename)
+    .bind(file_id)
+    .bind(user_id)
+    .fetch_optional(pool)
+    .await
+}
+
+pub async fn move_user_file(
+    pool: &PgPool,
+    user_id: Uuid,
+    file_id: Uuid,
+    folder_id: Option<Uuid>,
+) -> Result<Option<FileRecord>, sqlx::Error> {
+    sqlx::query_as::<_, FileRecord>(
+        r#"
+        UPDATE files
+        SET folder_id = $1,
+            updated_at = NOW()
+        WHERE id = $2
+          AND owner_id = $3
+          AND is_deleted = FALSE
+        RETURNING
+            id,
+            filename,
+            storage_path,
+            mime_type,
+            size_bytes,
+            folder_id,
+            note,
+            is_deleted,
+            is_public,
+            share_token,
+            share_expires_at,
+            share_download_limit,
+            share_download_count,
+            EXISTS (
+                SELECT 1
+                FROM favorites fav
+                WHERE fav.user_id = $3
+                  AND fav.file_id = files.id
+            ) AS is_favourite,
+            encrypted_key,
+            encryption_nonce,
+            created_at,
+            updated_at,
+            deleted_at
+        "#,
+    )
+    .bind(folder_id)
     .bind(file_id)
     .bind(user_id)
     .fetch_optional(pool)

@@ -10,8 +10,9 @@ use uuid::Uuid;
 use crate::auth::AuthUser;
 use crate::db::folders::{
     FolderRecord, NewFolderRecord, add_user_folder_favourite, create_folder_record,
-    folder_belongs_to_user, list_user_favourite_folders, list_user_folders,
-    remove_user_folder_favourite, rename_user_folder, update_user_folder_share, user_folder_exists,
+    folder_belongs_to_user, folder_is_descendant_of, list_user_favourite_folders,
+    list_user_folders, move_user_folder, remove_user_folder_favourite, rename_user_folder,
+    update_user_folder_share, user_folder_exists,
 };
 use crate::state::AppState;
 use crate::utils::errors::{ApiError, internal_error};
@@ -40,6 +41,11 @@ pub struct ShareFolderRequest {
 pub struct RenameFolderRequest {
     pub name: String,
     pub description: Option<String>,
+}
+
+#[derive(Deserialize)]
+pub struct MoveFolderRequest {
+    pub parent_folder_id: Option<String>,
 }
 
 pub async fn list_folders(
@@ -130,6 +136,48 @@ pub async fn rename_folder(
     let folder = rename_user_folder(&state.db_pool, auth.user_id, folder_id, name, description)
         .await
         .map_err(|e| internal_error("rename folder", e))?
+        .ok_or_else(|| ApiError::BadRequest("Folder not found".into()))?;
+
+    Ok(Json(folder))
+}
+
+pub async fn move_folder(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Path(folder_id): Path<Uuid>,
+    Json(payload): Json<MoveFolderRequest>,
+) -> Result<Json<FolderRecord>, ApiError> {
+    let parent_folder_id =
+        parse_optional_uuid(payload.parent_folder_id.as_deref(), "parent_folder_id")?;
+
+    if parent_folder_id == Some(folder_id) {
+        return Err(ApiError::BadRequest(
+            "Folder cannot be moved into itself".into(),
+        ));
+    }
+
+    if let Some(parent_id) = parent_folder_id {
+        let parent_exists = folder_belongs_to_user(&state.db_pool, auth.user_id, parent_id)
+            .await
+            .map_err(|e| internal_error("check move parent folder", e))?;
+        if !parent_exists {
+            return Err(ApiError::BadRequest("Destination folder not found".into()));
+        }
+
+        let would_create_cycle =
+            folder_is_descendant_of(&state.db_pool, auth.user_id, parent_id, folder_id)
+                .await
+                .map_err(|e| internal_error("check folder move cycle", e))?;
+        if would_create_cycle {
+            return Err(ApiError::BadRequest(
+                "Folder cannot be moved into its own subfolder".into(),
+            ));
+        }
+    }
+
+    let folder = move_user_folder(&state.db_pool, auth.user_id, folder_id, parent_folder_id)
+        .await
+        .map_err(|e| internal_error("move folder", e))?
         .ok_or_else(|| ApiError::BadRequest("Folder not found".into()))?;
 
     Ok(Json(folder))

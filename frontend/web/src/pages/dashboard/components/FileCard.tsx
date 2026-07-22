@@ -38,6 +38,8 @@ export function FileCard({
                       isDragging,
                       isDropTarget,
                       isSearchExiting,
+                      selected,
+                      onToggleSelected,
                       style,
                       onDragStartCard,
                       onDragEnterCard,
@@ -66,6 +68,8 @@ export function FileCard({
     isDragging?: boolean
     isDropTarget?: boolean
     isSearchExiting?: boolean
+    selected?: boolean
+    onToggleSelected?: ((id: string) => void) | undefined
     style?: CSSProperties
     onDragStartCard?: ((id: string, e: DragEvent<HTMLElement>) => void) | undefined
     onDragEnterCard?: ((id: string) => void) | undefined
@@ -227,7 +231,7 @@ export function FileCard({
                 canToggleFavourite ? 'file-card--has-favourite' : ''
             } ${
                 hasAction ? 'file-card--has-action' : ''
-            } ${pending ? 'file-card--pending' : ''} ${isDragging ? 'is-dragging-card' : ''} ${isDropTarget ? 'is-drop-target' : ''} ${
+            } ${selected ? 'is-selected' : ''} ${pending ? 'file-card--pending' : ''} ${isDragging ? 'is-dragging-card' : ''} ${isDropTarget ? 'is-drop-target' : ''} ${
                 isSearchExiting ? 'is-search-exiting' : ''
             }`}
             style={style}
@@ -258,6 +262,17 @@ export function FileCard({
             }}
             onDragEnd={() => onDragEndCard?.()}
         >
+            {onToggleSelected && !pending && !isRenaming && (
+                <label className="file-card__select" onClick={(event) => event.stopPropagation()}>
+                    <input
+                        type="checkbox"
+                        checked={Boolean(selected)}
+                        onChange={() => onToggleSelected(item.id)}
+                        aria-label={`Select ${item.filename}`}
+                    />
+                    <span aria-hidden="true" />
+                </label>
+            )}
             {draggable && !pending && (
                 <span className="file-card__handle" aria-hidden="true">
                     {DRAG_HANDLE_ICON}

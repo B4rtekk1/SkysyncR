@@ -111,6 +111,52 @@
     color: var(--mist);
 }
 
+.bulk-actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin: 0 0 14px;
+    padding: 10px 12px;
+    border: 1px solid rgba(var(--signal-rgb), 0.22);
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--panel) 88%, var(--signal) 12%);
+}
+
+.bulk-actions__select-all {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--paper);
+    font-size: 0.82rem;
+}
+
+.bulk-actions__select-all input {
+    width: 16px;
+    height: 16px;
+    accent-color: var(--signal);
+}
+
+.bulk-actions__buttons {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 8px;
+}
+
+.bulk-actions__target {
+    min-width: 148px;
+    height: 34px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--panel-2);
+    color: var(--paper);
+    padding: 0 10px;
+    font: inherit;
+    font-size: 0.78rem;
+}
+
 /* files.css */
 /* ---------- FILE GRID ---------- */
 
@@ -153,6 +199,50 @@
     border-radius: 12px;
     padding: 16px;
     transition: border-color 0.15s ease, transform 0.15s ease, opacity 0.15s ease, box-shadow 0.15s ease;
+}
+
+.file-card.is-selected {
+    border-color: rgba(var(--signal-rgb), 0.72);
+    box-shadow: 0 0 0 2px rgba(var(--signal-rgb), 0.16);
+}
+
+.file-card__select {
+    position: absolute;
+    top: 12px;
+    left: 12px;
+    z-index: 3;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    cursor: pointer;
+}
+
+.file-card__select input {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+}
+
+.file-card__select span {
+    width: 18px;
+    height: 18px;
+    border: 1px solid var(--line);
+    border-radius: 5px;
+    background: color-mix(in srgb, var(--panel-2) 86%, transparent);
+    transition: border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
+}
+
+.file-card__select input:checked + span {
+    border-color: var(--signal);
+    background: var(--signal);
+    box-shadow: inset 0 0 0 4px var(--panel);
+}
+
+.file-card__select:focus-within span {
+    outline: 2px solid var(--signal);
+    outline-offset: 2px;
 }
 
 .file-card--pending {
@@ -526,7 +616,7 @@
     justify-content: space-between;
     margin-bottom: 14px;
     padding-right: 26px;
-    padding-left: 0;
+    padding-left: 22px;
     transform: translate(-3px, -5px);
 }
 
@@ -657,12 +747,12 @@
 .file-grid--list .file-card__name-slot {
     grid-column: 1;
     margin: 0;
-    padding-left: 16px;
+    padding-left: 34px;
 }
 
 .file-grid--list .file-card__meta {
     grid-column: 1;
-    padding-left: 16px;
+    padding-left: 34px;
 }
 
 .file-grid--list .file-card__fav {
@@ -714,6 +804,19 @@
 
 /* files-responsive.css */
 @media (max-width: 560px) {
+    .bulk-actions {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .bulk-actions__buttons {
+        justify-content: flex-start;
+    }
+
+    .bulk-actions__target {
+        flex: 1 1 100%;
+    }
+
     .note-editor-shell__labels {
         grid-template-columns: 1fr;
     }

@@ -75,6 +75,7 @@ pub async fn list_user_folders(
          AND files.owner_id = f.owner_id
          AND files.is_deleted = FALSE
         WHERE f.owner_id = $1
+          AND f.is_deleted = FALSE
           AND (
               ($2::uuid IS NULL AND f.parent_folder_id IS NULL)
               OR f.parent_folder_id = $2
@@ -196,6 +197,7 @@ pub async fn folder_belongs_to_user(
             FROM folders
             WHERE id = $1
               AND owner_id = $2
+              AND is_deleted = FALSE
         )
         "#,
     )
@@ -307,6 +309,93 @@ pub async fn rename_user_folder(
     .bind(user_id)
     .fetch_optional(pool)
     .await
+}
+
+pub async fn move_user_folder(
+    pool: &PgPool,
+    user_id: Uuid,
+    folder_id: Uuid,
+    parent_folder_id: Option<Uuid>,
+) -> Result<Option<FolderRecord>, sqlx::Error> {
+    sqlx::query_as::<_, FolderRecord>(
+        r#"
+        UPDATE folders
+        SET parent_folder_id = $1,
+            updated_at = NOW()
+        WHERE id = $2
+          AND owner_id = $3
+          AND is_deleted = FALSE
+        RETURNING
+            id,
+            name,
+            description,
+            parent_folder_id,
+            is_public,
+            share_token,
+            created_at,
+            updated_at,
+            is_deleted,
+            deleted_at,
+            (
+                SELECT COUNT(files.id)::bigint
+                FROM files
+                WHERE files.folder_id = folders.id
+                  AND files.owner_id = folders.owner_id
+                  AND files.is_deleted = FALSE
+            ) AS file_count,
+            EXISTS (
+                SELECT 1
+                FROM favorites fav
+                WHERE fav.user_id = $3
+                  AND fav.folder_id = folders.id
+            ) AS is_favourite,
+            encrypted_key
+        "#,
+    )
+    .bind(parent_folder_id)
+    .bind(folder_id)
+    .bind(user_id)
+    .fetch_optional(pool)
+    .await
+}
+
+pub async fn folder_is_descendant_of(
+    pool: &PgPool,
+    user_id: Uuid,
+    folder_id: Uuid,
+    possible_ancestor_id: Uuid,
+) -> Result<bool, sqlx::Error> {
+    let exists = sqlx::query_scalar::<_, bool>(
+        r#"
+        WITH RECURSIVE folder_tree AS (
+            SELECT id, parent_folder_id
+            FROM folders
+            WHERE id = $1
+              AND owner_id = $2
+              AND is_deleted = FALSE
+
+            UNION ALL
+
+            SELECT f.id, f.parent_folder_id
+            FROM folders f
+            JOIN folder_tree ft ON f.id = ft.parent_folder_id
+            WHERE f.owner_id = $2
+              AND f.is_deleted = FALSE
+        )
+        SELECT EXISTS (
+            SELECT 1
+            FROM folder_tree
+            WHERE id = $3
+        )
+        "#,
+    )
+    .bind(folder_id)
+    .bind(user_id)
+    .bind(possible_ancestor_id)
+    .fetch_one(pool)
+    .await?;
+
+    Ok(exists)
 }
 
 pub async fn user_folder_exists(

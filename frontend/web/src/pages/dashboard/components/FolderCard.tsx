@@ -13,6 +13,8 @@ export function FolderCard({
     onRename,
     isFavourite,
     onToggleFavourite,
+    selected,
+    onToggleSelected,
 }: {
     folder: ApiFolder
     index: number
@@ -21,6 +23,8 @@ export function FolderCard({
     onRename?: (folder: ApiFolder, name: string, description: string | null) => Promise<void>
     isFavourite?: boolean
     onToggleFavourite?: ((id: string) => void | Promise<void>) | undefined
+    selected?: boolean
+    onToggleSelected?: ((id: string) => void) | undefined
 }) {
     const fileCountLabel = folder.file_count === 1 ? '1 file' : `${folder.file_count} files`
     const [favouriteTouched, setFavouriteTouched] = useState(false)
@@ -137,7 +141,9 @@ export function FolderCard({
     return (
         <article
             ref={cardRef}
-            className={`file-card folder-card file-card--can-preview ${onToggleFavourite ? 'file-card--has-favourite' : ''}`}
+            className={`file-card folder-card file-card--can-preview ${onToggleFavourite ? 'file-card--has-favourite' : ''} ${
+                selected ? 'is-selected' : ''
+            }`}
             style={{ '--file-index': index } as CSSProperties}
             role="button"
             tabIndex={0}
@@ -152,6 +158,17 @@ export function FolderCard({
                 onOpen(folder)
             }}
         >
+            {onToggleSelected && !isRenaming && (
+                <label className="file-card__select" onClick={(event) => event.stopPropagation()}>
+                    <input
+                        type="checkbox"
+                        checked={Boolean(selected)}
+                        onChange={() => onToggleSelected(folder.id)}
+                        aria-label={`Select folder ${folder.name}`}
+                    />
+                    <span aria-hidden="true" />
+                </label>
+            )}
             {onToggleFavourite && (
                 <button
                     className={`file-card__fav ${isFavourite ? 'is-active' : ''} ${

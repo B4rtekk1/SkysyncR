@@ -9,6 +9,7 @@ import { useNavigate } from 'react-router-dom'
 import '../App.css'
 import '../css/dashboard.css'
 import type { ShareableItem, ViewKey } from './dashboard/types'
+import { moveFile, moveFolder, permanentlyDeleteFile } from '../api/files'
 import { DashboardContent } from './dashboard/components/DashboardContent'
 import { DashboardModals } from './dashboard/components/DashboardModals'
 import { DashboardSidebar } from './dashboard/components/DashboardSidebar'
@@ -45,6 +46,8 @@ function Dashboard() {
     const [settingsOpen, setSettingsOpen] = useState(false)
     const [shareItem, setShareItem] = useState<ShareableItem | null>(null)
     const [shareLoading, setShareLoading] = useState(false)
+    const [selectedFileIds, setSelectedFileIds] = useState<Set<string>>(() => new Set())
+    const [selectedFolderIds, setSelectedFolderIds] = useState<Set<string>>(() => new Set())
     const normalizedQuery = query.trim().toLowerCase()
     const {
         navOrder,
@@ -181,6 +184,20 @@ function Dashboard() {
         favouriteIds,
         normalizedQuery,
     })
+    const visibleFileIds = useMemo(() => renderedItems.filter((item) => !pendingIds.has(item.id)).map((item) => item.id), [pendingIds, renderedItems])
+    const visibleFolderIds = useMemo(() => visibleFolders.map((folder) => folder.id), [visibleFolders])
+    const selectedCount = selectedFileIds.size + selectedFolderIds.size
+    const allVisibleSelected = useMemo(() => {
+        const selectableFileIds = view === 'all' || view === 'favourites' || view === 'trash' ? visibleFileIds : []
+        const selectableFolderIds = view === 'all' || view === 'favourites' ? visibleFolderIds : []
+        const total = selectableFileIds.length + selectableFolderIds.length
+        if (total === 0) return false
+        return selectableFileIds.every((id) => selectedFileIds.has(id)) && selectableFolderIds.every((id) => selectedFolderIds.has(id))
+    }, [selectedFileIds, selectedFolderIds, view, visibleFileIds, visibleFolderIds])
+    const moveTargets = useMemo(
+        () => visibleFolders.filter((folder) => !selectedFolderIds.has(folder.id)),
+        [selectedFolderIds, visibleFolders],
+    )
     const {
         usedPct,
         storageStatus,
@@ -318,10 +335,143 @@ function Dashboard() {
     }
 
     function selectNavView(key: ViewKey) {
+        clearSelection()
         if (key === 'all') {
             openFolderRoot()
         }
         setView(key)
+    }
+
+    function openFolderWithSelectionReset(folder: Parameters<typeof openFolder>[0]) {
+        clearSelection()
+        openFolder(folder)
+    }
+
+    function openFolderRootWithSelectionReset() {
+        clearSelection()
+        openFolderRoot()
+    }
+
+    function openFolderAtWithSelectionReset(folder: Parameters<typeof openFolderAt>[0], index: number) {
+        clearSelection()
+        openFolderAt(folder, index)
+    }
+
+    function openFolderParentWithSelectionReset() {
+        clearSelection()
+        openFolderParent()
+    }
+
+    function toggleFileSelected(id: string) {
+        setSelectedFileIds((current) => {
+            const next = new Set(current)
+            if (next.has(id)) next.delete(id)
+            else next.add(id)
+            return next
+        })
+    }
+
+    function toggleFolderSelected(id: string) {
+        setSelectedFolderIds((current) => {
+            const next = new Set(current)
+            if (next.has(id)) next.delete(id)
+            else next.add(id)
+            return next
+        })
+    }
+
+    function clearSelection() {
+        setSelectedFileIds(new Set())
+        setSelectedFolderIds(new Set())
+    }
+
+    function toggleAllVisibleSelected() {
+        if (allVisibleSelected) {
+            clearSelection()
+            return
+        }
+
+        setSelectedFileIds(new Set(view === 'all' || view === 'favourites' || view === 'trash' ? visibleFileIds : []))
+        setSelectedFolderIds(new Set(view === 'all' || view === 'favourites' ? visibleFolderIds : []))
+    }
+
+    async function bulkDelete() {
+        const ids = Array.from(selectedFileIds)
+        if (ids.length === 0) return
+        await Promise.all(ids.map((id) => handleDelete(id)))
+        clearSelection()
+    }
+
+    async function bulkRestore() {
+        const ids = Array.from(selectedFileIds)
+        if (ids.length === 0) return
+        await Promise.all(ids.map((id) => handleRestore(id)))
+        clearSelection()
+    }
+
+    async function bulkPermanentDelete() {
+        const ids = Array.from(selectedFileIds)
+        if (ids.length === 0) return
+        const confirmed = window.confirm(`Permanently delete ${ids.length} selected file${ids.length === 1 ? '' : 's'}? This cannot be undone.`)
+        if (!confirmed) return
+        const previousItems = items
+        const previousStorageItems = storageItems
+        const previousFavouriteIds = new Set(favouriteIds)
+
+        setItems((current) => current.filter((item) => !selectedFileIds.has(item.id)))
+        setStorageItems((current) => current.filter((item) => !selectedFileIds.has(item.id)))
+        setFavouriteIds((current) => {
+            const next = new Set(current)
+            ids.forEach((id) => next.delete(id))
+            return next
+        })
+
+        try {
+            await Promise.all(ids.map((id) => permanentlyDeleteFile(id)))
+            await refreshQuota()
+            clearSelection()
+        } catch (e) {
+            setItems(previousItems)
+            setStorageItems(previousStorageItems)
+            setFavouriteIds(previousFavouriteIds)
+            setError(e instanceof Error ? e.message : 'Could not permanently delete the selected files.')
+        }
+    }
+
+    async function bulkDownload() {
+        const selectedFiles = renderedItems.filter((item) => selectedFileIds.has(item.id))
+        for (const item of selectedFiles) {
+            await handleDownload(item)
+        }
+    }
+
+    async function bulkMove(targetFolderId: string | null) {
+        const fileIds = Array.from(selectedFileIds)
+        const folderIds = Array.from(selectedFolderIds)
+        if (fileIds.length === 0 && folderIds.length === 0) return
+
+        setError(null)
+        try {
+            await Promise.all([
+                ...fileIds.map((id) => moveFile(id, targetFolderId)),
+                ...folderIds.map((id) => moveFolder(id, targetFolderId)),
+            ])
+
+            setItems((current) =>
+                targetFolderId === activeFolderId ? current : current.filter((item) => !selectedFileIds.has(item.id)),
+            )
+            setStorageItems((current) =>
+                current.map((item) => (selectedFileIds.has(item.id) ? { ...item, folder_id: targetFolderId } : item)),
+            )
+            setFolders((current) =>
+                targetFolderId === activeFolderId
+                    ? current
+                    : current.filter((folder) => !selectedFolderIds.has(folder.id)),
+            )
+            clearSelection()
+        } catch (e) {
+            setError(e instanceof Error ? e.message : 'Could not move the selected items.')
+        }
     }
 
     return (
@@ -423,9 +573,9 @@ function Dashboard() {
                     onPauseAllTransfers={pauseAllTransfers}
                     onResumeAllTransfers={resumeAllTransfers}
                     folderTrail={folderTrail}
-                    onOpenRoot={openFolderRoot}
-                    onOpenFolderAt={openFolderAt}
-                    onOpenParent={openFolderParent}
+                    onOpenRoot={openFolderRootWithSelectionReset}
+                    onOpenFolderAt={openFolderAtWithSelectionReset}
+                    onOpenParent={openFolderParentWithSelectionReset}
                     error={error}
                     loading={loading}
                     visibleItems={visibleItems}
@@ -467,7 +617,12 @@ function Dashboard() {
                     onDeleteGroup={deleteGroup}
                     draggedCardId={draggedCardId}
                     dropTargetId={dropTargetId}
-                    onOpenFolder={openFolder}
+                    selectedFileIds={selectedFileIds}
+                    selectedFolderIds={selectedFolderIds}
+                    selectedCount={selectedCount}
+                    allVisibleSelected={allVisibleSelected}
+                    moveTargets={moveTargets}
+                    onOpenFolder={openFolderWithSelectionReset}
                     onShareFolder={handleShareFolder}
                     onRenameFolder={handleRenameFolder}
                     onToggleFolderFavourite={toggleFolderFavourite}
@@ -487,6 +642,15 @@ function Dashboard() {
                     onDropCard={handleCardDrop}
                     onDragEndCard={handleCardDragEnd}
                     onMoveCardByKeyboard={moveCardByKeyboard}
+                    onToggleFileSelected={toggleFileSelected}
+                    onToggleFolderSelected={toggleFolderSelected}
+                    onToggleAllVisibleSelected={toggleAllVisibleSelected}
+                    onClearSelection={clearSelection}
+                    onBulkDelete={bulkDelete}
+                    onBulkRestore={bulkRestore}
+                    onBulkPermanentDelete={bulkPermanentDelete}
+                    onBulkDownload={bulkDownload}
+                    onBulkMove={bulkMove}
                 />
             </div>
             <DashboardModals

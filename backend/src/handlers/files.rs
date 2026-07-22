@@ -26,9 +26,9 @@ use crate::db::files::{
     folder_belongs_to_user, get_file_share_recipient, get_user_file_for_content_update_in_tx,
     get_user_file_for_download, insert_file_audit_log, list_files_shared_with_user,
     list_user_file_audit_logs, list_user_file_shares, list_user_file_versions, list_user_files,
-    remove_user_file_favourite, rename_user_file, restore_user_file, restore_user_file_version,
-    soft_delete_user_file, update_user_file_content, update_user_file_note, update_user_file_share,
-    upsert_user_file_share, user_file_exists,
+    move_user_file, remove_user_file_favourite, rename_user_file, restore_user_file,
+    restore_user_file_version, soft_delete_user_file, update_user_file_content,
+    update_user_file_note, update_user_file_share, upsert_user_file_share, user_file_exists,
 };
 use crate::db::storage::try_apply_storage_delta;
 use crate::observability::RequestId;
@@ -47,6 +47,11 @@ pub struct ListFilesQuery {
 #[derive(Deserialize)]
 pub struct RenameFileRequest {
     pub filename: String,
+}
+
+#[derive(Deserialize)]
+pub struct MoveFileRequest {
+    pub folder_id: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -679,6 +684,40 @@ pub async fn update_file_note(
     Ok(Json(file))
 }
 
+pub async fn move_file(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    auth: AuthUser,
+    Path(file_id): Path<Uuid>,
+    Json(payload): Json<MoveFileRequest>,
+) -> Result<Json<FileRecord>, ApiError> {
+    let folder_id = parse_optional_uuid(payload.folder_id.as_deref(), "folder_id")?;
+    if let Some(target_folder_id) = folder_id {
+        let folder_exists = folder_belongs_to_user(&state.db_pool, auth.user_id, target_folder_id)
+            .await
+            .map_err(|e| internal_error("check move folder", e))?;
+        if !folder_exists {
+            return Err(ApiError::BadRequest("Destination folder not found".into()));
+        }
+    }
+
+    let file = move_user_file(&state.db_pool, auth.user_id, file_id, folder_id)
+        .await
+        .map_err(|e| internal_error("move file", e))?
+        .ok_or_else(|| ApiError::BadRequest("File not found".into()))?;
+
+    log_file_audit(
+        &state,
+        auth.user_id,
+        "file.move",
+        file_id,
+        device_label_from_headers(&headers).as_deref(),
+    )
+    .await;
+
+    Ok(Json(file))
+}
+
 pub async fn add_file_favourite(
     State(state): State<AppState>,
     auth: AuthUser,
@@ -1116,6 +1155,16 @@ fn decode_base64_field(field_name: &str, value: &str) -> Result<Vec<u8>, ApiErro
     general_purpose::STANDARD
         .decode(value.trim())
         .map_err(|_| ApiError::BadRequest(format!("Invalid {field_name}")))
+}
+
+fn parse_optional_uuid(value: Option<&str>, field_name: &str) -> Result<Option<Uuid>, ApiError> {
+    value
+        .filter(|raw| !raw.trim().is_empty())
+        .map(|raw| {
+            Uuid::parse_str(raw.trim())
+                .map_err(|_| ApiError::BadRequest(format!("Invalid {field_name}")))
+        })
+        .transpose()
 }
 
 fn is_valid_file_encryption_nonce(value: &[u8]) -> bool {

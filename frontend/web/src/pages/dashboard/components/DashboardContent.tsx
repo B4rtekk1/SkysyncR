@@ -1,4 +1,4 @@
-import { type ChangeEvent, type DragEvent, type RefObject } from 'react'
+import { useState, type ChangeEvent, type DragEvent, type RefObject } from 'react'
 import type { CurrentUserResponse } from '../../../api/users'
 import type { ApiFile, ApiFolder } from '../../../api/files'
 import { CalendarPanel } from './CalendarPanel'
@@ -109,6 +109,11 @@ type DashboardContentProps = {
     onDeleteGroup: (groupId: string) => void
     draggedCardId: string | null
     dropTargetId: string | null
+    selectedFileIds: Set<string>
+    selectedFolderIds: Set<string>
+    selectedCount: number
+    allVisibleSelected: boolean
+    moveTargets: ApiFolder[]
     onOpenFolder: (folder: ApiFolder) => void
     onShareFolder: (folder: ApiFolder) => void
     onRenameFolder: (folder: ApiFolder, name: string, description: string | null) => Promise<void>
@@ -129,6 +134,15 @@ type DashboardContentProps = {
     onDropCard: (id: string, event: DragEvent<HTMLElement>) => void
     onDragEndCard: () => void
     onMoveCardByKeyboard: (id: string, offset: number) => void
+    onToggleFileSelected: (id: string) => void
+    onToggleFolderSelected: (id: string) => void
+    onToggleAllVisibleSelected: () => void
+    onClearSelection: () => void
+    onBulkDelete: () => void | Promise<void>
+    onBulkRestore: () => void | Promise<void>
+    onBulkPermanentDelete: () => void | Promise<void>
+    onBulkDownload: () => void | Promise<void>
+    onBulkMove: (targetFolderId: string | null) => void | Promise<void>
 }
 
 function titleForView(view: ViewKey) {
@@ -231,6 +245,11 @@ export function DashboardContent({
     onDeleteGroup,
     draggedCardId,
     dropTargetId,
+    selectedFileIds,
+    selectedFolderIds,
+    selectedCount,
+    allVisibleSelected,
+    moveTargets,
     onOpenFolder,
     onShareFolder,
     onRenameFolder,
@@ -251,7 +270,17 @@ export function DashboardContent({
     onDropCard,
     onDragEndCard,
     onMoveCardByKeyboard,
+    onToggleFileSelected,
+    onToggleFolderSelected,
+    onToggleAllVisibleSelected,
+    onClearSelection,
+    onBulkDelete,
+    onBulkRestore,
+    onBulkPermanentDelete,
+    onBulkDownload,
+    onBulkMove,
 }: DashboardContentProps) {
+    const [moveTargetId, setMoveTargetId] = useState('__root__')
     const isEmpty = visibleItems.length === 0 && renderedItems.length === 0 && visibleFolders.length === 0
     const shownCount = visibleFolders.length + renderedItems.length
     const totalCount = visibleFolders.length + visibleItems.length
@@ -368,6 +397,60 @@ export function DashboardContent({
                 />
             )}
 
+            {selectedCount > 0 && (view === 'all' || view === 'favourites' || view === 'trash') && (
+                <div className="bulk-actions" role="region" aria-label="Bulk file actions">
+                    <label className="bulk-actions__select-all">
+                        <input type="checkbox" checked={allVisibleSelected} onChange={onToggleAllVisibleSelected} />
+                        <span>{selectedCount} selected</span>
+                    </label>
+                    <div className="bulk-actions__buttons">
+                        {view !== 'trash' && (
+                            <>
+                                <select
+                                    className="bulk-actions__target"
+                                    value={moveTargetId}
+                                    onChange={(event) => setMoveTargetId(event.target.value)}
+                                    aria-label="Move destination"
+                                >
+                                    <option value="__root__">Root folder</option>
+                                    {moveTargets.map((folder) => (
+                                        <option key={folder.id} value={folder.id}>
+                                            {folder.name}
+                                        </option>
+                                    ))}
+                                </select>
+                                <button
+                                    className="btn btn--outline"
+                                    type="button"
+                                    onClick={() => void onBulkMove(moveTargetId === '__root__' ? null : moveTargetId)}
+                                >
+                                    Move
+                                </button>
+                                <button className="btn btn--outline" type="button" onClick={() => void onBulkDownload()}>
+                                    Download
+                                </button>
+                                <button className="btn btn--outline" type="button" onClick={() => void onBulkDelete()}>
+                                    Move to trash
+                                </button>
+                            </>
+                        )}
+                        {view === 'trash' && (
+                            <>
+                                <button className="btn btn--outline" type="button" onClick={() => void onBulkRestore()}>
+                                    Restore
+                                </button>
+                                <button className="btn btn--outline" type="button" onClick={() => void onBulkPermanentDelete()}>
+                                    Delete forever
+                                </button>
+                            </>
+                        )}
+                        <button className="btn btn--ghost" type="button" onClick={onClearSelection}>
+                            Clear
+                        </button>
+                    </div>
+                </div>
+            )}
+
             {loading && <p className="shell__loading">Loading...</p>}
 
             {!loading && view === 'shared' && isEmpty && (
@@ -482,6 +565,8 @@ export function DashboardContent({
                     sortKey={sortKey}
                     draggedCardId={draggedCardId}
                     dropTargetId={dropTargetId}
+                    selectedFileIds={selectedFileIds}
+                    selectedFolderIds={selectedFolderIds}
                     onOpenFolder={onOpenFolder}
                     onShareFolder={onShareFolder}
                     onRenameFolder={onRenameFolder}
@@ -502,6 +587,8 @@ export function DashboardContent({
                     onDropCard={onDropCard}
                     onDragEndCard={onDragEndCard}
                     onMoveCardByKeyboard={onMoveCardByKeyboard}
+                    onToggleFileSelected={onToggleFileSelected}
+                    onToggleFolderSelected={onToggleFolderSelected}
                 />
             )}
 

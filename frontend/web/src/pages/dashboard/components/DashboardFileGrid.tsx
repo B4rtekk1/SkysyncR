@@ -19,6 +19,8 @@ type DashboardFileGridProps = {
     sortKey: string
     draggedCardId: string | null
     dropTargetId: string | null
+    selectedFileIds: Set<string>
+    selectedFolderIds: Set<string>
     onOpenFolder: (folder: ApiFolder) => void
     onShareFolder: (folder: ApiFolder) => void
     onRenameFolder: (folder: ApiFolder, name: string, description: string | null) => Promise<void>
@@ -39,6 +41,8 @@ type DashboardFileGridProps = {
     onDropCard: (id: string, e: DragEvent<HTMLElement>) => void
     onDragEndCard: () => void
     onMoveCardByKeyboard: (id: string, offset: number) => void
+    onToggleFileSelected: (id: string) => void
+    onToggleFolderSelected: (id: string) => void
 }
 
 export function DashboardFileGrid({
@@ -55,6 +59,8 @@ export function DashboardFileGrid({
     sortKey,
     draggedCardId,
     dropTargetId,
+    selectedFileIds,
+    selectedFolderIds,
     onOpenFolder,
     onShareFolder,
     onRenameFolder,
@@ -75,6 +81,8 @@ export function DashboardFileGrid({
     onDropCard,
     onDragEndCard,
     onMoveCardByKeyboard,
+    onToggleFileSelected,
+    onToggleFolderSelected,
 }: DashboardFileGridProps) {
     const transferStatusByTempId = new Map(uploadTransfers.map((transfer) => [transfer.tempId, transfer.status]))
 
@@ -94,6 +102,8 @@ export function DashboardFileGrid({
                     onRename={onRenameFolder}
                     isFavourite={folderFavouriteIds.has(folder.id)}
                     onToggleFavourite={view === 'all' || view === 'favourites' ? onToggleFolderFavourite : undefined}
+                    selected={selectedFolderIds.has(folder.id)}
+                    onToggleSelected={view === 'all' || view === 'favourites' ? onToggleFolderSelected : undefined}
                 />
             ))}
             {renderedItems.map((item, i) => {
@@ -122,6 +132,10 @@ export function DashboardFileGrid({
                         isDragging={draggedCardId === item.id}
                         isDropTarget={dropTargetId === item.id}
                         isSearchExiting={isSearchExiting}
+                        selected={selectedFileIds.has(item.id)}
+                        onToggleSelected={
+                            view === 'all' || view === 'favourites' || view === 'trash' ? onToggleFileSelected : undefined
+                        }
                         style={{ '--file-index': visibleFolders.length + i } as React.CSSProperties}
                         onDragStartCard={onDragStartCard}
                         onDragEnterCard={onDragEnterCard}
