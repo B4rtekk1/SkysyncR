@@ -273,10 +273,10 @@ export const tag: Validator<Tag> = (value, path) => {
   const item = object(value, path)
   return {
     id: string(prop(item, 'id', path), `${path}.id`),
-    owner_id: string(prop(item, 'owner_id', path), `${path}.owner_id`),
+    ...(typeof item.owner_id === 'string' ? { owner_id: item.owner_id } : {}),
     name: string(prop(item, 'name', path), `${path}.name`),
     color: nullableString(prop(item, 'color', path), `${path}.color`),
-    created_at: string(prop(item, 'created_at', path), `${path}.created_at`),
+    ...(typeof item.created_at === 'string' ? { created_at: item.created_at } : {}),
   }
 }
 

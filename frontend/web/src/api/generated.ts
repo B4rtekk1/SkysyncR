@@ -157,22 +157,6 @@ export type FileAudit = {
   "created_at": string
 }
 
-export type Tag = {
-  "id": string
-  "owner_id": string
-  "name": string
-  "color": string | null
-  "created_at": string
-}
-
-export type FileTag = {
-  "file_id": string
-  "tag_id": string
-  "name": string
-  "color": string | null
-  "created_at": string | null
-}
-
 export type Folder = {
   "id": string
   "name": string
@@ -324,4 +308,63 @@ export type FileContentUpdateRequest = {
   "encrypted_key": string
   "encryption_nonce": string
   "file": string
+}
+
+export type MoveFileRequest = {
+  "folder_id": string | null
+}
+
+export type MoveFolderRequest = {
+  "parent_folder_id": string | null
+}
+
+export type StartUploadRequest = {
+  "upload_id": string
+}
+
+export type UploadSessionStatus = {
+  "upload_id": string
+  "offset": number
+}
+
+export type CompleteUploadRequest = {
+  "filename": string
+  "mime_type"?: string | null
+  "folder_id"?: string | null
+  "encrypted_key": string
+  "encryption_nonce": string
+  "size_bytes": number
+}
+
+export type Tag = {
+  "id": string
+  "name": string
+  "color": string | null
+  "owner_id"?: string
+  "created_at"?: string
+}
+
+export type TagRequest = {
+  "name": string
+  "color"?: string | null
+}
+
+export type FileTag = {
+  "file_id": string
+  "tag_id": string
+  "name": string
+  "color": string | null
+  "created_at": string | null
+}
+
+export type Notification = {
+  "id": string
+  "type": string
+  "payload": Record<string, unknown>
+  "is_read": boolean
+  "created_at": string
+}
+
+export type ResendVerificationRequest = {
+  "email": string
 }

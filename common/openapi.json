@@ -262,6 +262,14 @@
             }
           },
           {
+            "name": "tag_id",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
             "name": "trashed",
             "in": "query",
             "schema": {
@@ -652,6 +660,13 @@
             "schema": {
               "type": "boolean"
             }
+          },
+          {
+            "name": "trashed",
+            "in": "query",
+            "schema": {
+              "type": "boolean"
+            }
           }
         ],
         "responses": {
@@ -724,6 +739,19 @@
                 }
               }
             }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "softDeleteFolder",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/FolderId"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Deleted"
           }
         }
       }
@@ -1149,7 +1177,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Encrypted file download",
+            "description": "Public file content",
             "content": {
               "application/octet-stream": {
                 "schema": {
@@ -1158,13 +1186,617 @@
                 }
               }
             }
-          },
-          "400": {
-            "description": "Invalid, expired, or exhausted share link",
+          }
+        }
+      }
+    },
+    "/users/logout-all": {
+      "post": {
+        "operationId": "logoutAllSessions",
+        "responses": {
+          "200": {
+            "description": "All sessions revoked"
+          }
+        }
+      }
+    },
+    "/users/resend-verification": {
+      "post": {
+        "operationId": "resendVerificationEmail",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResendVerificationRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Verification email sent when possible"
+          }
+        }
+      }
+    },
+    "/files/uploads": {
+      "post": {
+        "operationId": "startResumableUpload",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StartUploadRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created upload session",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ApiError"
+                  "$ref": "#/components/schemas/UploadSessionStatus"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/files/uploads/{uploadId}": {
+      "get": {
+        "operationId": "getResumableUploadStatus",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/UploadId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Upload session status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UploadSessionStatus"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "operationId": "appendResumableUploadChunk",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/UploadId"
+          },
+          {
+            "name": "upload-offset",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/octet-stream": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Upload session status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UploadSessionStatus"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "completeResumableUpload",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/UploadId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CompleteUploadRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created file",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/File"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "cancelResumableUpload",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/UploadId"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Cancelled"
+          }
+        }
+      }
+    },
+    "/files/{fileId}/download": {
+      "get": {
+        "operationId": "downloadFile",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/FileId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "File content",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/files/{fileId}/versions": {
+      "get": {
+        "operationId": "listFileVersions",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/FileId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "File versions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/FileVersion"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/files/{fileId}/versions/{versionId}/restore": {
+      "post": {
+        "operationId": "restoreFileVersion",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/FileId"
+          },
+          {
+            "$ref": "#/components/parameters/VersionId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Restored file version",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/File"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/files/{fileId}/activity": {
+      "get": {
+        "operationId": "listFileActivity",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/FileId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "File activity",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/FileAudit"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/files/{fileId}/move": {
+      "put": {
+        "operationId": "moveFile",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/FileId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MoveFileRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Moved file",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/File"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/folders/{folderId}/move": {
+      "put": {
+        "operationId": "moveFolder",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/FolderId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MoveFolderRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Moved folder",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Folder"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/folders/{folderId}/restore": {
+      "post": {
+        "operationId": "restoreFolder",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/FolderId"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Restored"
+          }
+        }
+      }
+    },
+    "/folders/{folderId}/permanent": {
+      "delete": {
+        "operationId": "permanentlyDeleteFolder",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/FolderId"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Permanently deleted"
+          }
+        }
+      }
+    },
+    "/tags": {
+      "get": {
+        "operationId": "listTags",
+        "responses": {
+          "200": {
+            "description": "Tags",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Tag"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "createTag",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TagRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created tag",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Tag"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/tags/{tagId}": {
+      "put": {
+        "operationId": "updateTag",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/TagId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TagRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated tag",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Tag"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "deleteTag",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/TagId"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Deleted"
+          }
+        }
+      }
+    },
+    "/files/{fileId}/tags": {
+      "get": {
+        "operationId": "listTagsForFile",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/FileId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "File tags",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/FileTag"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/files/{fileId}/tags/{tagId}": {
+      "put": {
+        "operationId": "addTagToFile",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/FileId"
+          },
+          {
+            "$ref": "#/components/parameters/TagId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Added file tag",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FileTag"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "removeTagFromFile",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/FileId"
+          },
+          {
+            "$ref": "#/components/parameters/TagId"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Removed"
+          }
+        }
+      }
+    },
+    "/notifications": {
+      "get": {
+        "operationId": "listNotifications",
+        "parameters": [
+          {
+            "name": "unread_only",
+            "in": "query",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Notifications",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Notification"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/notifications/read-all": {
+      "put": {
+        "operationId": "markAllNotificationsRead",
+        "responses": {
+          "204": {
+            "description": "Marked read"
+          }
+        }
+      }
+    },
+    "/notifications/reminders/due": {
+      "post": {
+        "operationId": "createDueReminders",
+        "responses": {
+          "200": {
+            "description": "Created reminder notifications",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Notification"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/notifications/{notificationId}": {
+      "delete": {
+        "operationId": "deleteNotification",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/NotificationId"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Deleted"
+          }
+        }
+      }
+    },
+    "/notifications/{notificationId}/read": {
+      "put": {
+        "operationId": "markNotificationRead",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/NotificationId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Marked notification read",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Notification"
                 }
               }
             }
@@ -1234,12 +1866,47 @@
         "in": "path",
         "required": true,
         "schema": {
-          "type": "string",
-          "format": "uuid"
+          "type": "string"
         }
       },
       "EntryId": {
         "name": "entryId",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "TagId": {
+        "name": "tagId",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "UploadId": {
+        "name": "uploadId",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "VersionId": {
+        "name": "versionId",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "NotificationId": {
+        "name": "notificationId",
         "in": "path",
         "required": true,
         "schema": {
@@ -2392,6 +3059,214 @@
           "file": {
             "type": "string",
             "format": "binary"
+          }
+        }
+      },
+      "MoveFileRequest": {
+        "type": "object",
+        "required": [
+          "folder_id"
+        ],
+        "properties": {
+          "folder_id": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          }
+        }
+      },
+      "MoveFolderRequest": {
+        "type": "object",
+        "required": [
+          "parent_folder_id"
+        ],
+        "properties": {
+          "parent_folder_id": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          }
+        }
+      },
+      "StartUploadRequest": {
+        "type": "object",
+        "required": [
+          "upload_id"
+        ],
+        "properties": {
+          "upload_id": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      },
+      "UploadSessionStatus": {
+        "type": "object",
+        "required": [
+          "upload_id",
+          "offset"
+        ],
+        "properties": {
+          "upload_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "offset": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "CompleteUploadRequest": {
+        "type": "object",
+        "required": [
+          "filename",
+          "encrypted_key",
+          "encryption_nonce",
+          "size_bytes"
+        ],
+        "properties": {
+          "filename": {
+            "type": "string"
+          },
+          "mime_type": {
+            "type": "string",
+            "nullable": true
+          },
+          "folder_id": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "encrypted_key": {
+            "type": "string",
+            "format": "byte"
+          },
+          "encryption_nonce": {
+            "type": "string",
+            "format": "byte"
+          },
+          "size_bytes": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "Tag": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "color"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "color": {
+            "type": "string",
+            "nullable": true
+          },
+          "owner_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "TagRequest": {
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "color": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "FileTag": {
+        "type": "object",
+        "required": [
+          "file_id",
+          "tag_id",
+          "name",
+          "color",
+          "created_at"
+        ],
+        "properties": {
+          "file_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "tag_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "color": {
+            "type": "string",
+            "nullable": true
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          }
+        }
+      },
+      "Notification": {
+        "type": "object",
+        "required": [
+          "id",
+          "type",
+          "payload",
+          "is_read",
+          "created_at"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "type": {
+            "type": "string"
+          },
+          "payload": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "is_read": {
+            "type": "boolean"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "ResendVerificationRequest": {
+        "type": "object",
+        "required": [
+          "email"
+        ],
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email"
           }
         }
       }
