@@ -87,9 +87,9 @@ export function useDashboardData({ view, activeFolderId, privateKey }: UseDashbo
             try {
                 setLoading(true)
                 setError(null)
+                setItems([])
+                setFolders([])
                 if (view === 'groups' || view === 'calendar') {
-                    setFolders([])
-                    setItems([])
                     return
                 }
 
@@ -100,7 +100,7 @@ export function useDashboardData({ view, activeFolderId, privateKey }: UseDashbo
 
                 if (view === 'all') {
                     const [files, foldersData] = await Promise.all([
-                        listFiles(activeFolderId ?? undefined),
+                        listFiles(activeFolderId),
                         listFolders(activeFolderId ?? undefined),
                     ])
                     fileData = files
@@ -125,8 +125,12 @@ export function useDashboardData({ view, activeFolderId, privateKey }: UseDashbo
                         decryptFilesMetadata(fileData, privateKey),
                         decryptFoldersMetadata(folderData, privateKey),
                     ])
+                    const scopedFileData =
+                        view === 'all'
+                            ? visibleFileData.filter((file) => file.folder_id === activeFolderId)
+                            : visibleFileData
                     if (view !== 'shared') scheduleMetadataMigration(fileData, privateKey)
-                    setItems(applySavedOrder(visibleFileData, view))
+                    setItems(applySavedOrder(scopedFileData, view))
                     setFolders(visibleFolderData)
                     if (view === 'all' || view === 'favourites') {
                         setStorageItems(visibleFileData as ApiFile[])

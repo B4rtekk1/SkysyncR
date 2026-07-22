@@ -16,6 +16,7 @@ pub async fn list_user_files(
     folder_id: Option<Uuid>,
     tag_id: Option<Uuid>,
     trashed: bool,
+    root_only: bool,
 ) -> Result<Vec<FileRecord>, sqlx::Error> {
     sqlx::query_as::<_, FileRecord>(
         r#"
@@ -47,7 +48,10 @@ pub async fn list_user_files(
         FROM files
         WHERE owner_id = $1
           AND is_deleted = $2
-          AND ($3::uuid IS NULL OR folder_id = $3)
+          AND (
+              ($5::boolean = TRUE AND folder_id IS NULL)
+              OR ($5::boolean = FALSE AND ($3::uuid IS NULL OR folder_id = $3))
+          )
           AND (
               $4::uuid IS NULL
               OR EXISTS (
@@ -66,6 +70,7 @@ pub async fn list_user_files(
     .bind(trashed)
     .bind(folder_id)
     .bind(tag_id)
+    .bind(root_only)
     .fetch_all(pool)
     .await
 }

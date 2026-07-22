@@ -2,6 +2,8 @@ import { useState, type Dispatch, type DragEvent, type SetStateAction } from 're
 import { saveOrderIds } from '../storage'
 import type { FileSortKey, Item, ViewKey } from '../types'
 
+export const FILE_CARD_DRAG_MIME = 'application/x-skysyncr-file-id'
+
 type UseManualCardOrderingParams = {
     sortKey: FileSortKey
     view: ViewKey
@@ -26,6 +28,7 @@ export function useManualCardOrdering({ sortKey, view, setItems }: UseManualCard
 
     function handleCardDragStart(id: string, event: DragEvent<HTMLElement>) {
         event.dataTransfer.effectAllowed = 'move'
+        event.dataTransfer.setData(FILE_CARD_DRAG_MIME, id)
         event.dataTransfer.setData('text/plain', id)
         setDraggedCardId(id)
     }
@@ -39,7 +42,7 @@ export function useManualCardOrdering({ sortKey, view, setItems }: UseManualCard
     }
 
     function handleCardDrop(targetId: string, event: DragEvent<HTMLElement>) {
-        const sourceId = event.dataTransfer.getData('text/plain') || draggedCardId
+        const sourceId = event.dataTransfer.getData(FILE_CARD_DRAG_MIME) || event.dataTransfer.getData('text/plain') || draggedCardId
         setDraggedCardId(null)
         setDropTargetId(null)
         if (sortKey !== 'manual') return

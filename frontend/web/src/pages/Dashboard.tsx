@@ -9,7 +9,7 @@ import { useNavigate } from 'react-router-dom'
 import '../App.css'
 import '../css/dashboard.css'
 import type { ShareableItem, ViewKey } from './dashboard/types'
-import { moveFile, moveFolder, permanentlyDeleteFile } from '../api/files'
+import { moveFile, moveFolder, permanentlyDeleteFile, type ApiFolder } from '../api/files'
 import { DashboardContent } from './dashboard/components/DashboardContent'
 import { DashboardModals } from './dashboard/components/DashboardModals'
 import { DashboardSidebar } from './dashboard/components/DashboardSidebar'
@@ -29,7 +29,7 @@ import { useFileFilterControls } from './dashboard/hooks/useFileFilterControls'
 import { useFileUpload } from './dashboard/hooks/useFileUpload'
 import { useFolderActions } from './dashboard/hooks/useFolderActions'
 import { useLayoutModeSwitch } from './dashboard/hooks/useLayoutModeSwitch'
-import { useManualCardOrdering } from './dashboard/hooks/useManualCardOrdering'
+import { FILE_CARD_DRAG_MIME, useManualCardOrdering } from './dashboard/hooks/useManualCardOrdering'
 import { useDashboardMenus } from './dashboard/hooks/useDashboardMenus'
 import { useNavIndicator } from './dashboard/hooks/useNavIndicator'
 import { useNavOrdering } from './dashboard/hooks/useNavOrdering'
@@ -48,6 +48,7 @@ function Dashboard() {
     const [shareLoading, setShareLoading] = useState(false)
     const [selectedFileIds, setSelectedFileIds] = useState<Set<string>>(() => new Set())
     const [selectedFolderIds, setSelectedFolderIds] = useState<Set<string>>(() => new Set())
+    const [folderDropTargetId, setFolderDropTargetId] = useState<string | null>(null)
     const normalizedQuery = query.trim().toLowerCase()
     const {
         navOrder,
@@ -334,6 +335,50 @@ function Dashboard() {
         }
     }
 
+    async function dropFileOnFolder(folder: ApiFolder, event: DragEvent<HTMLElement>) {
+        const fileId = event.dataTransfer.getData(FILE_CARD_DRAG_MIME)
+        setFolderDropTargetId(null)
+        handleCardDragEnd()
+
+        const movedItem = items.find((item) => item.id === fileId)
+        if (!fileId || movedItem?.folder_id === folder.id) return
+        setError(null)
+
+        setItems((current) => current.filter((item) => item.id !== fileId))
+        setStorageItems((current) => current.map((item) => (item.id === fileId ? { ...item, folder_id: folder.id } : item)))
+        setFolders((current) =>
+            current.map((item) => (item.id === folder.id ? { ...item, file_count: item.file_count + 1 } : item)),
+        )
+
+        try {
+            await moveFile(fileId, folder.id)
+        } catch (e) {
+            if (movedItem) setItems((current) => (current.some((item) => item.id === fileId) ? current : [...current, movedItem]))
+            setStorageItems((current) =>
+                current.map((item) => (item.id === fileId ? { ...item, folder_id: movedItem?.folder_id ?? null } : item)),
+            )
+            setFolders((current) =>
+                current.map((item) =>
+                    item.id === folder.id ? { ...item, file_count: Math.max(0, item.file_count - 1) } : item,
+                ),
+            )
+            setError(e instanceof Error ? e.message : 'Could not move that file.')
+        }
+    }
+
+    function dragFileOverFolder(folderId: string) {
+        setFolderDropTargetId(folderId)
+    }
+
+    function dragFileLeaveFolder(folderId: string) {
+        setFolderDropTargetId((current) => (current === folderId ? null : current))
+    }
+
+    function endFileCardDrag() {
+        setFolderDropTargetId(null)
+        handleCardDragEnd()
+    }
+
     function selectNavView(key: ViewKey) {
         clearSelection()
         if (key === 'all') {
@@ -617,6 +662,7 @@ function Dashboard() {
                     onDeleteGroup={deleteGroup}
                     draggedCardId={draggedCardId}
                     dropTargetId={dropTargetId}
+                    folderDropTargetId={folderDropTargetId}
                     selectedFileIds={selectedFileIds}
                     selectedFolderIds={selectedFolderIds}
                     selectedCount={selectedCount}
@@ -640,8 +686,11 @@ function Dashboard() {
                     onDragEnterCard={handleCardDragEnter}
                     onDragLeaveCard={handleCardDragLeave}
                     onDropCard={handleCardDrop}
-                    onDragEndCard={handleCardDragEnd}
+                    onDragEndCard={endFileCardDrag}
                     onMoveCardByKeyboard={moveCardByKeyboard}
+                    onFileDragEnterFolder={dragFileOverFolder}
+                    onFileDragLeaveFolder={dragFileLeaveFolder}
+                    onDropFileOnFolder={(folder, event) => void dropFileOnFolder(folder, event)}
                     onToggleFileSelected={toggleFileSelected}
                     onToggleFolderSelected={toggleFolderSelected}
                     onToggleAllVisibleSelected={toggleAllVisibleSelected}

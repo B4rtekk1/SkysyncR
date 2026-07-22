@@ -50,10 +50,11 @@ export type {
     StorageQuota,
 }
 
-export async function listFiles(folderId?: string): Promise<ApiFile[]> {
-    const qs = folderId ? `?folder_id=${encodeURIComponent(folderId)}` : '';
+export async function listFiles(folderId?: string | null): Promise<ApiFile[]> {
+    const qs = folderId === null ? '?folder_id=root' : folderId ? `?folder_id=${encodeURIComponent(folderId)}` : '';
     const res = await authenticatedFetch(`${API_BASE}files${qs}`, {
         method: 'GET',
+        cache: 'no-store',
         headers: {
             'Content-Type': 'application/json',
         },
@@ -139,6 +140,7 @@ export async function listFolders(parentFolderId?: string, favourite = false): P
     const qs = params.toString() ? `?${params.toString()}` : ''
     const res = await authenticatedFetch(`${API_BASE}folders${qs}`, {
         method: 'GET',
+        cache: 'no-store',
         headers: {
             'Content-Type': 'application/json',
         },

@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react'
+import { useCallback, useEffect, useRef, useState, type CSSProperties, type DragEvent } from 'react'
 import type { ApiFolder } from '../../../api/files'
 import { formatRelative } from '../fileUtils'
+import { FILE_CARD_DRAG_MIME } from '../hooks/useManualCardOrdering'
 import { CANCEL_ICON, CHECK_ICON, INFO_ICON, RENAME_ICON, SHARE_ICON, STAR_ICON_FILLED, STAR_ICON_OUTLINE } from '../icons'
 import { FileRenameInput } from './FileRenameInput'
 import { FileInfoPopover, type InfoPopoverPosition } from './FileInfoPopover'
@@ -15,6 +16,11 @@ export function FolderCard({
     onToggleFavourite,
     selected,
     onToggleSelected,
+    canAcceptFileDrop,
+    isFileDropTarget,
+    onFileDragEnter,
+    onFileDragLeave,
+    onFileDrop,
 }: {
     folder: ApiFolder
     index: number
@@ -25,6 +31,11 @@ export function FolderCard({
     onToggleFavourite?: ((id: string) => void | Promise<void>) | undefined
     selected?: boolean
     onToggleSelected?: ((id: string) => void) | undefined
+    canAcceptFileDrop?: boolean
+    isFileDropTarget?: boolean
+    onFileDragEnter?: ((folderId: string) => void) | undefined
+    onFileDragLeave?: ((folderId: string) => void) | undefined
+    onFileDrop?: ((folder: ApiFolder, event: DragEvent<HTMLElement>) => void) | undefined
 }) {
     const fileCountLabel = folder.file_count === 1 ? '1 file' : `${folder.file_count} files`
     const [favouriteTouched, setFavouriteTouched] = useState(false)
@@ -137,13 +148,27 @@ export function FolderCard({
             renameInputRef.current?.select()
         })
     }
+    const isInternalFileDrag = (event: DragEvent<HTMLElement>) =>
+        canAcceptFileDrop && Array.from(event.dataTransfer.types).includes(FILE_CARD_DRAG_MIME)
+    const isDragStillInsideCard = (event: DragEvent<HTMLElement>) => {
+        const nextTarget = event.relatedTarget
+        if (nextTarget instanceof Node && event.currentTarget.contains(nextTarget)) return true
+
+        const rect = event.currentTarget.getBoundingClientRect()
+        return (
+            event.clientX >= rect.left &&
+            event.clientX <= rect.right &&
+            event.clientY >= rect.top &&
+            event.clientY <= rect.bottom
+        )
+    }
 
     return (
         <article
             ref={cardRef}
             className={`file-card folder-card file-card--can-preview ${onToggleFavourite ? 'file-card--has-favourite' : ''} ${
                 selected ? 'is-selected' : ''
-            }`}
+            } ${isFileDropTarget ? 'is-folder-drop-target' : ''}`}
             style={{ '--file-index': index } as CSSProperties}
             role="button"
             tabIndex={0}
@@ -156,6 +181,30 @@ export function FolderCard({
                 if (event.key !== 'Enter' && event.key !== ' ') return
                 event.preventDefault()
                 onOpen(folder)
+            }}
+            onDragEnter={(event) => {
+                if (!isInternalFileDrag(event)) return
+                event.preventDefault()
+                event.stopPropagation()
+                onFileDragEnter?.(folder.id)
+            }}
+            onDragOver={(event) => {
+                if (!isInternalFileDrag(event)) return
+                event.preventDefault()
+                event.stopPropagation()
+                event.dataTransfer.dropEffect = 'move'
+            }}
+            onDragLeave={(event) => {
+                if (!isInternalFileDrag(event)) return
+                event.stopPropagation()
+                if (isDragStillInsideCard(event)) return
+                onFileDragLeave?.(folder.id)
+            }}
+            onDrop={(event) => {
+                if (!isInternalFileDrag(event)) return
+                event.preventDefault()
+                event.stopPropagation()
+                onFileDrop?.(folder, event)
             }}
         >
             {onToggleSelected && !isRenaming && (

@@ -565,6 +565,31 @@
     cursor: pointer;
 }
 
+.folder-card.is-folder-drop-target {
+    border-color: var(--signal);
+    background:
+        linear-gradient(180deg, rgba(var(--signal-rgb), 0.18), transparent 72%),
+        var(--panel);
+    box-shadow: 0 0 0 3px rgba(var(--signal-rgb), 0.22), 0 18px 36px -28px var(--shadow-soft);
+}
+
+.folder-card.is-folder-drop-target::after {
+    content: 'Move here';
+    position: absolute;
+    right: 12px;
+    bottom: 12px;
+    z-index: 4;
+    padding: 5px 8px;
+    border: 1px solid rgba(var(--signal-rgb), 0.32);
+    border-radius: 7px;
+    background: var(--panel-2);
+    color: var(--signal);
+    font-family: var(--font-mono), monospace;
+    font-size: 0.68rem;
+    font-weight: 700;
+    pointer-events: none;
+}
+
 .folder-card__badge {
     color: var(--amber);
 }

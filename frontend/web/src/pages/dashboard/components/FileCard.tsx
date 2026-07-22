@@ -35,6 +35,7 @@ export function FileCard({
                       isFavourite,
                       onToggleFavourite,
                       draggable,
+                      reorderable,
                       isDragging,
                       isDropTarget,
                       isSearchExiting,
@@ -65,6 +66,7 @@ export function FileCard({
     isFavourite?: boolean
     onToggleFavourite?: ((id: string) => void | Promise<void>) | undefined
     draggable?: boolean
+    reorderable?: boolean
     isDragging?: boolean
     isDropTarget?: boolean
     isSearchExiting?: boolean
@@ -105,7 +107,7 @@ export function FileCard({
             (view === 'trash' && (onRestore || onPermanentDelete)) ||
             !isRenaming,
     )
-    const keyboardLabel = draggable
+    const keyboardLabel = reorderable
         ? `${canPreview ? 'Preview' : 'File'} ${item.filename}. Use Alt plus arrow keys to move this file.`
         : canPreview
           ? `Preview ${item.filename}`
@@ -209,7 +211,7 @@ export function FileCard({
     const handleCardKeyDown = (e: ReactKeyboardEvent<HTMLElement>) => {
         if (isInteractiveClickTarget(e.target)) return
 
-        if (draggable && e.altKey) {
+        if (reorderable && e.altKey) {
             const offset = e.key === 'ArrowUp' || e.key === 'ArrowLeft' ? -1 : e.key === 'ArrowDown' || e.key === 'ArrowRight' ? 1 : 0
             if (offset !== 0) {
                 e.preventDefault()
@@ -236,9 +238,9 @@ export function FileCard({
             }`}
             style={style}
             draggable={draggable && !pending && !isRenaming}
-            tabIndex={canPreview || draggable ? 0 : undefined}
+            tabIndex={canPreview || reorderable ? 0 : undefined}
             aria-label={keyboardLabel}
-            aria-keyshortcuts={draggable ? 'Alt+ArrowUp Alt+ArrowDown Alt+ArrowLeft Alt+ArrowRight' : undefined}
+            aria-keyshortcuts={reorderable ? 'Alt+ArrowUp Alt+ArrowDown Alt+ArrowLeft Alt+ArrowRight' : undefined}
             onClick={
                 canPreview
                     ? (e) => {
@@ -273,7 +275,7 @@ export function FileCard({
                     <span aria-hidden="true" />
                 </label>
             )}
-            {draggable && !pending && (
+            {reorderable && !pending && (
                 <span className="file-card__handle" aria-hidden="true">
                     {DRAG_HANDLE_ICON}
                 </span>

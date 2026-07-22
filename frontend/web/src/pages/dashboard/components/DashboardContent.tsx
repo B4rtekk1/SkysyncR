@@ -109,6 +109,7 @@ type DashboardContentProps = {
     onDeleteGroup: (groupId: string) => void
     draggedCardId: string | null
     dropTargetId: string | null
+    folderDropTargetId: string | null
     selectedFileIds: Set<string>
     selectedFolderIds: Set<string>
     selectedCount: number
@@ -134,6 +135,9 @@ type DashboardContentProps = {
     onDropCard: (id: string, event: DragEvent<HTMLElement>) => void
     onDragEndCard: () => void
     onMoveCardByKeyboard: (id: string, offset: number) => void
+    onFileDragEnterFolder: (folderId: string) => void
+    onFileDragLeaveFolder: (folderId: string) => void
+    onDropFileOnFolder: (folder: ApiFolder, event: DragEvent<HTMLElement>) => void
     onToggleFileSelected: (id: string) => void
     onToggleFolderSelected: (id: string) => void
     onToggleAllVisibleSelected: () => void
@@ -245,6 +249,7 @@ export function DashboardContent({
     onDeleteGroup,
     draggedCardId,
     dropTargetId,
+    folderDropTargetId,
     selectedFileIds,
     selectedFolderIds,
     selectedCount,
@@ -270,6 +275,9 @@ export function DashboardContent({
     onDropCard,
     onDragEndCard,
     onMoveCardByKeyboard,
+    onFileDragEnterFolder,
+    onFileDragLeaveFolder,
+    onDropFileOnFolder,
     onToggleFileSelected,
     onToggleFolderSelected,
     onToggleAllVisibleSelected,
@@ -565,6 +573,7 @@ export function DashboardContent({
                     sortKey={sortKey}
                     draggedCardId={draggedCardId}
                     dropTargetId={dropTargetId}
+                    folderDropTargetId={folderDropTargetId}
                     selectedFileIds={selectedFileIds}
                     selectedFolderIds={selectedFolderIds}
                     onOpenFolder={onOpenFolder}
@@ -587,6 +596,9 @@ export function DashboardContent({
                     onDropCard={onDropCard}
                     onDragEndCard={onDragEndCard}
                     onMoveCardByKeyboard={onMoveCardByKeyboard}
+                    onFileDragEnterFolder={onFileDragEnterFolder}
+                    onFileDragLeaveFolder={onFileDragLeaveFolder}
+                    onDropFileOnFolder={onDropFileOnFolder}
                     onToggleFileSelected={onToggleFileSelected}
                     onToggleFolderSelected={onToggleFolderSelected}
                 />

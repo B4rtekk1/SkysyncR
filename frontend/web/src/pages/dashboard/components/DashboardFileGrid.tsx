@@ -19,6 +19,7 @@ type DashboardFileGridProps = {
     sortKey: string
     draggedCardId: string | null
     dropTargetId: string | null
+    folderDropTargetId: string | null
     selectedFileIds: Set<string>
     selectedFolderIds: Set<string>
     onOpenFolder: (folder: ApiFolder) => void
@@ -41,6 +42,9 @@ type DashboardFileGridProps = {
     onDropCard: (id: string, e: DragEvent<HTMLElement>) => void
     onDragEndCard: () => void
     onMoveCardByKeyboard: (id: string, offset: number) => void
+    onFileDragEnterFolder: (folderId: string) => void
+    onFileDragLeaveFolder: (folderId: string) => void
+    onDropFileOnFolder: (folder: ApiFolder, event: DragEvent<HTMLElement>) => void
     onToggleFileSelected: (id: string) => void
     onToggleFolderSelected: (id: string) => void
 }
@@ -59,6 +63,7 @@ export function DashboardFileGrid({
     sortKey,
     draggedCardId,
     dropTargetId,
+    folderDropTargetId,
     selectedFileIds,
     selectedFolderIds,
     onOpenFolder,
@@ -81,6 +86,9 @@ export function DashboardFileGrid({
     onDropCard,
     onDragEndCard,
     onMoveCardByKeyboard,
+    onFileDragEnterFolder,
+    onFileDragLeaveFolder,
+    onDropFileOnFolder,
     onToggleFileSelected,
     onToggleFolderSelected,
 }: DashboardFileGridProps) {
@@ -104,6 +112,11 @@ export function DashboardFileGrid({
                     onToggleFavourite={view === 'all' || view === 'favourites' ? onToggleFolderFavourite : undefined}
                     selected={selectedFolderIds.has(folder.id)}
                     onToggleSelected={view === 'all' || view === 'favourites' ? onToggleFolderSelected : undefined}
+                    canAcceptFileDrop={view === 'all' || view === 'favourites'}
+                    isFileDropTarget={folderDropTargetId === folder.id}
+                    onFileDragEnter={onFileDragEnterFolder}
+                    onFileDragLeave={onFileDragLeaveFolder}
+                    onFileDrop={onDropFileOnFolder}
                 />
             ))}
             {renderedItems.map((item, i) => {
@@ -128,7 +141,8 @@ export function DashboardFileGrid({
                         onNote={view === 'all' || view === 'favourites' ? onNote : undefined}
                         isFavourite={favouriteIds.has(item.id)}
                         onToggleFavourite={view === 'all' || view === 'favourites' ? onToggleFavourite : undefined}
-                        draggable={sortKey === 'manual' && !pendingIds.has(item.id) && !isSearchExiting}
+                        draggable={(sortKey === 'manual' || view === 'all' || view === 'favourites') && !pendingIds.has(item.id) && !isSearchExiting}
+                        reorderable={sortKey === 'manual'}
                         isDragging={draggedCardId === item.id}
                         isDropTarget={dropTargetId === item.id}
                         isSearchExiting={isSearchExiting}

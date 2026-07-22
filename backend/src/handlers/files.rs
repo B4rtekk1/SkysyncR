@@ -100,12 +100,20 @@ pub async fn list_files(
     auth: AuthUser,
     Query(query): Query<ListFilesQuery>,
 ) -> Result<Json<Vec<FileRecord>>, ApiError> {
-    let folder_id = query
+    let root_only = query
         .folder_id
         .as_deref()
-        .map(Uuid::parse_str)
-        .transpose()
-        .map_err(|_| ApiError::BadRequest("Invalid folder_id".into()))?;
+        .is_some_and(|value| value.trim().eq_ignore_ascii_case("root"));
+    let folder_id = if root_only {
+        None
+    } else {
+        query
+            .folder_id
+            .as_deref()
+            .map(Uuid::parse_str)
+            .transpose()
+            .map_err(|_| ApiError::BadRequest("Invalid folder_id".into()))?
+    };
     let tag_id = query
         .tag_id
         .as_deref()
@@ -119,6 +127,7 @@ pub async fn list_files(
         folder_id,
         tag_id,
         query.trashed,
+        root_only,
     )
     .await
     .map_err(|e| internal_error("list files", e))?;
