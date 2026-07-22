@@ -8,7 +8,7 @@ import React, {
 import { useNavigate } from 'react-router-dom'
 import '../App.css'
 import '../css/dashboard.css'
-import type { ShareableItem, ViewKey } from './dashboard/types'
+import type { Item, ShareableItem, ViewKey } from './dashboard/types'
 import { moveFile, moveFolder, permanentlyDeleteFile, type ApiFolder } from '../api/files'
 import { DashboardContent } from './dashboard/components/DashboardContent'
 import { DashboardModals } from './dashboard/components/DashboardModals'
@@ -46,9 +46,12 @@ function Dashboard() {
     const [settingsOpen, setSettingsOpen] = useState(false)
     const [shareItem, setShareItem] = useState<ShareableItem | null>(null)
     const [shareLoading, setShareLoading] = useState(false)
+    const [moveItem, setMoveItem] = useState<Item | null>(null)
+    const [moveSaving, setMoveSaving] = useState(false)
     const [selectedFileIds, setSelectedFileIds] = useState<Set<string>>(() => new Set())
     const [selectedFolderIds, setSelectedFolderIds] = useState<Set<string>>(() => new Set())
     const [folderDropTargetId, setFolderDropTargetId] = useState<string | null>(null)
+    const [pathDropTargetId, setPathDropTargetId] = useState<string | null>(null)
     const normalizedQuery = query.trim().toLowerCase()
     const {
         navOrder,
@@ -335,35 +338,49 @@ function Dashboard() {
         }
     }
 
-    async function dropFileOnFolder(folder: ApiFolder, event: DragEvent<HTMLElement>) {
-        const fileId = event.dataTransfer.getData(FILE_CARD_DRAG_MIME)
-        setFolderDropTargetId(null)
-        handleCardDragEnd()
-
+    async function moveSingleFileToFolder(fileId: string, targetFolderId: string | null) {
         const movedItem = items.find((item) => item.id === fileId)
-        if (!fileId || movedItem?.folder_id === folder.id) return
-        setError(null)
+        if (!fileId || movedItem?.folder_id === targetFolderId) return
 
-        setItems((current) => current.filter((item) => item.id !== fileId))
-        setStorageItems((current) => current.map((item) => (item.id === fileId ? { ...item, folder_id: folder.id } : item)))
+        setError(null)
+        setItems((current) =>
+            targetFolderId === activeFolderId
+                ? current.map((item) => (item.id === fileId ? { ...item, folder_id: targetFolderId } : item))
+                : current.filter((item) => item.id !== fileId),
+        )
+        setStorageItems((current) => current.map((item) => (item.id === fileId ? { ...item, folder_id: targetFolderId } : item)))
         setFolders((current) =>
-            current.map((item) => (item.id === folder.id ? { ...item, file_count: item.file_count + 1 } : item)),
+            current.map((item) => {
+                if (item.id === movedItem?.folder_id) return { ...item, file_count: Math.max(0, item.file_count - 1) }
+                if (item.id === targetFolderId) return { ...item, file_count: item.file_count + 1 }
+                return item
+            }),
         )
 
         try {
-            await moveFile(fileId, folder.id)
+            await moveFile(fileId, targetFolderId)
         } catch (e) {
             if (movedItem) setItems((current) => (current.some((item) => item.id === fileId) ? current : [...current, movedItem]))
             setStorageItems((current) =>
                 current.map((item) => (item.id === fileId ? { ...item, folder_id: movedItem?.folder_id ?? null } : item)),
             )
             setFolders((current) =>
-                current.map((item) =>
-                    item.id === folder.id ? { ...item, file_count: Math.max(0, item.file_count - 1) } : item,
-                ),
+                current.map((item) => {
+                    if (item.id === movedItem?.folder_id) return { ...item, file_count: item.file_count + 1 }
+                    if (item.id === targetFolderId) return { ...item, file_count: Math.max(0, item.file_count - 1) }
+                    return item
+                }),
             )
             setError(e instanceof Error ? e.message : 'Could not move that file.')
         }
+    }
+
+    async function dropFileOnFolder(folder: ApiFolder, event: DragEvent<HTMLElement>) {
+        const fileId = event.dataTransfer.getData(FILE_CARD_DRAG_MIME)
+        setFolderDropTargetId(null)
+        handleCardDragEnd()
+
+        await moveSingleFileToFolder(fileId, folder.id)
     }
 
     function dragFileOverFolder(folderId: string) {
@@ -376,7 +393,42 @@ function Dashboard() {
 
     function endFileCardDrag() {
         setFolderDropTargetId(null)
+        setPathDropTargetId(null)
         handleCardDragEnd()
+    }
+
+    function dragFileOverPath(targetFolderId: string | null) {
+        setPathDropTargetId(targetFolderId ?? '__root__')
+    }
+
+    function dragFileLeavePath(targetFolderId: string | null) {
+        const targetKey = targetFolderId ?? '__root__'
+        setPathDropTargetId((current) => (current === targetKey ? null : current))
+    }
+
+    async function dropFileOnPath(targetFolderId: string | null, event: DragEvent<HTMLButtonElement>) {
+        const fileId = event.dataTransfer.getData(FILE_CARD_DRAG_MIME)
+        setPathDropTargetId(null)
+        handleCardDragEnd()
+
+        await moveSingleFileToFolder(fileId, targetFolderId)
+    }
+
+    function openMoveFile(item: Item) {
+        setError(null)
+        setMoveItem(item)
+    }
+
+    async function moveFileFromModal(item: Item, targetFolderId: string | null) {
+        if (moveSaving) return
+
+        setMoveSaving(true)
+        try {
+            await moveSingleFileToFolder(item.id, targetFolderId)
+            setMoveItem(null)
+        } finally {
+            setMoveSaving(false)
+        }
     }
 
     function selectNavView(key: ViewKey) {
@@ -620,7 +672,6 @@ function Dashboard() {
                     folderTrail={folderTrail}
                     onOpenRoot={openFolderRootWithSelectionReset}
                     onOpenFolderAt={openFolderAtWithSelectionReset}
-                    onOpenParent={openFolderParentWithSelectionReset}
                     error={error}
                     loading={loading}
                     visibleItems={visibleItems}
@@ -663,6 +714,7 @@ function Dashboard() {
                     draggedCardId={draggedCardId}
                     dropTargetId={dropTargetId}
                     folderDropTargetId={folderDropTargetId}
+                    pathDropTargetId={pathDropTargetId}
                     selectedFileIds={selectedFileIds}
                     selectedFolderIds={selectedFolderIds}
                     selectedCount={selectedCount}
@@ -681,6 +733,7 @@ function Dashboard() {
                     onRename={handleRename}
                     onShare={handleShare}
                     onNote={setNoteItem}
+                    onMoveFile={openMoveFile}
                     onToggleFavourite={toggleFavourite}
                     onDragStartCard={handleCardDragStart}
                     onDragEnterCard={handleCardDragEnter}
@@ -691,6 +744,9 @@ function Dashboard() {
                     onFileDragEnterFolder={dragFileOverFolder}
                     onFileDragLeaveFolder={dragFileLeaveFolder}
                     onDropFileOnFolder={(folder, event) => void dropFileOnFolder(folder, event)}
+                    onFileDragEnterPath={dragFileOverPath}
+                    onFileDragLeavePath={dragFileLeavePath}
+                    onDropFileOnPath={(targetFolderId, event) => void dropFileOnPath(targetFolderId, event)}
                     onToggleFileSelected={toggleFileSelected}
                     onToggleFolderSelected={toggleFolderSelected}
                     onToggleAllVisibleSelected={toggleAllVisibleSelected}
@@ -730,6 +786,10 @@ function Dashboard() {
                 noteSaving={noteSaving}
                 onCloseNote={() => setNoteItem(null)}
                 onSaveNote={handleSaveNote}
+                moveItem={moveItem}
+                moveSaving={moveSaving}
+                onCloseMove={() => setMoveItem(null)}
+                onMoveFile={moveFileFromModal}
                 shareItem={shareItem}
                 shareLoading={shareLoading}
                 privateKey={privateKey}

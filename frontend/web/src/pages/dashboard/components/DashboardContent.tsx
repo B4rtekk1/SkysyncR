@@ -1,4 +1,4 @@
-import { useState, type ChangeEvent, type DragEvent, type RefObject } from 'react'
+import { useMemo, useState, type ChangeEvent, type DragEvent, type RefObject } from 'react'
 import type { CurrentUserResponse } from '../../../api/users'
 import type { ApiFile, ApiFolder } from '../../../api/files'
 import { CalendarPanel } from './CalendarPanel'
@@ -73,7 +73,6 @@ type DashboardContentProps = {
     folderTrail: ApiFolder[]
     onOpenRoot: () => void
     onOpenFolderAt: (folder: ApiFolder, index: number) => void
-    onOpenParent: () => void
     error: string | null
     loading: boolean
     visibleItems: Item[]
@@ -110,6 +109,7 @@ type DashboardContentProps = {
     draggedCardId: string | null
     dropTargetId: string | null
     folderDropTargetId: string | null
+    pathDropTargetId: string | null
     selectedFileIds: Set<string>
     selectedFolderIds: Set<string>
     selectedCount: number
@@ -128,6 +128,7 @@ type DashboardContentProps = {
     onRename: (item: Item, filename: string) => Promise<void>
     onShare: (item: Item) => void | Promise<void>
     onNote: (item: Item) => void
+    onMoveFile: (item: Item) => void | Promise<void>
     onToggleFavourite: (id: string) => void | Promise<void>
     onDragStartCard: (id: string, event: DragEvent<HTMLElement>) => void
     onDragEnterCard: (id: string) => void
@@ -138,6 +139,9 @@ type DashboardContentProps = {
     onFileDragEnterFolder: (folderId: string) => void
     onFileDragLeaveFolder: (folderId: string) => void
     onDropFileOnFolder: (folder: ApiFolder, event: DragEvent<HTMLElement>) => void
+    onFileDragEnterPath: (targetFolderId: string | null) => void
+    onFileDragLeavePath: (targetFolderId: string | null) => void
+    onDropFileOnPath: (targetFolderId: string | null, event: DragEvent<HTMLButtonElement>) => void
     onToggleFileSelected: (id: string) => void
     onToggleFolderSelected: (id: string) => void
     onToggleAllVisibleSelected: () => void
@@ -213,7 +217,6 @@ export function DashboardContent({
     folderTrail,
     onOpenRoot,
     onOpenFolderAt,
-    onOpenParent,
     error,
     loading,
     visibleItems,
@@ -250,6 +253,7 @@ export function DashboardContent({
     draggedCardId,
     dropTargetId,
     folderDropTargetId,
+    pathDropTargetId,
     selectedFileIds,
     selectedFolderIds,
     selectedCount,
@@ -268,6 +272,7 @@ export function DashboardContent({
     onRename,
     onShare,
     onNote,
+    onMoveFile,
     onToggleFavourite,
     onDragStartCard,
     onDragEnterCard,
@@ -278,6 +283,9 @@ export function DashboardContent({
     onFileDragEnterFolder,
     onFileDragLeaveFolder,
     onDropFileOnFolder,
+    onFileDragEnterPath,
+    onFileDragLeavePath,
+    onDropFileOnPath,
     onToggleFileSelected,
     onToggleFolderSelected,
     onToggleAllVisibleSelected,
@@ -288,7 +296,24 @@ export function DashboardContent({
     onBulkDownload,
     onBulkMove,
 }: DashboardContentProps) {
-    const [moveTargetId, setMoveTargetId] = useState('__root__')
+    const parentFolder = folderTrail.length > 1 ? folderTrail[folderTrail.length - 2] : null
+    const parentMoveTargetId = parentFolder?.id ?? '__root__'
+    const [moveTargetId, setMoveTargetId] = useState(parentMoveTargetId)
+    const moveTargetOptions = useMemo(() => {
+        const options = [{ id: '__root__', label: folderTrail.length === 1 ? 'Parent folder (All files)' : 'Root folder' }]
+        if (parentFolder) {
+            options.push({ id: parentFolder.id, label: `Parent folder (${parentFolder.name})` })
+        }
+        moveTargets.forEach((folder) => {
+            if (!options.some((option) => option.id === folder.id)) {
+                options.push({ id: folder.id, label: folder.name })
+            }
+        })
+        return options
+    }, [folderTrail.length, moveTargets, parentFolder])
+    const activeMoveTargetId = moveTargetOptions.some((option) => option.id === moveTargetId)
+        ? moveTargetId
+        : parentMoveTargetId
     const isEmpty = visibleItems.length === 0 && renderedItems.length === 0 && visibleFolders.length === 0
     const shownCount = visibleFolders.length + renderedItems.length
     const totalCount = visibleFolders.length + visibleItems.length
@@ -383,7 +408,11 @@ export function DashboardContent({
                     folderTrail={folderTrail}
                     onOpenRoot={onOpenRoot}
                     onOpenFolderAt={onOpenFolderAt}
-                    onOpenParent={onOpenParent}
+                    canAcceptFileDrop={Boolean(draggedCardId)}
+                    dropTargetId={pathDropTargetId}
+                    onFileDragEnter={onFileDragEnterPath}
+                    onFileDragLeave={onFileDragLeavePath}
+                    onFileDrop={onDropFileOnPath}
                 />
             )}
 
@@ -416,21 +445,20 @@ export function DashboardContent({
                             <>
                                 <select
                                     className="bulk-actions__target"
-                                    value={moveTargetId}
+                                    value={activeMoveTargetId}
                                     onChange={(event) => setMoveTargetId(event.target.value)}
                                     aria-label="Move destination"
                                 >
-                                    <option value="__root__">Root folder</option>
-                                    {moveTargets.map((folder) => (
-                                        <option key={folder.id} value={folder.id}>
-                                            {folder.name}
+                                    {moveTargetOptions.map((target) => (
+                                        <option key={target.id} value={target.id}>
+                                            {target.label}
                                         </option>
                                     ))}
                                 </select>
                                 <button
                                     className="btn btn--outline"
                                     type="button"
-                                    onClick={() => void onBulkMove(moveTargetId === '__root__' ? null : moveTargetId)}
+                                    onClick={() => void onBulkMove(activeMoveTargetId === '__root__' ? null : activeMoveTargetId)}
                                 >
                                     Move
                                 </button>
@@ -589,6 +617,7 @@ export function DashboardContent({
                     onRename={onRename}
                     onShare={onShare}
                     onNote={onNote}
+                    onMoveFile={onMoveFile}
                     onToggleFavourite={onToggleFavourite}
                     onDragStartCard={onDragStartCard}
                     onDragEnterCard={onDragEnterCard}

@@ -5,6 +5,7 @@ import {
     DOWNLOAD_ICON,
     INFO_ICON,
     MORE_ICON,
+    MOVE_TO_PARENT_ICON,
     NOTE_ICON,
     PREVIEW_ICON,
     RENAME_ICON,
@@ -33,6 +34,7 @@ type FileCardActionsProps = {
     onDownload?: ((item: Item) => void) | undefined
     onShare?: ((item: Item) => void | Promise<void>) | undefined
     onNote?: ((item: Item) => void) | undefined
+    onMove?: ((item: Item) => void | Promise<void>) | undefined
     onDelete?: ((id: string) => void) | undefined
     onRestore?: ((id: string) => void) | undefined
     onPermanentDelete?: ((id: string) => void) | undefined
@@ -67,6 +69,7 @@ export function FileCardActions({
     onDownload,
     onShare,
     onNote,
+    onMove,
     onDelete,
     onRestore,
     onPermanentDelete,
@@ -101,6 +104,15 @@ export function FileCardActions({
             icon: NOTE_ICON,
             active: Boolean(item.note),
             onSelect: () => onNote?.(item),
+        })
+    }
+
+    if (view === 'all' && onMove) {
+        secondaryActions.push({
+            key: 'move',
+            label: 'Move...',
+            icon: MOVE_TO_PARENT_ICON,
+            onSelect: () => void onMove(item),
         })
     }
 

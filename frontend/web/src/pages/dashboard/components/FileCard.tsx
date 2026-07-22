@@ -31,6 +31,7 @@ export function FileCard({
                       onRename,
                       onShare,
                       onNote,
+                      onMove,
                       view,
                       isFavourite,
                       onToggleFavourite,
@@ -62,6 +63,7 @@ export function FileCard({
     onRename?: ((item: Item, filename: string) => Promise<void>) | undefined
     onShare?: ((item: Item) => void | Promise<void>) | undefined
     onNote?: ((item: Item) => void) | undefined
+    onMove?: ((item: Item) => void | Promise<void>) | undefined
     view: ViewKey
     isFavourite?: boolean
     onToggleFavourite?: ((id: string) => void | Promise<void>) | undefined
@@ -96,12 +98,14 @@ export function FileCard({
     const canRename = Boolean(onRename && !isShared(item) && view !== 'trash' && !pending)
     const canShare = Boolean(onShare && !isShared(item) && view !== 'trash' && !pending)
     const canNote = Boolean(onNote && !isShared(item) && view !== 'trash' && !pending)
+    const canMove = Boolean(onMove && !isShared(item) && view === 'all' && !pending)
     const canDownload = Boolean(onDownload && view !== 'trash')
     const canPreview = Boolean(onPreview && ['image', 'video', 'pdf', 'text', 'code'].includes(kind) && view !== 'trash' && !pending && !isRenaming)
     const hasAction = Boolean(
         canRename ||
             canShare ||
             canNote ||
+            canMove ||
             canDownload ||
             (view === 'all' && onDelete) ||
             (view === 'trash' && (onRestore || onPermanentDelete)) ||
@@ -358,6 +362,7 @@ export function FileCard({
                     onDownload={onDownload}
                     onShare={onShare}
                     onNote={onNote}
+                    onMove={canMove ? onMove : undefined}
                     onDelete={onDelete}
                     onRestore={onRestore}
                     onPermanentDelete={onPermanentDelete}

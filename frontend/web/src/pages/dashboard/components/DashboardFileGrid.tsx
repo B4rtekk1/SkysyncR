@@ -35,6 +35,7 @@ type DashboardFileGridProps = {
     onRename: (item: Item, filename: string) => Promise<void>
     onShare: (item: Item) => void | Promise<void>
     onNote: (item: Item) => void
+    onMoveFile: (item: Item) => void | Promise<void>
     onToggleFavourite: (id: string) => void | Promise<void>
     onDragStartCard: (id: string, e: DragEvent<HTMLElement>) => void
     onDragEnterCard: (id: string) => void
@@ -79,6 +80,7 @@ export function DashboardFileGrid({
     onRename,
     onShare,
     onNote,
+    onMoveFile,
     onToggleFavourite,
     onDragStartCard,
     onDragEnterCard,
@@ -139,6 +141,7 @@ export function DashboardFileGrid({
                         onRename={view === 'all' || view === 'favourites' ? onRename : undefined}
                         onShare={view === 'all' || view === 'favourites' ? onShare : undefined}
                         onNote={view === 'all' || view === 'favourites' ? onNote : undefined}
+                        onMove={view === 'all' ? onMoveFile : undefined}
                         isFavourite={favouriteIds.has(item.id)}
                         onToggleFavourite={view === 'all' || view === 'favourites' ? onToggleFavourite : undefined}
                         draggable={(sortKey === 'manual' || view === 'all' || view === 'favourites') && !pendingIds.has(item.id) && !isSearchExiting}

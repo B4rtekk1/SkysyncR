@@ -202,6 +202,13 @@ export const NOTE_ICON = (
     </svg>
 )
 
+export const MOVE_TO_PARENT_ICON = (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path d="M4.5 7h6l2 2.5h7v8.5a1.5 1.5 0 0 1-1.5 1.5h-12A1.5 1.5 0 0 1 4.5 18V7Z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
+        <path d="M12 15V6.5M8.8 9.7 12 6.5l3.2 3.2" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+)
+
 export const MORE_ICON = (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
         <circle cx="5.5" cy="12" r="1.4" fill="currentColor" />
@@ -301,4 +308,3 @@ export const LIST_VIEW_ICON = (
         <circle cx="4.5" cy="18" r="1.2" fill="currentColor" />
     </svg>
 )
-

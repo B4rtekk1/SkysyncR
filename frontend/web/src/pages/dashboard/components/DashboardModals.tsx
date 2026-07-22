@@ -5,6 +5,7 @@ import { arrayBufferToBase64Url, exportRawKey, unwrapFileKeyForUser } from '../.
 import { CreateFileModal } from './CreateFileModal'
 import { CreateFolderModal } from './CreateFolderModal'
 import { FileNoteModal } from './FileNoteModal'
+import { MoveFileModal } from './MoveFileModal'
 import { hasFileExtension } from '../createdFile'
 import type { FilePreviewState, Group, Item, ShareableItem } from '../types'
 import type { SettingsState } from '../../settingsPreferences'
@@ -45,6 +46,10 @@ type DashboardModalsProps = {
     noteSaving: boolean
     onCloseNote: () => void
     onSaveNote: (item: Item, note: string) => Promise<void>
+    moveItem: Item | null
+    moveSaving: boolean
+    onCloseMove: () => void
+    onMoveFile: (item: Item, folderId: string | null) => Promise<void>
     shareItem: ShareableItem | null
     shareLoading: boolean
     privateKey: CryptoKey | null
@@ -93,6 +98,10 @@ export function DashboardModals({
     noteSaving,
     onCloseNote,
     onSaveNote,
+    moveItem,
+    moveSaving,
+    onCloseMove,
+    onMoveFile,
     shareItem,
     shareLoading,
     privateKey,
@@ -193,6 +202,15 @@ export function DashboardModals({
                     saving={noteSaving}
                     onClose={onCloseNote}
                     onSave={onSaveNote}
+                />
+            )}
+            {moveItem && (
+                <MoveFileModal
+                    item={moveItem}
+                    privateKey={privateKey}
+                    moving={moveSaving}
+                    onClose={onCloseMove}
+                    onMove={onMoveFile}
                 />
             )}
             {shareItem && (
