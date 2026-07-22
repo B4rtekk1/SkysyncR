@@ -487,6 +487,69 @@
     margin-bottom: 0;
 }
 
+.settings-session-list {
+    display: grid;
+    width: 100%;
+    gap: 10px;
+}
+
+.settings-session-item {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    width: 100%;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--panel);
+    padding: 13px;
+}
+
+.settings-session-item span:first-child {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.settings-session-item strong {
+    color: var(--paper);
+    font-size: 0.9rem;
+}
+
+.settings-session-item small {
+    color: var(--mist);
+    font-size: 0.78rem;
+    line-height: 1.4;
+}
+
+.settings-warning {
+    margin: 0;
+    color: var(--paper);
+    font-size: 0.8rem;
+}
+
+.settings-session-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.settings-danger-button {
+    background: var(--amber);
+    border-color: var(--amber);
+    color: #171b20;
+}
+
+.settings-danger-button:hover:not(:disabled) {
+    filter: brightness(1.05);
+}
+
+.settings-danger-button:disabled {
+    cursor: default;
+    opacity: 0.65;
+}
+
 .settings-actions {
     display: flex;
     justify-content: flex-end;
@@ -551,11 +614,13 @@
     }
 
     .settings-profile,
+    .settings-session-actions,
     .settings-actions {
         grid-template-columns: 1fr;
         flex-direction: column-reverse;
     }
 
+    .settings-session-actions .btn,
     .settings-actions .btn {
         width: 100%;
         text-align: center;

@@ -3,7 +3,7 @@ import '../App.css'
 import '../css/Settings.css'
 import ThemeToggle from '../components/ThemeToggle'
 import { useTheme, type ThemePreference } from '../hooks/UseTheme'
-import { logout } from '../api/auth'
+import { logout, logoutAllSessions } from '../api/auth'
 import {
     ApiRequestError,
     changePassword,
@@ -57,6 +57,9 @@ function SettingsModalContent({ currentUser, onClose, onSave }: SettingsModalPro
     const [passwordSaving, setPasswordSaving] = useState(false)
     const [passwordSaved, setPasswordSaved] = useState(false)
     const [passwordError, setPasswordError] = useState<string | null>(null)
+    const [confirmLogoutAll, setConfirmLogoutAll] = useState(false)
+    const [logoutAllSaving, setLogoutAllSaving] = useState(false)
+    const [logoutAllError, setLogoutAllError] = useState<string | null>(null)
     const dialogRef = useRef<HTMLElement>(null)
     const { theme, themePreference, setThemePreference } = useTheme()
     const initials = useMemo(() => {
@@ -239,6 +242,26 @@ function SettingsModalContent({ currentUser, onClose, onSave }: SettingsModalPro
     async function signOut() {
         await logout()
         window.location.href = '/login'
+    }
+
+    async function signOutEverywhere() {
+        setLogoutAllError(null)
+
+        if (!confirmLogoutAll) {
+            setConfirmLogoutAll(true)
+            return
+        }
+
+        setLogoutAllSaving(true)
+        try {
+            await logoutAllSessions()
+            window.location.href = '/login'
+        } catch {
+            setLogoutAllError('Could not sign out all sessions. Try again.')
+            setConfirmLogoutAll(false)
+        } finally {
+            setLogoutAllSaving(false)
+        }
     }
 
     return (
@@ -528,13 +551,47 @@ function SettingsModalContent({ currentUser, onClose, onSave }: SettingsModalPro
                             <div className="settings-panel__head">
                                 <div>
                                     <p className="settings-kicker">Session</p>
-                                    <h2>Access</h2>
+                                    <h2>Devices and sessions</h2>
                                 </div>
                             </div>
-                            <p className="settings-muted">Sign out on this device and end the active session.</p>
-                            <button className="btn btn--outline" type="button" onClick={signOut}>
-                                Sign out
-                            </button>
+                            <div className="settings-session-list">
+                                <div className="settings-session-item">
+                                    <span>
+                                        <strong>Current browser</strong>
+                                        <small>This device can access your encrypted vault until you sign out.</small>
+                                    </span>
+                                    <span className="settings-badge">Active</span>
+                                </div>
+                                <div className="settings-session-item">
+                                    <span>
+                                        <strong>Other devices</strong>
+                                        <small>End refresh sessions on every browser and device signed in to this account.</small>
+                                    </span>
+                                </div>
+                            </div>
+                            {confirmLogoutAll && (
+                                <p className="settings-warning">
+                                    Click again to sign out everywhere, including this browser.
+                                </p>
+                            )}
+                            {logoutAllError && <p className="settings-error">{logoutAllError}</p>}
+                            <div className="settings-session-actions">
+                                <button className="btn btn--outline" type="button" onClick={signOut}>
+                                    Sign out this device
+                                </button>
+                                <button
+                                    className="btn btn--solid settings-danger-button"
+                                    type="button"
+                                    onClick={signOutEverywhere}
+                                    disabled={logoutAllSaving}
+                                >
+                                    {logoutAllSaving
+                                        ? 'Signing out...'
+                                        : confirmLogoutAll
+                                            ? 'Confirm sign out everywhere'
+                                            : 'Sign out everywhere'}
+                                </button>
+                            </div>
                         </section>
                     </div>
 

@@ -194,6 +194,17 @@ export async function logout(): Promise<void> {
   clearTokens()
 }
 
+export async function logoutAllSessions(): Promise<void> {
+  try {
+    await apiFetch(`${API_BASE}users/logout-all`, {
+      method: 'POST',
+    })
+  } finally {
+    await clearActivePrivateKeys()
+    clearTokens()
+  }
+}
+
 export async function authenticatedFetch(
   input: RequestInfo | URL,
   init: RequestInit = {},
