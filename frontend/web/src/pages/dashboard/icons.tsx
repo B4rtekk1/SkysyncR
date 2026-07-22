@@ -222,6 +222,12 @@ export const CANCEL_ICON = (
     </svg>
 )
 
+export const CLOSE_ICON = (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path d="m7 7 10 10M17 7 7 17" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+    </svg>
+)
+
 export const SETTINGS_ICON = (
     <svg
         width="17"
@@ -295,5 +301,4 @@ export const LIST_VIEW_ICON = (
         <circle cx="4.5" cy="18" r="1.2" fill="currentColor" />
     </svg>
 )
-
 

@@ -11,7 +11,7 @@ import {
 import { listGroupShareRecipients } from '../../../api/groups'
 import { unwrapFileKeyForUser, wrapFileKeyForUser } from '../../../crypto/fileEncryption'
 import { useModalA11y } from '../../../hooks/useModalA11y'
-import { COPY_ICON } from '../icons'
+import { CLOSE_ICON, COPY_ICON } from '../icons'
 import { createQrPath } from '../qr'
 import { DEFAULT_SHARE_DURATION_SECONDS, PermissionDropdown, ShareDurationDropdown } from './shareControls'
 import type { Group, GroupInviteRole, ShareableItem } from '../types'
@@ -310,7 +310,7 @@ export function ShareFileModal({
                         <h2 id="share-title">{title}</h2>
                     </div>
                     <button className="image-preview__close" type="button" onClick={onClose} aria-label="Close share dialog">
-                        x
+                        {CLOSE_ICON}
                     </button>
                 </header>
 

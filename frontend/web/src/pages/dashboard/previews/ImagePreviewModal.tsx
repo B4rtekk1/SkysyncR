@@ -1,6 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import '../../../css/dashboard/preview-image.css'
-import { CANCEL_ICON, CHECK_ICON, DOWNLOAD_ICON, RENAME_ICON } from '../icons'
+import { CANCEL_ICON, CHECK_ICON, CLOSE_ICON, DOWNLOAD_ICON, RENAME_ICON } from '../icons'
 import type { FilePreviewState, Item } from '../types'
 import { formatBytes } from '../fileUtils'
 import { TextFileCopyButton, TextFileEditor, TextFilePreview, TextFilePreviewModeToggle } from './TextFilePreview'
@@ -211,7 +211,7 @@ export function ImagePreviewModal({
                             aria-label="Close preview"
                             title="Close"
                         >
-                            x
+                            {CLOSE_ICON}
                         </button>
                     </div>
                 </div>

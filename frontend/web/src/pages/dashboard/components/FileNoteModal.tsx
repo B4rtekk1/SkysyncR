@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { CANCEL_ICON, CHECK_ICON } from '../icons'
+import { CANCEL_ICON, CHECK_ICON, CLOSE_ICON } from '../icons'
 import { TextFileEditor } from '../previews/TextFilePreview'
 import type { Item } from '../types'
 
@@ -77,7 +77,7 @@ export function FileNoteModal({ item, saving, onClose, onSave }: FileNoteModalPr
                             aria-label="Close preview"
                             title="Close"
                         >
-                            x
+                            {CLOSE_ICON}
                         </button>
                     </div>
                 </div>

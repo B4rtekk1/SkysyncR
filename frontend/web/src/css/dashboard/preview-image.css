@@ -121,6 +121,11 @@
     transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
 }
 
+.image-preview__close svg {
+    display: block;
+    flex: 0 0 auto;
+}
+
 .image-preview__close:hover,
 .image-preview__close:focus-visible {
     border-color: var(--signal);
