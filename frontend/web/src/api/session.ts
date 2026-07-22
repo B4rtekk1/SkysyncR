@@ -11,10 +11,20 @@ type GetUnlockedVaultSessionOptions = {
   allowRefresh?: boolean
 }
 
+let cachedUnlockedSession: UnlockedVaultSession | null = null
+
+export function setUnlockedVaultSession(session: UnlockedVaultSession | null) {
+  cachedUnlockedSession = session
+}
+
 export async function getUnlockedVaultSession(
   options: GetUnlockedVaultSessionOptions = {},
 ): Promise<UnlockedVaultSession | null> {
   const allowRefresh = options.allowRefresh ?? true
+  if (cachedUnlockedSession && getAccessToken()) {
+    return cachedUnlockedSession
+  }
+
   const token = allowRefresh ? await getValidAccessToken() : getAccessToken()
   if (!token) return null
 
@@ -23,5 +33,6 @@ export async function getUnlockedVaultSession(
 
   if (!privateKey) return null
 
-  return { user, privateKey }
+  cachedUnlockedSession = { user, privateKey }
+  return cachedUnlockedSession
 }

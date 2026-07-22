@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import {
     getStorageQuota,
     listFiles,
@@ -13,6 +13,10 @@ import { applySavedOrder, clearLegacyLocalFileMetadata, loadFavouriteIds } from 
 import { decryptFilesMetadata, decryptFoldersMetadata } from '../encryptedMetadata'
 import { migratePlaintextFileMetadata } from '../metadataMigration'
 import type { Item, ViewKey } from '../types'
+
+type RefreshQuotaOptions = {
+    includeFiles?: boolean
+}
 
 type UseDashboardDataOptions = {
     view: ViewKey
@@ -30,26 +34,47 @@ export function useDashboardData({ view, activeFolderId, privateKey }: UseDashbo
     const [storageItems, setStorageItems] = useState<ApiFile[]>([])
     const [favouriteIds, setFavouriteIds] = useState<Set<string>>(() => loadFavouriteIds())
     const [folderFavouriteIds, setFolderFavouriteIds] = useState<Set<string>>(new Set())
+    const migratedMetadataIdsRef = useRef<Set<string>>(new Set())
 
-    const refreshQuota = useCallback(async () => {
+    const scheduleMetadataMigration = useCallback((files: ApiFile[], key: CryptoKey) => {
+        const pendingFiles = files.filter((file) => !migratedMetadataIdsRef.current.has(file.id))
+        if (pendingFiles.length === 0) return
+
+        for (const file of pendingFiles) {
+            migratedMetadataIdsRef.current.add(file.id)
+        }
+
+        window.setTimeout(() => {
+            void migratePlaintextFileMetadata(pendingFiles, key)
+        }, 1000)
+    }, [])
+
+    const refreshQuota = useCallback(async (options: RefreshQuotaOptions = {}) => {
+        const includeFiles = options.includeFiles ?? true
+
         try {
+            if (!includeFiles) {
+                setQuota(await getStorageQuota())
+                return
+            }
+
             const [quotaData, fileData] = await Promise.all([getStorageQuota(), listFiles()])
             const visibleFileData = privateKey ? await decryptFilesMetadata(fileData, privateKey) : fileData
-            if (privateKey) void migratePlaintextFileMetadata(fileData, privateKey)
+            if (privateKey) scheduleMetadataMigration(fileData, privateKey)
             setQuota(quotaData)
             setStorageItems(visibleFileData)
             setFavouriteIds(new Set(fileData.filter((file) => file.is_favourite).map((file) => file.id)))
         } catch {
             setQuota(null)
         }
-    }, [privateKey])
+    }, [privateKey, scheduleMetadataMigration])
 
     useEffect(() => {
         clearLegacyLocalFileMetadata()
     }, [])
 
     useEffect(() => {
-        const timeout = setTimeout(() => void refreshQuota(), 0)
+        const timeout = setTimeout(() => void refreshQuota({ includeFiles: false }), 0)
         return () => clearTimeout(timeout)
     }, [refreshQuota])
 
@@ -100,7 +125,7 @@ export function useDashboardData({ view, activeFolderId, privateKey }: UseDashbo
                         decryptFilesMetadata(fileData, privateKey),
                         decryptFoldersMetadata(folderData, privateKey),
                     ])
-                    if (view !== 'shared') void migratePlaintextFileMetadata(fileData, privateKey)
+                    if (view !== 'shared') scheduleMetadataMigration(fileData, privateKey)
                     setItems(applySavedOrder(visibleFileData, view))
                     setFolders(visibleFolderData)
                     if (view === 'all' || view === 'favourites') {
@@ -121,7 +146,7 @@ export function useDashboardData({ view, activeFolderId, privateKey }: UseDashbo
         return () => {
             active = false
         }
-    }, [activeFolderId, privateKey, view])
+    }, [activeFolderId, privateKey, scheduleMetadataMigration, view])
 
     function handleFileUpdated(updated: ApiFile) {
         const previousSize = storageItems.find((item) => item.id === updated.id)?.size_bytes ?? updated.size_bytes

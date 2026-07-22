@@ -1,7 +1,7 @@
 import { type SubmitEvent, useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { clearTokens } from '../../api/auth.ts'
-import { getUnlockedVaultSession } from '../../api/session.ts'
+import { getUnlockedVaultSession, setUnlockedVaultSession } from '../../api/session.ts'
 import { ApiRequestError, getCurrentUser, loginUser, resendVerificationEmail } from '../../api/users.ts'
 import { isNetworkError } from '../../api/http.ts'
 import {
@@ -202,6 +202,7 @@ function LoginForm() {
       }
 
       await storeActivePrivateKey(user.id, privateKey)
+      setUnlockedVaultSession({ user, privateKey })
 
       clearPendingVerificationEmail()
       setPendingVerificationEmail(null)
