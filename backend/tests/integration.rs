@@ -565,7 +565,7 @@ async fn file_share_permissions_gate_download_access() {
 }
 
 #[tokio::test]
-async fn file_share_write_permission_gates_mutations_and_preserves_owner_key() {
+async fn file_share_write_permission_gates_metadata_and_blocks_content_updates() {
     let (_guard, pool) = test_pool().await;
     let owner_id = insert_user(&pool, "write-owner@example.test").await;
     let read_user_id = insert_user(&pool, "readonly-writer@example.test").await;
@@ -631,9 +631,8 @@ async fn file_share_write_permission_gates_mutations_and_preserves_owner_key() {
     let mut write_tx = pool.begin().await.unwrap();
     let write_target = get_user_file_for_content_update_in_tx(&mut write_tx, writer_id, file.id)
         .await
-        .unwrap()
-        .expect("writer can lock file for update");
-    assert_eq!(write_target.owner_id, owner_id);
+        .unwrap();
+    assert!(write_target.is_none());
 
     let updated = update_user_file_content(
         &mut write_tx,
@@ -646,21 +645,23 @@ async fn file_share_write_permission_gates_mutations_and_preserves_owner_key() {
         Some("checksum-v2".to_string()),
     )
     .await
-    .unwrap()
-    .expect("writer can update content");
+    .unwrap();
     write_tx.commit().await.unwrap();
+    assert!(updated.is_none());
 
-    assert_eq!(updated.size_bytes, 24);
-    assert_eq!(updated.encrypted_key, b"owner-wrapped-key");
-    assert_eq!(updated.encryption_nonce, b"nonce-v2");
-
-    let stored_owner_key =
-        sqlx::query_scalar::<_, Vec<u8>>("SELECT encrypted_key FROM files WHERE id = $1")
+    let stored =
+        sqlx::query_as::<_, (String, i64, Vec<u8>, Vec<u8>, Option<String>)>(
+            "SELECT storage_path, size_bytes, encrypted_key, encryption_nonce, checksum FROM files WHERE id = $1",
+        )
             .bind(file.id)
             .fetch_one(&pool)
             .await
             .unwrap();
-    assert_eq!(stored_owner_key, b"owner-wrapped-key");
+    assert_eq!(stored.0, "draft-v1.txt.enc");
+    assert_eq!(stored.1, 12);
+    assert_eq!(stored.2, b"owner-wrapped-key");
+    assert_eq!(stored.3, b"nonce");
+    assert_eq!(stored.4.as_deref(), Some("checksum-v1"));
 }
 
 #[tokio::test]

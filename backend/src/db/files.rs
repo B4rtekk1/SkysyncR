@@ -192,16 +192,7 @@ pub async fn get_user_file_for_content_update_in_tx(
         SELECT owner_id, storage_path, size_bytes, checksum, encrypted_key, encryption_nonce
         FROM files
         WHERE id = $1
-          AND (
-              owner_id = $2
-              OR EXISTS (
-                  SELECT 1
-                  FROM file_shares fs
-                  WHERE fs.file_id = files.id
-                    AND fs.recipient_user_id = $2
-                    AND fs.permission = 'write'
-              )
-          )
+          AND owner_id = $2
           AND is_deleted = FALSE
         FOR UPDATE
         "#,
@@ -919,21 +910,12 @@ pub async fn update_user_file_content(
         UPDATE files
         SET storage_path = $1,
             size_bytes = $2,
-            encrypted_key = CASE WHEN owner_id = $7 THEN $3 ELSE encrypted_key END,
+            encrypted_key = $3,
             encryption_nonce = $4,
             checksum = $5,
             updated_at = NOW()
         WHERE id = $6
-          AND (
-              owner_id = $7
-              OR EXISTS (
-                  SELECT 1
-                  FROM file_shares fs
-                  WHERE fs.file_id = files.id
-                    AND fs.recipient_user_id = $7
-                    AND fs.permission = 'write'
-              )
-          )
+          AND owner_id = $7
           AND is_deleted = FALSE
         RETURNING
             id,

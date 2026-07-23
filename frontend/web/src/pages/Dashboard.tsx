@@ -291,13 +291,15 @@ function Dashboard() {
     const {
         draggedCardId,
         dropTargetId,
+        dropTargetPosition,
         handleCardDragStart,
         handleCardDragEnter,
+        handleCardDragOver,
         handleCardDragLeave,
         handleCardDrop,
         handleCardDragEnd,
         moveCardByKeyboard,
-    } = useManualCardOrdering({ sortKey, view, setItems })
+    } = useManualCardOrdering({ sortKey, setSortKey, view, setItems })
     const {
         folderTrail,
         folderCreateOpen,
@@ -787,6 +789,7 @@ function Dashboard() {
                     onDeleteGroup={deleteGroup}
                     draggedCardId={draggedCardId}
                     dropTargetId={dropTargetId}
+                    dropTargetPosition={dropTargetPosition}
                     folderDropTargetId={folderDropTargetId}
                     pathDropTargetId={pathDropTargetId}
                     selectedFileIds={selectedFileIds}
@@ -815,6 +818,7 @@ function Dashboard() {
                     onRemoveTagFromFile={removeTagFromFile}
                     onDragStartCard={handleCardDragStart}
                     onDragEnterCard={handleCardDragEnter}
+                    onDragOverCard={handleCardDragOver}
                     onDragLeaveCard={handleCardDragLeave}
                     onDropCard={handleCardDrop}
                     onDragEndCard={endFileCardDrag}

@@ -18,6 +18,21 @@ where
 }
 
 #[derive(FromRow, Serialize)]
+pub struct FolderShareRecord {
+    pub id: Uuid,
+    pub email: String,
+    pub display_name: Option<String>,
+    pub permission: String,
+    pub created_at: DateTime<Utc>,
+}
+
+#[derive(FromRow, Serialize)]
+pub struct FolderShareRecipientRecord {
+    pub email: String,
+    pub public_key: String,
+}
+
+#[derive(FromRow, Serialize)]
 pub struct FolderRecord {
     pub id: Uuid,
     pub name: String,
@@ -40,6 +55,14 @@ pub struct NewFolderRecord {
     pub name: String,
     pub description: Option<String>,
     pub parent_folder_id: Option<Uuid>,
+    pub encrypted_key: Vec<u8>,
+}
+
+pub struct NewFolderShare {
+    pub owner_id: Uuid,
+    pub folder_id: Uuid,
+    pub recipient_email: String,
+    pub permission: String,
     pub encrypted_key: Vec<u8>,
 }
 
@@ -260,6 +283,136 @@ pub async fn update_user_folder_share(
     .bind(user_id)
     .fetch_optional(pool)
     .await
+}
+
+pub async fn get_folder_share_recipient(
+    pool: &PgPool,
+    owner_id: Uuid,
+    folder_id: Uuid,
+    email: &str,
+) -> Result<Option<FolderShareRecipientRecord>, sqlx::Error> {
+    sqlx::query_as::<_, FolderShareRecipientRecord>(
+        r#"
+        SELECT recipient.email, recipient.public_key
+        FROM folders f
+        JOIN users recipient ON recipient.email = $3
+        WHERE f.id = $1
+          AND f.owner_id = $2
+          AND f.is_deleted = FALSE
+          AND recipient.is_active = TRUE
+          AND recipient.public_key IS NOT NULL
+          AND recipient.id <> $2
+        "#,
+    )
+    .bind(folder_id)
+    .bind(owner_id)
+    .bind(email)
+    .fetch_optional(pool)
+    .await
+}
+
+pub async fn list_user_folder_shares(
+    pool: &PgPool,
+    owner_id: Uuid,
+    folder_id: Uuid,
+) -> Result<Vec<FolderShareRecord>, sqlx::Error> {
+    sqlx::query_as::<_, FolderShareRecord>(
+        r#"
+        SELECT
+            fs.id,
+            recipient.email,
+            recipient.display_name,
+            fs.permission,
+            fs.created_at
+        FROM folder_shares fs
+        JOIN folders f ON f.id = fs.folder_id
+        JOIN users recipient ON recipient.id = fs.recipient_user_id
+        WHERE fs.folder_id = $1
+          AND fs.owner_id = $2
+          AND f.owner_id = $2
+          AND f.is_deleted = FALSE
+        ORDER BY fs.created_at DESC
+        "#,
+    )
+    .bind(folder_id)
+    .bind(owner_id)
+    .fetch_all(pool)
+    .await
+}
+
+pub async fn upsert_user_folder_share(
+    pool: &PgPool,
+    share: NewFolderShare,
+) -> Result<Option<FolderShareRecord>, sqlx::Error> {
+    sqlx::query_as::<_, FolderShareRecord>(
+        r#"
+        WITH target AS (
+            SELECT f.id AS folder_id, recipient.id AS recipient_user_id
+            FROM folders f
+            JOIN users recipient ON recipient.email = $3
+            WHERE f.id = $2
+              AND f.owner_id = $1
+              AND f.is_deleted = FALSE
+              AND recipient.is_active = TRUE
+              AND recipient.id <> $1
+        ),
+        upserted AS (
+            INSERT INTO folder_shares (
+                folder_id,
+                owner_id,
+                recipient_user_id,
+                permission,
+                encrypted_key
+            )
+            SELECT folder_id, $1, recipient_user_id, $4, $5
+            FROM target
+            ON CONFLICT (folder_id, recipient_user_id)
+            DO UPDATE SET
+                permission = EXCLUDED.permission,
+                encrypted_key = EXCLUDED.encrypted_key,
+                updated_at = NOW()
+            RETURNING id, recipient_user_id, permission, created_at
+        )
+        SELECT
+            upserted.id,
+            recipient.email,
+            recipient.display_name,
+            upserted.permission,
+            upserted.created_at
+        FROM upserted
+        JOIN users recipient ON recipient.id = upserted.recipient_user_id
+        "#,
+    )
+    .bind(share.owner_id)
+    .bind(share.folder_id)
+    .bind(share.recipient_email)
+    .bind(share.permission)
+    .bind(share.encrypted_key)
+    .fetch_optional(pool)
+    .await
+}
+
+pub async fn delete_user_folder_share(
+    pool: &PgPool,
+    owner_id: Uuid,
+    folder_id: Uuid,
+    share_id: Uuid,
+) -> Result<u64, sqlx::Error> {
+    let result = sqlx::query(
+        r#"
+        DELETE FROM folder_shares
+        WHERE id = $1
+          AND folder_id = $2
+          AND owner_id = $3
+        "#,
+    )
+    .bind(share_id)
+    .bind(folder_id)
+    .bind(owner_id)
+    .execute(pool)
+    .await?;
+
+    Ok(result.rows_affected())
 }
 
 pub async fn rename_user_folder(

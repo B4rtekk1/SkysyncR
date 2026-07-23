@@ -82,7 +82,11 @@ fn cors_layer() -> CorsLayer {
             Method::DELETE,
             Method::OPTIONS,
         ])
-        .allow_headers([header::AUTHORIZATION, header::CONTENT_TYPE])
+        .allow_headers([
+            header::AUTHORIZATION,
+            header::CONTENT_TYPE,
+            HeaderName::from_static("upload-offset"),
+        ])
         .expose_headers([
             header::CONTENT_TYPE,
             header::CONTENT_DISPOSITION,

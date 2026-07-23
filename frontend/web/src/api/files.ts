@@ -105,6 +105,49 @@ export async function listFileShares(fileId: string): Promise<FileSharePerson[]>
     return readJson(res, fileShares, 'FileShare[]')
 }
 
+export async function getFolderShareRecipient(folderId: string, email: string): Promise<FileShareRecipient> {
+    const res = await authenticatedFetch(
+        `${API_BASE}folders/${folderId}/shares/recipient?email=${encodeURIComponent(email)}`,
+        { method: 'GET' },
+    )
+    if (!res.ok) throw new Error(await parseErrorMessage(res))
+    return readJson(res, shareRecipient, 'ShareRecipient')
+}
+
+export async function listFolderShares(folderId: string): Promise<FileSharePerson[]> {
+    const res = await authenticatedFetch(`${API_BASE}folders/${folderId}/shares`, { method: 'GET' })
+    if (!res.ok) throw new Error(await parseErrorMessage(res))
+    return readJson(res, fileShares, 'FolderShare[]')
+}
+
+export async function createFolderShare(params: {
+    folderId: string
+    email: string
+    permission: FileSharePermission
+    encryptedKey: ArrayBuffer | Uint8Array
+}): Promise<FileSharePerson> {
+    const res = await authenticatedFetch(`${API_BASE}folders/${params.folderId}/shares`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            email: params.email,
+            permission: params.permission,
+            encrypted_key: arrayBufferToBase64(params.encryptedKey),
+        }),
+    })
+    if (!res.ok) throw new Error(await parseErrorMessage(res))
+    return readJson(res, fileShare, 'FolderShare')
+}
+
+export async function deleteFolderShare(folderId: string, shareId: string): Promise<void> {
+    const res = await authenticatedFetch(`${API_BASE}folders/${folderId}/shares/${shareId}`, {
+        method: 'DELETE',
+    })
+    if (!res.ok) throw new Error(await parseErrorMessage(res))
+}
+
 export async function createFileShare(params: {
     fileId: string
     email: string

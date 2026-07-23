@@ -1,9 +1,13 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import '../../../css/dashboard/sharing.css'
 import {
+    createFolderShare,
     createFileShare,
+    deleteFolderShare,
     deleteFileShare,
+    getFolderShareRecipient,
     getFileShareRecipient,
+    listFolderShares,
     listFileShares,
     type FileSharePermission,
     type FileSharePerson,
@@ -124,17 +128,11 @@ export function ShareFileModal({
 
     useEffect(() => {
         let active = true
-        if (!isFileShare) {
-            return () => {
-                active = false
-            }
-        }
-
         async function loadPeople() {
             setPeopleLoading(true)
             setError(null)
             try {
-                const shares = await listFileShares(item.id)
+                const shares = isFileShare ? await listFileShares(item.id) : await listFolderShares(item.id)
                 if (active) setPeople(shares.map(toSharePerson))
             } catch (e) {
                 if (active) setError(e instanceof Error ? e.message : 'Could not load shared people.')
@@ -162,20 +160,31 @@ export function ShareFileModal({
     }
 
     async function savePerson(email: string, permission: FileSharePermission) {
-        if (!isFileShare) return null
         if (!privateKey) {
-            throw new Error('Private key is locked. Sign in again to share encrypted files.')
+            throw new Error(`Private key is locked. Sign in again to share encrypted ${itemKind}s.`)
+        }
+        if (!item.encrypted_key) {
+            throw new Error(`This ${itemKind} is missing an encryption key.`)
         }
 
-        const recipient = await getFileShareRecipient(item.id, email)
-        const fileKey = await unwrapFileKeyForUser(item.encrypted_key, privateKey)
-        const wrappedKey = await wrapFileKeyForUser(fileKey, recipient.public_key)
-        return createFileShare({
-            fileId: item.id,
-            email: recipient.email,
-            permission,
-            encryptedKey: wrappedKey,
-        })
+        const recipient = isFileShare
+            ? await getFileShareRecipient(item.id, email)
+            : await getFolderShareRecipient(item.id, email)
+        const itemKey = await unwrapFileKeyForUser(item.encrypted_key, privateKey)
+        const wrappedKey = await wrapFileKeyForUser(itemKey, recipient.public_key)
+        return isFileShare
+            ? createFileShare({
+                  fileId: item.id,
+                  email: recipient.email,
+                  permission,
+                  encryptedKey: wrappedKey,
+              })
+            : createFolderShare({
+                  folderId: item.id,
+                  email: recipient.email,
+                  permission,
+                  encryptedKey: wrappedKey,
+              })
     }
 
     async function addPerson() {
@@ -210,14 +219,17 @@ export function ShareFileModal({
     }
 
     async function addGroup() {
-        if (!isFileShare) return
         const group = groups.find((current) => current.id === selectedGroupId)
         if (!group) {
             setError('Choose a group to share with.')
             return
         }
         if (!privateKey) {
-            setError('Private key is locked. Sign in again to share encrypted files.')
+            setError(`Private key is locked. Sign in again to share encrypted ${itemKind}s.`)
+            return
+        }
+        if (!item.encrypted_key) {
+            setError(`This ${itemKind} is missing an encryption key.`)
             return
         }
 
@@ -230,16 +242,23 @@ export function ShareFileModal({
                 return
             }
 
-            const fileKey = await unwrapFileKeyForUser(item.encrypted_key, privateKey)
+            const itemKey = await unwrapFileKeyForUser(item.encrypted_key, privateKey)
             const savedPeople = await Promise.all(
                 recipients.map(async (recipient) => {
-                    const wrappedKey = await wrapFileKeyForUser(fileKey, recipient.public_key)
-                    return createFileShare({
-                        fileId: item.id,
-                        email: recipient.email,
-                        permission: roleToPermission(recipient.role),
-                        encryptedKey: wrappedKey,
-                    })
+                    const wrappedKey = await wrapFileKeyForUser(itemKey, recipient.public_key)
+                    return isFileShare
+                        ? createFileShare({
+                              fileId: item.id,
+                              email: recipient.email,
+                              permission: roleToPermission(recipient.role),
+                              encryptedKey: wrappedKey,
+                          })
+                        : createFolderShare({
+                              folderId: item.id,
+                              email: recipient.email,
+                              permission: roleToPermission(recipient.role),
+                              encryptedKey: wrappedKey,
+                          })
                 }),
             )
 
@@ -279,11 +298,14 @@ export function ShareFileModal({
     }
 
     async function removePerson(person: SharePerson) {
-        if (!isFileShare) return
         setError(null)
         setPeopleSaving(true)
         try {
-            await deleteFileShare(item.id, person.id)
+            if (isFileShare) {
+                await deleteFileShare(item.id, person.id)
+            } else {
+                await deleteFolderShare(item.id, person.id)
+            }
             setPeople((current) => current.filter((currentPerson) => currentPerson.id !== person.id))
         } catch (e) {
             setError(e instanceof Error ? e.message : 'Could not remove access.')
@@ -411,7 +433,7 @@ export function ShareFileModal({
                             <select
                                 value={selectedGroupId}
                                 onChange={(event) => setSelectedGroupId(event.target.value)}
-                                disabled={groupSharing || !isFileShare || groups.length === 0}
+                                disabled={groupSharing || groups.length === 0}
                                 aria-label="Group"
                             >
                                 <option value="">Choose group</option>
@@ -425,7 +447,7 @@ export function ShareFileModal({
                                 className="btn btn--outline"
                                 type="button"
                                 onClick={() => void addGroup()}
-                                disabled={groupSharing || !isFileShare || !selectedGroupId}
+                                disabled={groupSharing || !selectedGroupId}
                             >
                                 {groupSharing ? 'Sharing' : 'Share with group'}
                             </button>
@@ -443,14 +465,12 @@ export function ShareFileModal({
                                 value={permissionDraft}
                                 onChange={setPermissionDraft}
                             />
-                            <button className="btn btn--solid" type="button" onClick={() => void addPerson()} disabled={peopleSaving || !isFileShare}>
+                            <button className="btn btn--solid" type="button" onClick={() => void addPerson()} disabled={peopleSaving}>
                                 {peopleSaving ? 'Saving' : 'Add'}
                             </button>
                         </div>
                         <div className="share-modal__people-list">
-                            {!isFileShare ? (
-                                <p className="share-modal__empty">Account sharing is available for files.</p>
-                            ) : peopleLoading ? (
+                            {peopleLoading ? (
                                 <p className="share-modal__empty">Loading people...</p>
                             ) : people.length === 0 ? (
                                 <p className="share-modal__empty">Add account email addresses to grant explicit permissions.</p>

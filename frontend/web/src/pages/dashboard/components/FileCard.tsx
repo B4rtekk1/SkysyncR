@@ -11,6 +11,7 @@ import { FileCardActions } from './FileCardActions'
 import { FileCardHeader } from './FileCardHeader'
 import { FileInfoPopover, type InfoPopoverPosition } from './FileInfoPopover'
 import { FileRenameInput } from './FileRenameInput'
+import type { FileCardDropPosition } from '../hooks/useManualCardOrdering'
 import { DRAG_HANDLE_ICON, STAR_ICON_FILLED, STAR_ICON_OUTLINE } from '../icons'
 import type { Item, ViewKey } from '../types'
 import { KIND_LABELS, formatBytes, formatRelative, kindFromFile, useDecryptReveal } from '../fileUtils'
@@ -44,13 +45,14 @@ export function FileCard({
                       draggable,
                       reorderable,
                       isDragging,
-                      isDropTarget,
+                      dropPosition,
                       isSearchExiting,
                       selected,
                       onToggleSelected,
                       style,
                       onDragStartCard,
                       onDragEnterCard,
+                      onDragOverCard,
                       onDragLeaveCard,
                       onDropCard,
                       onDragEndCard,
@@ -81,13 +83,14 @@ export function FileCard({
     draggable?: boolean
     reorderable?: boolean
     isDragging?: boolean
-    isDropTarget?: boolean
+    dropPosition?: FileCardDropPosition | undefined
     isSearchExiting?: boolean
     selected?: boolean
     onToggleSelected?: ((id: string) => void) | undefined
     style?: CSSProperties
     onDragStartCard?: ((id: string, e: DragEvent<HTMLElement>) => void) | undefined
     onDragEnterCard?: ((id: string) => void) | undefined
+    onDragOverCard?: ((id: string, e: DragEvent<HTMLElement>) => void) | undefined
     onDragLeaveCard?: ((id: string) => void) | undefined
     onDropCard?: ((id: string, e: DragEvent<HTMLElement>) => void) | undefined
     onDragEndCard?: (() => void) | undefined
@@ -283,7 +286,7 @@ export function FileCard({
                 canToggleFavourite ? 'file-card--has-favourite' : ''
             } ${
                 hasAction ? 'file-card--has-action' : ''
-            } ${shared ? 'file-card--shared' : ''} ${item.is_public ? 'file-card--public' : ''} ${item.note ? 'file-card--has-note' : ''} ${selected ? 'is-selected' : ''} ${pending ? 'file-card--pending' : ''} ${isDragging ? 'is-dragging-card' : ''} ${isDropTarget ? 'is-drop-target' : ''} ${
+            } ${shared ? 'file-card--shared' : ''} ${item.is_public ? 'file-card--public' : ''} ${item.note ? 'file-card--has-note' : ''} ${selected ? 'is-selected' : ''} ${pending ? 'file-card--pending' : ''} ${isDragging ? 'is-dragging-card' : ''} ${dropPosition ? `is-drop-target is-drop-${dropPosition}` : ''} ${
                 isSearchExiting ? 'is-search-exiting' : ''
             }`}
             data-file-kind={kind}
@@ -307,7 +310,10 @@ export function FileCard({
                 e.preventDefault()
                 onDragEnterCard?.(item.id)
             }}
-            onDragOver={(e) => e.preventDefault()}
+            onDragOver={(e) => {
+                e.preventDefault()
+                onDragOverCard?.(item.id, e)
+            }}
             onDragLeave={() => onDragLeaveCard?.(item.id)}
             onDrop={(e) => {
                 e.preventDefault()

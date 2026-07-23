@@ -9,10 +9,12 @@ use uuid::Uuid;
 
 use crate::auth::AuthUser;
 use crate::db::folders::{
-    FolderRecord, NewFolderRecord, add_user_folder_favourite, create_folder_record,
-    folder_belongs_to_user, folder_is_descendant_of, list_user_favourite_folders,
-    list_user_folders, move_user_folder, remove_user_folder_favourite, rename_user_folder,
-    restore_user_folder, soft_delete_user_folder, update_user_folder_share, user_folder_exists,
+    FolderRecord, FolderShareRecipientRecord, FolderShareRecord, NewFolderRecord, NewFolderShare,
+    add_user_folder_favourite, create_folder_record, delete_user_folder_share,
+    folder_belongs_to_user, folder_is_descendant_of, get_folder_share_recipient,
+    list_user_favourite_folders, list_user_folder_shares, list_user_folders, move_user_folder,
+    remove_user_folder_favourite, rename_user_folder, restore_user_folder, soft_delete_user_folder,
+    update_user_folder_share, upsert_user_folder_share, user_folder_exists,
 };
 use crate::services::trash::permanently_delete_user_folder;
 use crate::state::AppState;
@@ -38,6 +40,18 @@ pub struct CreateFolderRequest {
 #[derive(Deserialize)]
 pub struct ShareFolderRequest {
     pub is_public: bool,
+}
+
+#[derive(Deserialize)]
+pub struct ShareRecipientQuery {
+    pub email: String,
+}
+
+#[derive(Deserialize)]
+pub struct CreateFolderShareRequest {
+    pub email: String,
+    pub permission: String,
+    pub encrypted_key: String,
 }
 
 #[derive(Deserialize)]
@@ -131,6 +145,77 @@ pub async fn share_folder(
     .ok_or_else(|| ApiError::BadRequest("Folder not found".into()))?;
 
     Ok(Json(folder))
+}
+
+pub async fn get_folder_share_recipient_profile(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Path(folder_id): Path<Uuid>,
+    Query(query): Query<ShareRecipientQuery>,
+) -> Result<Json<FolderShareRecipientRecord>, ApiError> {
+    let email = normalize_share_email(&query.email)?;
+    let recipient = get_folder_share_recipient(&state.db_pool, auth.user_id, folder_id, &email)
+        .await
+        .map_err(|e| internal_error("get folder share recipient", e))?
+        .ok_or_else(|| ApiError::BadRequest("User not found or cannot receive shares".into()))?;
+
+    Ok(Json(recipient))
+}
+
+pub async fn list_folder_shares(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Path(folder_id): Path<Uuid>,
+) -> Result<Json<Vec<FolderShareRecord>>, ApiError> {
+    ensure_user_folder_exists(&state, auth.user_id, folder_id).await?;
+    let shares = list_user_folder_shares(&state.db_pool, auth.user_id, folder_id)
+        .await
+        .map_err(|e| internal_error("list folder shares", e))?;
+
+    Ok(Json(shares))
+}
+
+pub async fn create_folder_share(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Path(folder_id): Path<Uuid>,
+    Json(payload): Json<CreateFolderShareRequest>,
+) -> Result<(StatusCode, Json<FolderShareRecord>), ApiError> {
+    let email = normalize_share_email(&payload.email)?;
+    let permission = validate_share_permission(&payload.permission)?;
+    let encrypted_key = decode_folder_key(&payload.encrypted_key)?;
+
+    let share = upsert_user_folder_share(
+        &state.db_pool,
+        NewFolderShare {
+            owner_id: auth.user_id,
+            folder_id,
+            recipient_email: email,
+            permission,
+            encrypted_key,
+        },
+    )
+    .await
+    .map_err(|e| internal_error("create folder share", e))?
+    .ok_or_else(|| ApiError::BadRequest("User not found or cannot receive shares".into()))?;
+
+    Ok((StatusCode::CREATED, Json(share)))
+}
+
+pub async fn delete_folder_share(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Path((folder_id, share_id)): Path<(Uuid, Uuid)>,
+) -> Result<StatusCode, ApiError> {
+    let rows = delete_user_folder_share(&state.db_pool, auth.user_id, folder_id, share_id)
+        .await
+        .map_err(|e| internal_error("delete folder share", e))?;
+
+    if rows == 0 {
+        return Err(ApiError::BadRequest("Folder share not found".into()));
+    }
+
+    Ok(StatusCode::NO_CONTENT)
 }
 
 pub async fn rename_folder(
@@ -378,4 +463,19 @@ fn decode_folder_key(value: &str) -> Result<Vec<u8>, ApiError> {
         ));
     }
     Ok(decoded)
+}
+
+fn normalize_share_email(value: &str) -> Result<String, ApiError> {
+    let trimmed = value.trim().to_lowercase();
+    if trimmed.is_empty() || !trimmed.contains('@') || trimmed.len() > 320 {
+        return Err(ApiError::BadRequest("Enter a valid email address".into()));
+    }
+    Ok(trimmed)
+}
+
+fn validate_share_permission(value: &str) -> Result<String, ApiError> {
+    match value {
+        "read" | "download" | "write" => Ok(value.to_string()),
+        _ => Err(ApiError::BadRequest("Invalid share permission".into())),
+    }
 }

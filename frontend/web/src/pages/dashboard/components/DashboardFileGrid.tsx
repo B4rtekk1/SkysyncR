@@ -3,8 +3,9 @@ import type { ApiFolder } from '../../../api/files'
 import type { FileTag, Tag } from '../../../api/tags'
 import { FileCard } from './FileCard'
 import { FolderCard } from './FolderCard'
+import type { FileCardDropPosition } from '../hooks/useManualCardOrdering'
 import type { UploadTransfer } from '../hooks/useFileUpload'
-import type { Item, LayoutMode, ViewKey } from '../types'
+import type { FileSortKey, Item, LayoutMode, ViewKey } from '../types'
 
 type DashboardFileGridProps = {
     visibleFolders: ApiFolder[]
@@ -19,9 +20,10 @@ type DashboardFileGridProps = {
     view: ViewKey
     layoutMode: LayoutMode
     layoutSwitchTarget: LayoutMode | null
-    sortKey: string
+    sortKey: FileSortKey
     draggedCardId: string | null
     dropTargetId: string | null
+    dropTargetPosition: FileCardDropPosition
     folderDropTargetId: string | null
     selectedFileIds: Set<string>
     selectedFolderIds: Set<string>
@@ -46,6 +48,7 @@ type DashboardFileGridProps = {
     onRemoveTagFromFile: (fileId: string, tagId: string) => void | Promise<void>
     onDragStartCard: (id: string, e: DragEvent<HTMLElement>) => void
     onDragEnterCard: (id: string) => void
+    onDragOverCard: (id: string, e: DragEvent<HTMLElement>) => void
     onDragLeaveCard: (id: string) => void
     onDropCard: (id: string, e: DragEvent<HTMLElement>) => void
     onDragEndCard: () => void
@@ -73,6 +76,7 @@ export function DashboardFileGrid({
     sortKey,
     draggedCardId,
     dropTargetId,
+    dropTargetPosition,
     folderDropTargetId,
     selectedFileIds,
     selectedFolderIds,
@@ -97,6 +101,7 @@ export function DashboardFileGrid({
     onRemoveTagFromFile,
     onDragStartCard,
     onDragEnterCard,
+    onDragOverCard,
     onDragLeaveCard,
     onDropCard,
     onDragEndCard,
@@ -166,7 +171,7 @@ export function DashboardFileGrid({
                         draggable={(sortKey === 'manual' || view === 'all' || view === 'favourites') && !pendingIds.has(item.id) && !isSearchExiting}
                         reorderable={sortKey === 'manual'}
                         isDragging={draggedCardId === item.id}
-                        isDropTarget={dropTargetId === item.id}
+                        dropPosition={dropTargetId === item.id ? dropTargetPosition : undefined}
                         isSearchExiting={isSearchExiting}
                         selected={selectedFileIds.has(item.id)}
                         onToggleSelected={
@@ -175,6 +180,7 @@ export function DashboardFileGrid({
                         style={{ '--file-index': visibleFolders.length + i } as React.CSSProperties}
                         onDragStartCard={onDragStartCard}
                         onDragEnterCard={onDragEnterCard}
+                        onDragOverCard={onDragOverCard}
                         onDragLeaveCard={onDragLeaveCard}
                         onDropCard={onDropCard}
                         onDragEndCard={onDragEndCard}

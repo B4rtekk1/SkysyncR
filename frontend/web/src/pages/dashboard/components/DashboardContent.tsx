@@ -9,6 +9,7 @@ import { EmptyPane } from './EmptyPane'
 import { FolderBreadcrumbs } from './FolderBreadcrumbs'
 import { GroupsPanel } from './GroupsPanel'
 import { TransferQueuePanel } from './TransferQueuePanel'
+import type { FileCardDropPosition } from '../hooks/useManualCardOrdering'
 import type { UploadTransfer } from '../hooks/useFileUpload'
 import type {
     FileFilters,
@@ -112,6 +113,7 @@ type DashboardContentProps = {
     onDeleteGroup: (groupId: string) => void
     draggedCardId: string | null
     dropTargetId: string | null
+    dropTargetPosition: FileCardDropPosition
     folderDropTargetId: string | null
     pathDropTargetId: string | null
     selectedFileIds: Set<string>
@@ -140,6 +142,7 @@ type DashboardContentProps = {
     onRemoveTagFromFile: (fileId: string, tagId: string) => void | Promise<void>
     onDragStartCard: (id: string, event: DragEvent<HTMLElement>) => void
     onDragEnterCard: (id: string) => void
+    onDragOverCard: (id: string, event: DragEvent<HTMLElement>) => void
     onDragLeaveCard: (id: string) => void
     onDropCard: (id: string, event: DragEvent<HTMLElement>) => void
     onDragEndCard: () => void
@@ -263,6 +266,7 @@ export function DashboardContent({
     onDeleteGroup,
     draggedCardId,
     dropTargetId,
+    dropTargetPosition,
     folderDropTargetId,
     pathDropTargetId,
     selectedFileIds,
@@ -291,6 +295,7 @@ export function DashboardContent({
     onRemoveTagFromFile,
     onDragStartCard,
     onDragEnterCard,
+    onDragOverCard,
     onDragLeaveCard,
     onDropCard,
     onDragEndCard,
@@ -620,6 +625,7 @@ export function DashboardContent({
                     sortKey={sortKey}
                     draggedCardId={draggedCardId}
                     dropTargetId={dropTargetId}
+                    dropTargetPosition={dropTargetPosition}
                     folderDropTargetId={folderDropTargetId}
                     selectedFileIds={selectedFileIds}
                     selectedFolderIds={selectedFolderIds}
@@ -644,6 +650,7 @@ export function DashboardContent({
                     onRemoveTagFromFile={onRemoveTagFromFile}
                     onDragStartCard={onDragStartCard}
                     onDragEnterCard={onDragEnterCard}
+                    onDragOverCard={onDragOverCard}
                     onDragLeaveCard={onDragLeaveCard}
                     onDropCard={onDropCard}
                     onDragEndCard={onDragEndCard}

@@ -340,6 +340,31 @@
     box-shadow: 0 0 0 2px rgba(var(--file-accent-rgb), 0.18);
 }
 
+.file-card:not(.folder-card).is-drop-target::before {
+    content: '';
+    position: absolute;
+    z-index: 5;
+    pointer-events: none;
+    background: var(--file-accent);
+    box-shadow: 0 0 0 3px rgba(var(--file-accent-rgb), 0.18);
+}
+
+.file-grid:not(.file-grid--list) .file-card:not(.folder-card).is-drop-before::before {
+    top: -2px;
+    right: 12px;
+    left: 12px;
+    height: 3px;
+    border-radius: 999px;
+}
+
+.file-grid:not(.file-grid--list) .file-card:not(.folder-card).is-drop-after::before {
+    right: 12px;
+    bottom: -2px;
+    left: 12px;
+    height: 3px;
+    border-radius: 999px;
+}
+
 .file-card.is-search-exiting {
     pointer-events: none;
     animation: file-card-search-exit 0.24s cubic-bezier(0.22, 0.8, 0.24, 1) forwards;
@@ -947,6 +972,22 @@ html[data-theme='light'] .file-card--can-preview:hover {
     align-items: center;
     gap: 12px;
     padding: 12px 14px;
+}
+
+.file-grid--list .file-card:not(.folder-card).is-drop-before::before {
+    top: 8px;
+    bottom: 8px;
+    left: -2px;
+    width: 3px;
+    border-radius: 999px;
+}
+
+.file-grid--list .file-card:not(.folder-card).is-drop-after::before {
+    top: 8px;
+    right: -2px;
+    bottom: 8px;
+    width: 3px;
+    border-radius: 999px;
 }
 
 .file-grid--list .file-card:hover {
