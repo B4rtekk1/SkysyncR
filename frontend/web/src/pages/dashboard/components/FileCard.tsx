@@ -122,6 +122,8 @@ export function FileCard({
     const canTag = Boolean((onAddTag || onRemoveTag || onCreateTag) && !shared && view !== 'trash' && !pending)
     const canDownload = Boolean(onDownload && view !== 'trash')
     const canPreview = Boolean(onPreview && ['image', 'video', 'pdf', 'text', 'code'].includes(kind) && view !== 'trash' && !pending && !isRenaming)
+    const visibleTags = tags.slice(0, 2)
+    const hiddenTagCount = Math.max(tags.length - visibleTags.length, 0)
     const hasAction = Boolean(
         canRename ||
             canShare ||
@@ -374,40 +376,35 @@ export function FileCard({
                 )}
             </div>
             <div className="file-card__meta" aria-label={`${typeLabel}, ${formatBytes(item.size_bytes)}, updated ${updatedRelative}`}>
-                <span className="file-card__meta-type">
-                    <span className="file-card__meta-dot" aria-hidden="true" />
-                    {typeLabel}
-                </span>
-                <span className="file-card__meta-divider" aria-hidden="true" />
                 <span>{formatBytes(item.size_bytes)}</span>
                 <span className="file-card__meta-divider" aria-hidden="true" />
                 <time dateTime={item.updated_at} title={updatedTitle}>{updatedRelative}</time>
             </div>
             {(shared || item.is_public || item.note) && (
-                <div className="file-card__context" aria-label="File status">
+                <div className="file-card__signals" aria-label="File status">
                     {shared && (
-                        <span className="file-card__context-item file-card__context-item--shared">
-                            <span className="file-card__context-icon" aria-hidden="true">↗</span>
-                            {item.shared_by_user_name ? `Shared by ${item.shared_by_user_name}` : 'Shared with you'}
+                        <span
+                            className="file-card__signal file-card__signal--shared"
+                            title={item.shared_by_user_name ? `Shared by ${item.shared_by_user_name}` : 'Shared with you'}
+                        >
+                            <span aria-hidden="true">↗</span>
                         </span>
                     )}
                     {!shared && item.is_public && (
-                        <span className="file-card__context-item file-card__context-item--public">
-                            <span className="file-card__context-icon" aria-hidden="true">◎</span>
-                            Public link
+                        <span className="file-card__signal file-card__signal--public" title="Public link">
+                            <span aria-hidden="true">◎</span>
                         </span>
                     )}
                     {item.note && (
-                        <span className="file-card__context-item file-card__context-item--note">
-                            <span className="file-card__context-icon" aria-hidden="true">≡</span>
-                            Note
+                        <span className="file-card__signal file-card__signal--note" title="Note">
+                            <span aria-hidden="true">≡</span>
                         </span>
                     )}
                 </div>
             )}
             {(tags.length > 0 || canTag) && (
                 <div className="file-card__tags" onClick={(event) => event.stopPropagation()}>
-                    {tags.map((tag) => (
+                    {visibleTags.map((tag) => (
                         <span
                             key={tag.tag_id}
                             className="file-card__tag"
@@ -417,6 +414,11 @@ export function FileCard({
                             {tag.name}
                         </span>
                     ))}
+                    {hiddenTagCount > 0 && (
+                        <span className="file-card__tag file-card__tag--more" title={tags.map((tag) => tag.name).join(', ')}>
+                            +{hiddenTagCount}
+                        </span>
+                    )}
                     {canTag && (
                         <div className="file-card__tag-menu-wrap">
                             <button

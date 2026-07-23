@@ -78,6 +78,25 @@ export function FileCardActions({
     const menuRef = useRef<HTMLDivElement>(null)
     const secondaryActions: MenuAction[] = []
 
+    if (!isRenaming) {
+        secondaryActions.push({
+            key: 'details',
+            label: isInfoOpen ? 'Hide details' : 'Details',
+            icon: INFO_ICON,
+            active: isInfoOpen,
+            onSelect: onToggleInfo,
+        })
+    }
+
+    if (canDownload) {
+        secondaryActions.push({
+            key: 'download',
+            label: 'Download',
+            icon: DOWNLOAD_ICON,
+            onSelect: () => onDownload?.(item),
+        })
+    }
+
     if (canRename && !isRenaming) {
         secondaryActions.push({
             key: 'rename',
@@ -212,40 +231,6 @@ export function FileCardActions({
                 </button>
             )}
 
-            {!isRenaming && (
-                <div className="file-card__info-wrap">
-                    <button
-                        className={`file-card__action file-card__action--info ${isInfoOpen ? 'is-active' : ''}`}
-                        onClick={(e) => {
-                            e.stopPropagation()
-                            onToggleInfo()
-                        }}
-                        aria-label={`Show details for ${item.filename}`}
-                        aria-expanded={isInfoOpen}
-                        title="Details"
-                        type="button"
-                    >
-                        {INFO_ICON}
-                    </button>
-                    {infoPopover}
-                </div>
-            )}
-
-            {canDownload && (
-                <button
-                    className="file-card__action file-card__action--download"
-                    onClick={(e) => {
-                        e.stopPropagation()
-                        onDownload?.(item)
-                    }}
-                    aria-label={`Download ${item.filename}`}
-                    title="Download"
-                    type="button"
-                >
-                    {DOWNLOAD_ICON}
-                </button>
-            )}
-
             {!isRenaming && secondaryActions.length > 0 && (
                 <div className="file-card__more" ref={menuRef}>
                     <button
@@ -284,6 +269,7 @@ export function FileCardActions({
                     )}
                 </div>
             )}
+            {!isRenaming && infoPopover}
         </div>
     )
 }

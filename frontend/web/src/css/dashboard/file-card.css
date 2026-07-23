@@ -14,7 +14,8 @@
 .file-card__actions {
     display: flex;
     align-items: center;
-    gap: 5px;
+    justify-content: flex-end;
+    gap: 4px;
     margin-top: auto;
     padding-top: 10px;
     border-top: none;
@@ -168,9 +169,9 @@
 .file-card__tags {
     display: flex;
     flex-wrap: wrap;
-    gap: 6px;
-    min-height: 24px;
-    margin-top: 8px;
+    gap: 5px;
+    min-height: 22px;
+    margin-top: 7px;
 }
 
 .file-card__tag,
@@ -193,6 +194,12 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+}
+
+.file-card__tag--more {
+    border-color: var(--line);
+    background: transparent;
+    color: var(--mist);
 }
 
 .file-card__tag-add {
