@@ -75,7 +75,9 @@ export async function createZip(entries: ZipEntry[]): Promise<Blob> {
 export function safeZipName(value: string, fallback = 'download'): string {
     const name = value
         .replace(/[\\/:*?"<>|]/g, '_')
-        .replace(/[\u0000-\u001f]/g, '_')
+        .split('')
+        .map((ch) => (ch.charCodeAt(0) < 32 ? '_' : ch))
+        .join('')
         .trim()
         .replace(/^\.+$/, '')
 

@@ -1,21 +1,31 @@
 use axum::{
     Json,
-    extract::{Path, Query, State},
-    http::StatusCode,
+    body::Body,
+    extract::{Extension, Path, Query, State},
+    http::{
+        HeaderMap, HeaderValue, StatusCode,
+        header::{CONTENT_DISPOSITION, CONTENT_TYPE},
+    },
+    response::{IntoResponse, Response},
 };
 use base64::{Engine as _, engine::general_purpose};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
+use tokio::fs;
+use tokio_util::io::ReaderStream;
 use uuid::Uuid;
 
 use crate::auth::AuthUser;
+use crate::db::files::FileRecord;
 use crate::db::folders::{
     FolderRecord, FolderShareRecipientRecord, FolderShareRecord, NewFolderRecord, NewFolderShare,
     add_user_folder_favourite, create_folder_record, delete_user_folder_share,
     folder_belongs_to_user, folder_is_descendant_of, get_folder_share_recipient,
+    get_public_folder_file_for_download, get_public_folder_tree, list_public_folder_tree_files,
     list_user_favourite_folders, list_user_folder_shares, list_user_folders, move_user_folder,
     remove_user_folder_favourite, rename_user_folder, restore_user_folder, soft_delete_user_folder,
     update_user_folder_share, upsert_user_folder_share, user_folder_exists,
 };
+use crate::observability::RequestId;
 use crate::services::trash::permanently_delete_user_folder;
 use crate::state::AppState;
 use crate::utils::errors::{ApiError, internal_error};
@@ -63,6 +73,13 @@ pub struct RenameFolderRequest {
 #[derive(Deserialize)]
 pub struct MoveFolderRequest {
     pub parent_folder_id: Option<String>,
+}
+
+#[derive(Serialize)]
+pub struct PublicFolderManifest {
+    pub root: FolderRecord,
+    pub folders: Vec<FolderRecord>,
+    pub files: Vec<FileRecord>,
 }
 
 pub async fn list_folders(
@@ -145,6 +162,95 @@ pub async fn share_folder(
     .ok_or_else(|| ApiError::BadRequest("Folder not found".into()))?;
 
     Ok(Json(folder))
+}
+
+pub async fn get_public_folder_manifest(
+    State(state): State<AppState>,
+    Path(share_token): Path<String>,
+) -> Result<Json<PublicFolderManifest>, ApiError> {
+    let share_token = validate_share_token(&share_token)?;
+    let folders = get_public_folder_tree(&state.db_pool, &share_token)
+        .await
+        .map_err(|e| internal_error("get public folder tree", e))?;
+    let root = folders
+        .iter()
+        .find(|folder| folder.share_token.as_deref() == Some(share_token.as_str()))
+        .cloned()
+        .ok_or_else(|| ApiError::BadRequest("This share link is invalid or has expired".into()))?;
+    let files = list_public_folder_tree_files(&state.db_pool, &share_token)
+        .await
+        .map_err(|e| internal_error("list public folder files", e))?;
+
+    Ok(Json(PublicFolderManifest {
+        root,
+        folders,
+        files,
+    }))
+}
+
+pub async fn download_public_folder_file(
+    State(state): State<AppState>,
+    Extension(request_id): Extension<RequestId>,
+    Path((share_token, file_id)): Path<(String, Uuid)>,
+) -> Result<Response, ApiError> {
+    let share_token = validate_share_token(&share_token)?;
+    let file = get_public_folder_file_for_download(&state.db_pool, &share_token, file_id)
+        .await
+        .map_err(|e| internal_error("get public folder download file", e))?
+        .ok_or_else(|| ApiError::BadRequest("File not found in this shared folder".into()))?;
+
+    let download = fs::File::open(&file.storage_path)
+        .await
+        .map_err(|e| internal_error("open public folder download file", e))?;
+
+    let mut headers = HeaderMap::new();
+    headers.insert(
+        CONTENT_TYPE,
+        HeaderValue::from_static("application/octet-stream"),
+    );
+    if let Ok(value) = HeaderValue::from_str(&file.size_bytes.to_string()) {
+        headers.insert(axum::http::header::CONTENT_LENGTH, value);
+    }
+    if let Some(checksum) = file.checksum.as_deref() {
+        if let Ok(value) = HeaderValue::from_str(checksum) {
+            headers.insert("x-skysyncr-sha256", value);
+        }
+    }
+    if let Ok(value) =
+        HeaderValue::from_str(&general_purpose::STANDARD.encode(file.filename.as_bytes()))
+    {
+        headers.insert("x-skysyncr-filename-b64", value);
+    }
+    if let Ok(value) =
+        HeaderValue::from_str(&general_purpose::STANDARD.encode(&file.encryption_nonce))
+    {
+        headers.insert("x-skysyncr-encryption-nonce", value);
+    }
+    if let Some(mime_type) = file.mime_type.as_deref() {
+        if let Ok(value) = HeaderValue::from_str(mime_type) {
+            headers.insert("x-skysyncr-mime-type", value);
+        }
+    }
+    let disposition = format!(
+        "attachment; filename=\"{}\"",
+        sanitize_download_filename(&file.filename)
+    );
+    headers.insert(
+        CONTENT_DISPOSITION,
+        HeaderValue::from_str(&disposition)
+            .unwrap_or_else(|_| HeaderValue::from_static("attachment")),
+    );
+
+    tracing::info!(
+        request_id = %request_id.0,
+        transfer_direction = "public_folder_download",
+        share_token = %share_token,
+        file_id = %file_id,
+        bytes = file.size_bytes,
+        "file_transfer"
+    );
+
+    Ok((headers, Body::from_stream(ReaderStream::new(download))).into_response())
 }
 
 pub async fn get_folder_share_recipient_profile(
@@ -451,6 +557,29 @@ fn validate_folder_description(value: Option<&str>) -> Result<Option<String>, Ap
     }
 
     Ok(Some(trimmed.to_string()))
+}
+
+fn validate_share_token(value: &str) -> Result<String, ApiError> {
+    let trimmed = value.trim();
+    Uuid::parse_str(trimmed).map_err(|_| ApiError::BadRequest("Invalid share token".into()))?;
+    Ok(trimmed.to_string())
+}
+
+fn sanitize_download_filename(filename: &str) -> String {
+    let sanitized: String = filename
+        .chars()
+        .map(|ch| match ch {
+            '"' | '\\' | '/' => '_',
+            ch if ch.is_control() => '_',
+            ch => ch,
+        })
+        .collect();
+
+    if sanitized.trim().is_empty() {
+        "download.bin".into()
+    } else {
+        sanitized
+    }
 }
 
 fn decode_folder_key(value: &str) -> Result<Vec<u8>, ApiError> {

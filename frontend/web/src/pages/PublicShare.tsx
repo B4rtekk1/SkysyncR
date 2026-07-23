@@ -2,7 +2,14 @@ import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import '../App.css'
 import ThemeToggle from '../components/ThemeToggle'
-import { downloadPublicFile, verifyBlobChecksum } from '../api/files'
+import {
+  downloadPublicFile,
+  downloadPublicFolderFile,
+  getPublicFolderManifest,
+  verifyBlobChecksum,
+  type ApiFile,
+  type ApiFolder,
+} from '../api/files'
 import {
   base64UrlToBuffer,
   decryptFile,
@@ -13,6 +20,7 @@ import {
   isEncryptedTextEnvelope,
   streamToBlob,
 } from '../crypto/fileEncryption'
+import { createZip, safeZipName, uniqueZipPath } from './dashboard/zip'
 
 type ShareStatus = 'loading' | 'ready' | 'error'
 
@@ -33,6 +41,39 @@ function fileKeyFromLocationHash(): string | null {
   return params.get('key')
 }
 
+type PublicFolderKeyring = {
+  v: 1
+  folders: Record<string, string>
+  files: Record<string, string>
+}
+
+type DecryptedFolder = ApiFolder & { name: string }
+
+function folderKeyringFromLocationHash(): PublicFolderKeyring | null {
+  const hash = window.location.hash.startsWith('#') ? window.location.hash.slice(1) : window.location.hash
+  const params = new URLSearchParams(hash)
+  const value = params.get('keys')
+  if (!value) return null
+
+  try {
+    const decoded = new TextDecoder().decode(base64UrlToBuffer(value))
+    const parsed: unknown = JSON.parse(decoded)
+    if (
+      typeof parsed === 'object' &&
+      parsed !== null &&
+      (parsed as { v?: unknown }).v === 1 &&
+      typeof (parsed as { folders?: unknown }).folders === 'object' &&
+      typeof (parsed as { files?: unknown }).files === 'object'
+    ) {
+      return parsed as PublicFolderKeyring
+    }
+  } catch {
+    return null
+  }
+
+  return null
+}
+
 async function decryptMaybeEncryptedMetadata(value: string, fileKey: CryptoKey): Promise<string> {
   if (!isEncryptedTextEnvelope(value)) return value
   return decryptTextEnvelope(value, fileKey)
@@ -40,11 +81,108 @@ async function decryptMaybeEncryptedMetadata(value: string, fileKey: CryptoKey):
 
 function PublicShare() {
   const { token } = useParams()
+  const isFolderShare = window.location.pathname.includes('/share/folders/')
   const [status, setStatus] = useState<ShareStatus>('loading')
   const [message, setMessage] = useState('Preparing download...')
 
   useEffect(() => {
     let active = true
+
+    async function downloadFileShare(shareToken: string) {
+      const rawFileKey = fileKeyFromLocationHash()
+      if (!rawFileKey) {
+        throw new Error('This secure share link is missing its decryption key.')
+      }
+
+      const file = await downloadPublicFile(shareToken)
+      await verifyBlobChecksum(file.blob, file.checksum)
+      if (!file.encryptionNonce) {
+        throw new Error('This secure share link is missing encryption metadata.')
+      }
+
+      const fileKey = await importRawFileKey(base64UrlToBuffer(rawFileKey))
+      const [filename, mimeType] = await Promise.all([
+        decryptMaybeEncryptedMetadata(file.filename, fileKey),
+        file.mimeType ? decryptMaybeEncryptedMetadata(file.mimeType, fileKey) : Promise.resolve(null),
+      ])
+      const decryptedBlob = isChunkedFileNonce(file.encryptionNonce)
+        ? await streamToBlob(decryptFileStream(file.blob, fileKey, file.encryptionNonce), mimeType)
+        : await decryptFile(file.blob, fileKey, file.encryptionNonce, mimeType)
+
+      saveBlob(decryptedBlob, filename)
+    }
+
+    async function downloadFolderShare(shareToken: string) {
+      const keyring = folderKeyringFromLocationHash()
+      if (!keyring) {
+        throw new Error('This secure folder link is missing its decryption keys.')
+      }
+      const shareKeys = keyring
+
+      const manifest = await getPublicFolderManifest(shareToken)
+      const keyCache = new Map<string, CryptoKey>()
+
+      async function importKey(rawKey: string): Promise<CryptoKey> {
+        const cached = keyCache.get(rawKey)
+        if (cached) return cached
+        const key = await importRawFileKey(base64UrlToBuffer(rawKey))
+        keyCache.set(rawKey, key)
+        return key
+      }
+
+      async function folderName(folder: ApiFolder): Promise<string> {
+        const rawKey = shareKeys.folders[folder.id]
+        if (!rawKey) throw new Error('This secure folder link is missing a folder key.')
+        return decryptMaybeEncryptedMetadata(folder.name, await importKey(rawKey))
+      }
+
+      async function fileEntry(file: ApiFile, pathPrefix: string, usedPaths: Set<string>) {
+        const rawKey = shareKeys.files[file.id]
+        if (!rawKey) throw new Error('This secure folder link is missing a file key.')
+        const fileKey = await importKey(rawKey)
+        const downloaded = await downloadPublicFolderFile(shareToken, file.id)
+        await verifyBlobChecksum(downloaded.blob, downloaded.checksum)
+        if (!downloaded.encryptionNonce) {
+          throw new Error('This secure folder link is missing encryption metadata.')
+        }
+
+        const [filename, mimeType] = await Promise.all([
+          decryptMaybeEncryptedMetadata(file.filename, fileKey),
+          downloaded.mimeType ? decryptMaybeEncryptedMetadata(downloaded.mimeType, fileKey) : Promise.resolve(null),
+        ])
+        const decryptedBlob = isChunkedFileNonce(downloaded.encryptionNonce)
+          ? await streamToBlob(decryptFileStream(downloaded.blob, fileKey, downloaded.encryptionNonce), mimeType)
+          : await decryptFile(downloaded.blob, fileKey, downloaded.encryptionNonce, mimeType)
+
+        return {
+          path: uniqueZipPath(`${pathPrefix}/${safeZipName(filename, 'file')}`, usedPaths),
+          blob: decryptedBlob,
+          modifiedAt: new Date(file.updated_at),
+        }
+      }
+
+      const decryptedFolders = new Map<string, DecryptedFolder>()
+      await Promise.all(
+        manifest.folders.map(async (folder) => {
+          decryptedFolders.set(folder.id, { ...folder, name: await folderName(folder) })
+        }),
+      )
+      const root = decryptedFolders.get(manifest.root.id)
+      if (!root) throw new Error('This secure folder link is invalid.')
+      const rootFolder = root
+
+      function folderPath(folderId: string | null): string {
+        const folder = folderId ? decryptedFolders.get(folderId) : null
+        if (!folder || folder.id === rootFolder.id) return safeZipName(rootFolder.name, 'folder')
+        return `${folderPath(folder.parent_folder_id)}/${safeZipName(folder.name, 'folder')}`
+      }
+
+      const usedPaths = new Set<string>()
+      const entries = await Promise.all(
+        manifest.files.map((file) => fileEntry(file, folderPath(file.folder_id), usedPaths)),
+      )
+      saveBlob(await createZip(entries), `${safeZipName(rootFolder.name, 'folder')}.zip`)
+    }
 
     async function download() {
       function showError(errorMessage: string) {
@@ -59,30 +197,12 @@ function PublicShare() {
       }
 
       try {
-        const rawFileKey = fileKeyFromLocationHash()
-        if (!rawFileKey) {
-          showError('This secure share link is missing its decryption key.')
-          return
+        if (isFolderShare) {
+          await downloadFolderShare(token)
+        } else {
+          await downloadFileShare(token)
         }
-
-        const file = await downloadPublicFile(token)
-        await verifyBlobChecksum(file.blob, file.checksum)
-        if (!file.encryptionNonce) {
-          showError('This secure share link is missing encryption metadata.')
-          return
-        }
-
-        const fileKey = await importRawFileKey(base64UrlToBuffer(rawFileKey))
-        const [filename, mimeType] = await Promise.all([
-          decryptMaybeEncryptedMetadata(file.filename, fileKey),
-          file.mimeType ? decryptMaybeEncryptedMetadata(file.mimeType, fileKey) : Promise.resolve(null),
-        ])
-        const decryptedBlob = isChunkedFileNonce(file.encryptionNonce)
-          ? await streamToBlob(decryptFileStream(file.blob, fileKey, file.encryptionNonce), mimeType)
-          : await decryptFile(file.blob, fileKey, file.encryptionNonce, mimeType)
-
         if (!active) return
-        saveBlob(decryptedBlob, filename)
         setStatus('ready')
         setMessage('Your download has started.')
       } catch (err) {
@@ -97,7 +217,7 @@ function PublicShare() {
     return () => {
       active = false
     }
-  }, [token])
+  }, [isFolderShare, token])
 
   return (
     <div className="page not-found-page">
@@ -117,7 +237,7 @@ function PublicShare() {
       <main className="not-found" aria-labelledby="share-title">
         <p className="not-found__code">{status === 'error' ? 'Share' : 'Download'}</p>
         <h1 id="share-title" className="not-found__title">
-          Shared file
+          {isFolderShare ? 'Shared folder' : 'Shared file'}
         </h1>
         <p className="not-found__copy">{message}</p>
         <div className="not-found__actions">

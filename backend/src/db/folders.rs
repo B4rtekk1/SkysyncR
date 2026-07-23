@@ -4,6 +4,8 @@ use serde::{Serialize, Serializer};
 use sqlx::{FromRow, PgPool, Row};
 use uuid::Uuid;
 
+use super::file_records::{DownloadFileRecord, FileRecord};
+
 fn serialize_optional_bytes_base64<S>(
     bytes: &Option<Vec<u8>>,
     serializer: S,
@@ -32,7 +34,7 @@ pub struct FolderShareRecipientRecord {
     pub public_key: String,
 }
 
-#[derive(FromRow, Serialize)]
+#[derive(Clone, FromRow, Serialize)]
 pub struct FolderRecord {
     pub id: Uuid,
     pub name: String,
@@ -281,6 +283,153 @@ pub async fn update_user_folder_share(
     .bind(share_token)
     .bind(folder_id)
     .bind(user_id)
+    .fetch_optional(pool)
+    .await
+}
+
+pub async fn get_public_folder_tree(
+    pool: &PgPool,
+    share_token: &str,
+) -> Result<Vec<FolderRecord>, sqlx::Error> {
+    sqlx::query_as::<_, FolderRecord>(
+        r#"
+        WITH RECURSIVE folder_tree AS (
+            SELECT id
+            FROM folders
+            WHERE share_token = $1
+              AND is_public = TRUE
+              AND is_deleted = FALSE
+
+            UNION ALL
+
+            SELECT child.id
+            FROM folders child
+            JOIN folder_tree ft ON child.parent_folder_id = ft.id
+            WHERE child.owner_id = (
+                SELECT owner_id
+                FROM folders
+                WHERE share_token = $1
+                  AND is_public = TRUE
+                  AND is_deleted = FALSE
+                LIMIT 1
+            )
+              AND child.is_deleted = FALSE
+        )
+        SELECT
+            f.id,
+            f.name,
+            f.description,
+            f.parent_folder_id,
+            f.is_public,
+            f.share_token,
+            f.created_at,
+            f.updated_at,
+            f.is_deleted,
+            f.deleted_at,
+            (
+                SELECT COUNT(files.id)::bigint
+                FROM files
+                WHERE files.folder_id = f.id
+                  AND files.owner_id = f.owner_id
+                  AND files.is_deleted = FALSE
+            ) AS file_count,
+            FALSE AS is_favourite,
+            f.encrypted_key
+        FROM folders f
+        JOIN folder_tree ft ON ft.id = f.id
+        ORDER BY f.created_at
+        "#,
+    )
+    .bind(share_token)
+    .fetch_all(pool)
+    .await
+}
+
+pub async fn list_public_folder_tree_files(
+    pool: &PgPool,
+    share_token: &str,
+) -> Result<Vec<FileRecord>, sqlx::Error> {
+    sqlx::query_as::<_, FileRecord>(
+        r#"
+        WITH RECURSIVE folder_tree AS (
+            SELECT id, owner_id
+            FROM folders
+            WHERE share_token = $1
+              AND is_public = TRUE
+              AND is_deleted = FALSE
+
+            UNION ALL
+
+            SELECT child.id, child.owner_id
+            FROM folders child
+            JOIN folder_tree ft ON child.parent_folder_id = ft.id
+            WHERE child.owner_id = ft.owner_id
+              AND child.is_deleted = FALSE
+        )
+        SELECT
+            files.id,
+            files.filename,
+            ''::text AS storage_path,
+            files.mime_type,
+            files.size_bytes,
+            files.folder_id,
+            files.note,
+            files.is_deleted,
+            files.is_public,
+            files.share_token,
+            files.share_expires_at,
+            files.share_download_limit,
+            files.share_download_count,
+            FALSE AS is_favourite,
+            files.encrypted_key,
+            files.encryption_nonce,
+            files.created_at,
+            files.updated_at,
+            files.deleted_at
+        FROM files
+        JOIN folder_tree ft ON ft.id = files.folder_id
+        WHERE files.owner_id = ft.owner_id
+          AND files.is_deleted = FALSE
+        ORDER BY files.updated_at DESC
+        "#,
+    )
+    .bind(share_token)
+    .fetch_all(pool)
+    .await
+}
+
+pub async fn get_public_folder_file_for_download(
+    pool: &PgPool,
+    share_token: &str,
+    file_id: Uuid,
+) -> Result<Option<DownloadFileRecord>, sqlx::Error> {
+    sqlx::query_as::<_, DownloadFileRecord>(
+        r#"
+        WITH RECURSIVE folder_tree AS (
+            SELECT id, owner_id
+            FROM folders
+            WHERE share_token = $1
+              AND is_public = TRUE
+              AND is_deleted = FALSE
+
+            UNION ALL
+
+            SELECT child.id, child.owner_id
+            FROM folders child
+            JOIN folder_tree ft ON child.parent_folder_id = ft.id
+            WHERE child.owner_id = ft.owner_id
+              AND child.is_deleted = FALSE
+        )
+        SELECT filename, mime_type, storage_path, size_bytes, checksum, encryption_nonce
+        FROM files
+        JOIN folder_tree ft ON ft.id = files.folder_id
+        WHERE files.id = $2
+          AND files.owner_id = ft.owner_id
+          AND files.is_deleted = FALSE
+        "#,
+    )
+    .bind(share_token)
+    .bind(file_id)
     .fetch_optional(pool)
     .await
 }

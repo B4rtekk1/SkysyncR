@@ -554,10 +554,55 @@ export type PublicDownload = {
     checksum: string | null
 }
 
+export type PublicFolderManifest = {
+    root: ApiFolder
+    folders: ApiFolder[]
+    files: ApiFile[]
+}
+
+function publicFolderManifest(value: unknown, path: string): PublicFolderManifest {
+    if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+        throw new Error(`${path}: expected object`)
+    }
+    const item = value as Record<string, unknown>
+    return {
+        root: folder(item.root, `${path}.root`),
+        folders: folders(item.folders, `${path}.folders`),
+        files: files(item.files, `${path}.files`),
+    }
+}
+
 export async function downloadPublicFile(shareToken: string): Promise<PublicDownload> {
     const res = await apiFetch(`${API_BASE}share/${encodeURIComponent(shareToken)}/download`, {
         method: 'GET',
     })
+    if (!res.ok) throw new Error(await parseErrorMessage(res))
+
+    return {
+        blob: await res.blob(),
+        filename:
+            filenameFromBase64Header(res.headers.get('x-skysyncr-filename-b64')) ??
+            filenameFromContentDisposition(res.headers.get('content-disposition')) ??
+            'download.bin',
+        mimeType: res.headers.get('x-skysyncr-mime-type'),
+        encryptionNonce: res.headers.get('x-skysyncr-encryption-nonce'),
+        checksum: res.headers.get('x-skysyncr-sha256'),
+    }
+}
+
+export async function getPublicFolderManifest(shareToken: string): Promise<PublicFolderManifest> {
+    const res = await apiFetch(`${API_BASE}share/folders/${encodeURIComponent(shareToken)}`, {
+        method: 'GET',
+    })
+    if (!res.ok) throw new Error(await parseErrorMessage(res))
+    return readJson(res, publicFolderManifest, 'PublicFolderManifest')
+}
+
+export async function downloadPublicFolderFile(shareToken: string, fileId: string): Promise<PublicDownload> {
+    const res = await apiFetch(
+        `${API_BASE}share/folders/${encodeURIComponent(shareToken)}/files/${encodeURIComponent(fileId)}/download`,
+        { method: 'GET' },
+    )
     if (!res.ok) throw new Error(await parseErrorMessage(res))
 
     return {

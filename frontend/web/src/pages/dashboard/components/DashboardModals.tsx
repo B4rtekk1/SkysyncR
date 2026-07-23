@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useState } from 'react'
 import type { CurrentUserResponse } from '../../../api/users'
-import type { ApiFolder } from '../../../api/files'
+import { listFiles, listFolders, type ApiFolder } from '../../../api/files'
 import { arrayBufferToBase64Url, exportRawKey, unwrapFileKeyForUser } from '../../../crypto/fileEncryption'
 import { CreateFileModal } from './CreateFileModal'
 import { CreateFolderModal } from './CreateFolderModal'
@@ -70,6 +70,43 @@ function ModalFallback() {
     )
 }
 
+type FolderShareKeyring = {
+    v: 1
+    folders: Record<string, string>
+    files: Record<string, string>
+}
+
+function encodeFolderShareKeyring(keyring: FolderShareKeyring): string {
+    const bytes = new TextEncoder().encode(JSON.stringify(keyring))
+    return arrayBufferToBase64Url(bytes)
+}
+
+async function exportShareKey(encryptedKey: string | null | undefined, privateKey: CryptoKey): Promise<string> {
+    if (!encryptedKey) throw new Error('This item is missing an encryption key.')
+
+    const itemKey = await unwrapFileKeyForUser(encryptedKey, privateKey)
+    return arrayBufferToBase64Url(await exportRawKey(itemKey))
+}
+
+async function collectFolderShareKeyring(root: ApiFolder, privateKey: CryptoKey): Promise<FolderShareKeyring> {
+    const keyring: FolderShareKeyring = { v: 1, folders: {}, files: {} }
+
+    async function collect(folder: ApiFolder) {
+        keyring.folders[folder.id] = await exportShareKey(folder.encrypted_key, privateKey)
+        const [files, folders] = await Promise.all([listFiles(folder.id), listFolders(folder.id)])
+
+        await Promise.all(
+            files.map(async (file) => {
+                keyring.files[file.id] = await exportShareKey(file.encrypted_key, privateKey)
+            }),
+        )
+        await Promise.all(folders.map(collect))
+    }
+
+    await collect(root)
+    return keyring
+}
+
 export function DashboardModals({
     filePreview,
     onCloseFilePreview,
@@ -121,17 +158,22 @@ export function DashboardModals({
                 return
             }
 
-            if (!('filename' in shareItem)) {
-                setPublicShareUrl(`${window.location.origin}/share/folders/${shareItem.share_token}`)
-                return
-            }
-
             if (!privateKey) {
                 setPublicShareUrl(null)
                 return
             }
 
             try {
+                if (!('filename' in shareItem)) {
+                    const keyring = await collectFolderShareKeyring(shareItem, privateKey)
+                    if (active) {
+                        setPublicShareUrl(
+                            `${window.location.origin}/share/folders/${shareItem.share_token}#keys=${encodeFolderShareKeyring(keyring)}`,
+                        )
+                    }
+                    return
+                }
+
                 const fileKey = await unwrapFileKeyForUser(shareItem.encrypted_key, privateKey)
                 const rawKey = await exportRawKey(fileKey)
                 if (active) {

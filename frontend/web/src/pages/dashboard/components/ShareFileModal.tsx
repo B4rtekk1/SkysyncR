@@ -73,8 +73,8 @@ export function ShareFileModal({
     const linkInputValue =
         shareUrl ??
         (item.is_public || loading
-            ? itemKind === 'file' && !privateKey
-                ? 'Unlock your private key to create a secure link'
+            ? !privateKey
+                ? `Unlock your private key to create a secure ${itemKind} link`
                 : 'Generating link...'
             : 'Link is inactive')
     const selectedExpiresAt = shareDuration === null ? null : new Date(sharePreviewBaseTime + shareDuration * 1000)
