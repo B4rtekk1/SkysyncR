@@ -1,0 +1,83 @@
+services:
+  db:
+    image: postgres:17
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-skysyncr}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-skysyncr_dev_password}
+      POSTGRES_DB: ${POSTGRES_DB:-skysyncr}
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  migrate:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    restart: "no"
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-skysyncr}:${POSTGRES_PASSWORD:-skysyncr_dev_password}@db:5432/${POSTGRES_DB:-skysyncr}
+      JWT_SECRET: ${JWT_SECRET:-dev-only-change-this-secret-at-least-32-bytes}
+      APP_ENV: development
+      LOG_FORMAT: text
+    command: ["skysyncr-migrate"]
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-skysyncr}:${POSTGRES_PASSWORD:-skysyncr_dev_password}@db:5432/${POSTGRES_DB:-skysyncr}
+      JWT_SECRET: ${JWT_SECRET:-dev-only-change-this-secret-at-least-32-bytes}
+      APP_ENV: development
+      LOG_FORMAT: ${LOG_FORMAT:-text}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:${HTTP_PORT:-8080}}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_EMAIL: ${SMTP_EMAIL:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      UPLOAD_DIR: /var/lib/skysyncr/uploads
+      MAX_FILE_SIZE_BYTES: ${MAX_FILE_SIZE_BYTES:-1073741824}
+      MAX_CONCURRENT_FILE_TRANSFERS: ${MAX_CONCURRENT_FILE_TRANSFERS:-4}
+      FILE_TRANSFER_TIMEOUT_SECONDS: ${FILE_TRANSFER_TIMEOUT_SECONDS:-900}
+      TRASH_RETENTION_DAYS: ${TRASH_RETENTION_DAYS:-30}
+      TRASH_PURGE_INTERVAL_HOURS: ${TRASH_PURGE_INTERVAL_HOURS:-24}
+    volumes:
+      - uploads:/var/lib/skysyncr/uploads
+    expose:
+      - "3000"
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/web/Dockerfile
+      args:
+        VITE_API_BASE: /api/
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_started
+    ports:
+      - "${HTTP_PORT:-8080}:80"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/ >/dev/null || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  db_data:
+  uploads:

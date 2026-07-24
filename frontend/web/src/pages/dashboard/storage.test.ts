@@ -33,7 +33,7 @@ import {
   saveNavOrder,
   saveOrderIds,
 } from './storage.ts'
-import type { Item } from './types.ts'
+import type { FileFilters, Group, Item } from './types.ts'
 
 const backingStore = new Map<string, string>()
 
@@ -154,7 +154,7 @@ test('loadFileFilter sanitizes structured stored filters', () => {
 })
 
 test('saveFileFilter round-trips complete filter objects', () => {
-  const filters = {
+  const filters: FileFilters = {
     types: ['archive', 'video'],
     visibility: 'private',
     tagId: 'tag-2',
@@ -163,7 +163,7 @@ test('saveFileFilter round-trips complete filter objects', () => {
     excludedExtensions: 'tmp',
     modifiedFrom: '2026-07-01',
     modifiedTo: '2026-07-31',
-  } as const
+  }
 
   saveFileFilter(filters)
   assert.deepEqual(loadFileFilter(), filters)
@@ -202,7 +202,7 @@ test('loadGroups backfills new fields and migrates legacy invites', () => {
 })
 
 test('saveGroups and saved order helpers round-trip through localStorage', () => {
-  const groups = [
+  const groups: Group[] = [
     {
       id: 'group-1',
       name: 'Design',
@@ -214,9 +214,9 @@ test('saveGroups and saved order helpers round-trip through localStorage', () =>
       members: [],
       invites: [],
     },
-  ] as const
+  ]
 
-  saveGroups([...groups])
+  saveGroups(groups)
   saveOrderIds('all', ['c', 'a'])
 
   assert.deepEqual(loadGroups(), groups)

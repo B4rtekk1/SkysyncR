@@ -1,0 +1,13 @@
+.git
+.github
+.idea
+.agents
+.codex
+backend/target
+backend/uploads
+frontend/web/dist
+frontend/web/node_modules
+infra/env/.env.dev
+infra/env/.env.prod
+**/.DS_Store
+**/*.log
