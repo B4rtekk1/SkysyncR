@@ -133,6 +133,7 @@ export type FileShare = {
   "id": string
   "email": string
   "display_name": string | null
+  "public_key": string
   "permission": FileSharePermission
   "created_at": string
 }

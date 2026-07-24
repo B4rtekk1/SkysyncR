@@ -238,6 +238,7 @@ export const fileShare: Validator<FileShare> = (value, path) => {
     id: string(prop(item, 'id', path), `${path}.id`),
     email: string(prop(item, 'email', path), `${path}.email`),
     display_name: nullableString(prop(item, 'display_name', path), `${path}.display_name`),
+    public_key: string(prop(item, 'public_key', path), `${path}.public_key`),
     permission: fileSharePermission(prop(item, 'permission', path), `${path}.permission`) as FileSharePermission,
     created_at: string(prop(item, 'created_at', path), `${path}.created_at`),
   }

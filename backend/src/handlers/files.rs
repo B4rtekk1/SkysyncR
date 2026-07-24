@@ -28,7 +28,8 @@ use crate::db::files::{
     list_user_file_audit_logs, list_user_file_shares, list_user_file_versions, list_user_files,
     move_user_file, remove_user_file_favourite, rename_user_file, restore_user_file,
     restore_user_file_version, soft_delete_user_file, update_user_file_content,
-    update_user_file_note, update_user_file_share, upsert_user_file_share, user_file_exists,
+    update_user_file_note, update_user_file_share, update_user_file_share_keys_in_tx,
+    upsert_user_file_share, user_file_exists,
 };
 use crate::db::storage::try_apply_storage_delta;
 use crate::observability::RequestId;
@@ -365,6 +366,13 @@ struct UpdateContentPayload {
     checksum: String,
     encrypted_key: Vec<u8>,
     encryption_nonce: Vec<u8>,
+    share_keys: Vec<FileShareKeyPayload>,
+}
+
+#[derive(Deserialize)]
+struct FileShareKeyPayload {
+    share_id: Uuid,
+    encrypted_key: String,
 }
 
 pub async fn list_files(
@@ -683,6 +691,34 @@ pub async fn update_file_content(
         let _ = std::fs::remove_file(&new_storage_path);
         internal_error("create file version", e)
     })?;
+
+    let share_keys = payload
+        .share_keys
+        .into_iter()
+        .map(|share_key| {
+            let encrypted_key =
+                decode_base64_field("share_keys.encrypted_key", &share_key.encrypted_key)?;
+            if encrypted_key.len() < 128 {
+                return Err(ApiError::BadRequest(
+                    "share_keys encrypted_key must be wrapped for the recipient".into(),
+                ));
+            }
+            Ok((share_key.share_id, encrypted_key))
+        })
+        .collect::<Result<Vec<_>, ApiError>>()?;
+    let share_keys_updated =
+        update_user_file_share_keys_in_tx(&mut tx, auth.user_id, file_id, share_keys)
+            .await
+            .map_err(|e| {
+                let _ = std::fs::remove_file(&new_storage_path);
+                internal_error("update file share keys", e)
+            })?;
+    if !share_keys_updated {
+        let _ = fs::remove_file(&new_storage_path).await;
+        return Err(ApiError::BadRequest(
+            "Missing rotated keys for one or more file shares".into(),
+        ));
+    }
 
     let file = update_user_file_content(
         &mut tx,
@@ -1191,6 +1227,7 @@ async fn parse_update_content_payload(
     let mut file_info: Option<(u64, String)> = None;
     let mut encrypted_key: Option<Vec<u8>> = None;
     let mut encryption_nonce: Option<Vec<u8>> = None;
+    let mut share_keys: Option<Vec<FileShareKeyPayload>> = None;
 
     while let Some(field) = multipart
         .next_field()
@@ -1227,6 +1264,16 @@ async fn parse_update_content_payload(
                 }
                 encryption_nonce = Some(decoded);
             }
+            "share_keys" => {
+                let value = field
+                    .text()
+                    .await
+                    .map_err(|_| ApiError::BadRequest("Invalid share_keys".into()))?;
+                share_keys = Some(
+                    serde_json::from_str(value.trim())
+                        .map_err(|_| ApiError::BadRequest("Invalid share_keys".into()))?,
+                );
+            }
             _ => {}
         }
     }
@@ -1243,6 +1290,7 @@ async fn parse_update_content_payload(
             .ok_or_else(|| ApiError::BadRequest("Missing encrypted_key".into()))?,
         encryption_nonce: encryption_nonce
             .ok_or_else(|| ApiError::BadRequest("Missing encryption_nonce".into()))?,
+        share_keys: share_keys.unwrap_or_default(),
     })
 }
 

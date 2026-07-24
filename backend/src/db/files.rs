@@ -1,5 +1,5 @@
 use chrono::{DateTime, Utc};
-use sqlx::{PgPool, Postgres, Row, Transaction};
+use sqlx::{PgPool, Postgres, QueryBuilder, Row, Transaction};
 use uuid::Uuid;
 
 use super::file_records::SharedFileRow;
@@ -211,7 +211,7 @@ pub async fn create_file_version_snapshot_in_tx(
     device_label: Option<&str>,
     action: &str,
 ) -> Result<FileVersionRecord, sqlx::Error> {
-    sqlx::query_as::<_, FileVersionRecord>(
+    let version = sqlx::query_as::<_, FileVersionRecord>(
         r#"
         WITH next_version AS (
             SELECT COALESCE(MAX(version_number), 0) + 1 AS version_number
@@ -255,7 +255,84 @@ pub async fn create_file_version_snapshot_in_tx(
     .bind(device_label)
     .bind(action)
     .fetch_one(&mut **tx)
-    .await
+    .await?;
+
+    sqlx::query(
+        r#"
+        INSERT INTO file_version_shares (
+            file_version_id,
+            file_share_id,
+            recipient_user_id,
+            permission,
+            encrypted_key
+        )
+        SELECT $1, id, recipient_user_id, permission, encrypted_key
+        FROM file_shares
+        WHERE file_id = $2
+        "#,
+    )
+    .bind(version.id)
+    .bind(file_id)
+    .execute(&mut **tx)
+    .await?;
+
+    Ok(version)
+}
+
+pub async fn update_user_file_share_keys_in_tx(
+    tx: &mut Transaction<'_, Postgres>,
+    owner_id: Uuid,
+    file_id: Uuid,
+    share_keys: Vec<(Uuid, Vec<u8>)>,
+) -> Result<bool, sqlx::Error> {
+    let expected_share_ids = sqlx::query_scalar::<_, Uuid>(
+        r#"
+        SELECT id
+        FROM file_shares
+        WHERE owner_id = $1
+          AND file_id = $2
+        ORDER BY id
+        FOR UPDATE
+        "#,
+    )
+    .bind(owner_id)
+    .bind(file_id)
+    .fetch_all(&mut **tx)
+    .await?;
+
+    if expected_share_ids.len() != share_keys.len() {
+        return Ok(false);
+    }
+
+    let mut expected_share_ids = expected_share_ids;
+    expected_share_ids.sort_unstable();
+    let mut actual_share_ids: Vec<Uuid> =
+        share_keys.iter().map(|(share_id, _)| *share_id).collect();
+    actual_share_ids.sort_unstable();
+    if actual_share_ids != expected_share_ids {
+        return Ok(false);
+    }
+
+    if share_keys.is_empty() {
+        return Ok(true);
+    }
+
+    let mut query_builder = QueryBuilder::<Postgres>::new(
+        "UPDATE file_shares AS fs SET encrypted_key = v.encrypted_key, updated_at = NOW() FROM (VALUES ",
+    );
+    let mut separated = query_builder.separated(", ");
+    for (share_id, encrypted_key) in share_keys {
+        separated
+            .push("(")
+            .push_bind(share_id)
+            .push(", ")
+            .push_bind(encrypted_key)
+            .push(")");
+    }
+    separated.push_unseparated(") AS v(id, encrypted_key) WHERE fs.id = v.id");
+
+    query_builder.build().execute(&mut **tx).await?;
+    Ok(true)
 }
 
 pub async fn list_user_file_versions(
@@ -304,7 +381,7 @@ pub async fn restore_user_file_version(
 
     let version = sqlx::query_as::<_, UpdateFileContentTarget>(
         r#"
-        SELECT f.owner_id, fv.storage_path, fv.size_bytes, fv.checksum, f.encrypted_key, f.encryption_nonce
+        SELECT f.owner_id, fv.storage_path, fv.size_bytes, fv.checksum, fv.encrypted_key, fv.encryption_nonce
         FROM file_versions fv
         JOIN files f ON f.id = fv.file_id
         WHERE fv.id = $1
@@ -342,6 +419,25 @@ pub async fn restore_user_file_version(
         version.encryption_nonce,
         version.checksum,
     )
+    .await?;
+
+    sqlx::query(
+        r#"
+        UPDATE file_shares fs
+        SET encrypted_key = fvs.encrypted_key,
+            permission = fvs.permission,
+            updated_at = NOW()
+        FROM file_version_shares fvs
+        WHERE fvs.file_version_id = $1
+          AND fvs.file_share_id = fs.id
+          AND fs.file_id = $2
+          AND fs.owner_id = $3
+        "#,
+    )
+    .bind(version_id)
+    .bind(file_id)
+    .bind(user_id)
+    .execute(&mut *tx)
     .await?;
 
     tx.commit().await?;
@@ -533,6 +629,7 @@ pub async fn list_user_file_shares(
             fs.id,
             recipient.email,
             recipient.display_name,
+            recipient.public_key,
             fs.permission,
             fs.created_at
         FROM file_shares fs
@@ -542,6 +639,7 @@ pub async fn list_user_file_shares(
           AND fs.owner_id = $2
           AND f.owner_id = $2
           AND f.is_deleted = FALSE
+          AND recipient.public_key IS NOT NULL
         ORDER BY fs.created_at DESC
         "#,
     )
@@ -565,6 +663,7 @@ pub async fn upsert_user_file_share(
               AND f.owner_id = $1
               AND f.is_deleted = FALSE
               AND recipient.is_active = TRUE
+              AND recipient.public_key IS NOT NULL
               AND recipient.id <> $1
         ),
         upserted AS (
@@ -588,6 +687,7 @@ pub async fn upsert_user_file_share(
             upserted.id,
             recipient.email,
             recipient.display_name,
+            recipient.public_key,
             upserted.permission,
             upserted.created_at
         FROM upserted

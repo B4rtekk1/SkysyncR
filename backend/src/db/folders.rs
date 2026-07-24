@@ -24,6 +24,7 @@ pub struct FolderShareRecord {
     pub id: Uuid,
     pub email: String,
     pub display_name: Option<String>,
+    pub public_key: String,
     pub permission: String,
     pub created_at: DateTime<Utc>,
 }
@@ -471,6 +472,7 @@ pub async fn list_user_folder_shares(
             fs.id,
             recipient.email,
             recipient.display_name,
+            recipient.public_key,
             fs.permission,
             fs.created_at
         FROM folder_shares fs
@@ -480,6 +482,7 @@ pub async fn list_user_folder_shares(
           AND fs.owner_id = $2
           AND f.owner_id = $2
           AND f.is_deleted = FALSE
+          AND recipient.public_key IS NOT NULL
         ORDER BY fs.created_at DESC
         "#,
     )
@@ -503,6 +506,7 @@ pub async fn upsert_user_folder_share(
               AND f.owner_id = $1
               AND f.is_deleted = FALSE
               AND recipient.is_active = TRUE
+              AND recipient.public_key IS NOT NULL
               AND recipient.id <> $1
         ),
         upserted AS (
@@ -526,6 +530,7 @@ pub async fn upsert_user_folder_share(
             upserted.id,
             recipient.email,
             recipient.display_name,
+            recipient.public_key,
             upserted.permission,
             upserted.created_at
         FROM upserted

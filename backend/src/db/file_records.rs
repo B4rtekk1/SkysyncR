@@ -50,6 +50,7 @@ pub struct FileShareRecord {
     pub id: Uuid,
     pub email: String,
     pub display_name: Option<String>,
+    pub public_key: String,
     pub permission: String,
     pub created_at: DateTime<Utc>,
 }

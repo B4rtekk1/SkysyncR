@@ -1,13 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { downloadFileWithIntegrity, updateFileContent, verifyBlobChecksum, type ApiFile } from '../../../api/files'
+import { downloadFileWithIntegrity, listFileShares, updateFileContent, verifyBlobChecksum, type ApiFile } from '../../../api/files'
 import {
     decryptFile,
     decryptFileStream,
     encryptedFileFormatNonce,
     encryptFileStream,
+    generateFileKey,
     isChunkedFileNonce,
     streamToBlob,
     unwrapFileKeyForUser,
+    wrapFileKeyForUser,
 } from '../../../crypto/fileEncryption'
 import { type FileKind, kindFromFile } from '../fileUtils'
 import type { FilePreviewState, Item } from '../types'
@@ -39,7 +41,7 @@ function previewKindFromFile(filename: string, mime: string | null): FilePreview
 
 export function useFilePreview(
     privateKey: CryptoKey | null,
-    _publicKey: string | null,
+    publicKey: string | null,
     setError: (error: string | null) => void,
     onFileUpdated: (file: ApiFile) => void,
 ) {
@@ -176,14 +178,29 @@ export function useFilePreview(
         if (!privateKey) {
             throw new Error('Private key is locked. Sign in again to save encrypted files.')
         }
-        const fileKey = await unwrapFileKeyForUser(item.encrypted_key, privateKey)
+        if (!publicKey) {
+            throw new Error('Account public key is unavailable. Sign in again before saving encrypted files.')
+        }
+
+        const fileKey = await generateFileKey()
+        const [wrappedOwnerKey, shares] = await Promise.all([
+            wrapFileKeyForUser(fileKey, publicKey),
+            listFileShares(item.id),
+        ])
+        const shareKeys = await Promise.all(
+            shares.map(async (share) => ({
+                shareId: share.id,
+                encryptedKey: await wrapFileKeyForUser(fileKey, share.public_key),
+            })),
+        )
         const encryptedFile = encryptFileStream(new Blob([text], { type: item.mime_type || 'text/plain' }), fileKey)
         const updated = await updateFileContent({
             id: item.id,
             encryptedFile,
             originalFilename: item.filename,
-            wrappedKey: item.encrypted_key,
+            wrappedKey: wrappedOwnerKey,
             encryptionNonce: encryptedFileFormatNonce(),
+            shareKeys,
         })
 
         const visibleUpdated = {

@@ -442,10 +442,17 @@ export async function updateFileContent(params: {
     originalFilename: string
     wrappedKey: ArrayBuffer | Uint8Array | string
     encryptionNonce: ArrayBuffer | Uint8Array
+    shareKeys?: Array<{ shareId: string; encryptedKey: ArrayBuffer | Uint8Array | string }>
 }): Promise<ApiFile> {
     const res = await authenticatedMultipartStream(`${API_BASE}files/${params.id}/content`, [
         textPart('encrypted_key', typeof params.wrappedKey === 'string' ? params.wrappedKey : arrayBufferToBase64(params.wrappedKey)),
         textPart('encryption_nonce', arrayBufferToBase64(params.encryptionNonce)),
+        textPart('share_keys', JSON.stringify((params.shareKeys ?? []).map((shareKey) => ({
+            share_id: shareKey.shareId,
+            encrypted_key: typeof shareKey.encryptedKey === 'string'
+                ? shareKey.encryptedKey
+                : arrayBufferToBase64(shareKey.encryptedKey),
+        })))),
         streamPart('file', params.encryptedFile, params.originalFilename, 'application/octet-stream'),
     ], 'PUT')
     if (!res.ok) throw new Error(await parseErrorMessage(res))
