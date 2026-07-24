@@ -33,6 +33,7 @@ use crate::db::files::{
 };
 use crate::db::storage::try_apply_storage_delta;
 use crate::observability::RequestId;
+use crate::services::ransomware_detection::detect_and_alert_after_file_mutation;
 use crate::services::trash::permanently_delete_user_file;
 use crate::state::AppState;
 use crate::utils::errors::{ApiError, internal_error};
@@ -1578,5 +1579,20 @@ async fn log_file_audit(
             action,
             "failed to write file audit log"
         );
+        return;
+    }
+
+    if matches!(action, "file.delete" | "file.rename" | "file.update") {
+        if let Err(err) =
+            detect_and_alert_after_file_mutation(&state.db_pool, user_id, device_label).await
+        {
+            tracing::warn!(
+                error = %err,
+                user_id = %user_id,
+                file_id = %file_id,
+                action,
+                "failed to evaluate ransomware activity"
+            );
+        }
     }
 }

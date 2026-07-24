@@ -60,6 +60,40 @@ pub async fn create_notification(
     .await
 }
 
+pub async fn create_ransomware_alert_notification_if_absent(
+    pool: &PgPool,
+    notification: NewNotification,
+    device_label: Option<&str>,
+    dedupe_minutes: i32,
+) -> Result<Option<NotificationRecord>, sqlx::Error> {
+    sqlx::query_as::<_, NotificationRecord>(
+        r#"
+        WITH inserted AS (
+            INSERT INTO notifications (user_id, type, payload)
+            SELECT $1, $2, $3
+            WHERE NOT EXISTS (
+                SELECT 1
+                FROM notifications n
+                WHERE n.user_id = $1
+                  AND n.type = $2
+                  AND n.payload->>'device_label' IS NOT DISTINCT FROM $4
+                  AND n.created_at >= NOW() - ($5::int * interval '1 minute')
+            )
+            RETURNING id, type, payload, is_read, created_at
+        )
+        SELECT id, type, payload, is_read, created_at
+        FROM inserted
+        "#,
+    )
+    .bind(notification.user_id)
+    .bind(notification.r#type)
+    .bind(notification.payload)
+    .bind(device_label)
+    .bind(dedupe_minutes)
+    .fetch_optional(pool)
+    .await
+}
+
 pub async fn mark_notification_read(
     pool: &PgPool,
     user_id: Uuid,

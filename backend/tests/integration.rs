@@ -13,6 +13,7 @@ use skysyncr::db::storage::{get_storage_quota, try_apply_storage_delta};
 use skysyncr::db::users::{
     is_login_allowed, record_failed_login, reset_failed_login, update_last_login,
 };
+use skysyncr::services::ransomware_detection::detect_and_alert_after_file_mutation;
 use sqlx::{Executor, PgPool, postgres::PgPoolOptions};
 use std::borrow::Cow;
 use std::sync::{Arc, OnceLock};
@@ -375,6 +376,53 @@ async fn storage_quota_rejects_overflow_and_negative_usage() {
     let quota = get_storage_quota(&pool, user_id).await.unwrap();
     assert_eq!(quota.used_bytes, 60);
     assert_eq!(quota.total_bytes, 100);
+}
+
+#[tokio::test]
+async fn ransomware_detection_alerts_once_for_mass_deletes() {
+    let (_guard, pool) = test_pool().await;
+    let user_id = insert_user(&pool, "ransomware-alert@example.test").await;
+    let device_label = "Integration Test Browser";
+
+    for _ in 0..10 {
+        sqlx::query(
+            r#"
+            INSERT INTO audit_logs (user_id, action, resource_id, resource_type, device_label)
+            VALUES ($1, 'file.delete', $2, 'file', $3)
+            "#,
+        )
+        .bind(user_id)
+        .bind(Uuid::new_v4())
+        .bind(device_label)
+        .execute(&pool)
+        .await
+        .unwrap();
+    }
+
+    detect_and_alert_after_file_mutation(&pool, user_id, Some(device_label))
+        .await
+        .unwrap();
+    detect_and_alert_after_file_mutation(&pool, user_id, Some(device_label))
+        .await
+        .unwrap();
+
+    let alert_count = sqlx::query_scalar::<_, i64>(
+        r#"
+        SELECT COUNT(*)
+        FROM notifications
+        WHERE user_id = $1
+          AND type = 'security.ransomware_suspected'
+          AND payload->>'device_label' = $2
+          AND payload->'signals' ? 'mass_deletes'
+        "#,
+    )
+    .bind(user_id)
+    .bind(device_label)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+
+    assert_eq!(alert_count, 1);
 }
 
 #[tokio::test]

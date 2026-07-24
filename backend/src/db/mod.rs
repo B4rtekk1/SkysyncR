@@ -5,6 +5,7 @@ pub mod folders;
 pub mod groups;
 pub mod migrations;
 pub mod notifications;
+pub mod ransomware_detection;
 pub mod refresh_tokens;
 pub mod storage;
 pub mod tags;
