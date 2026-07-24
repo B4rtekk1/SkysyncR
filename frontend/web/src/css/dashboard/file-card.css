@@ -176,6 +176,7 @@
 
 .file-card__tag,
 .file-card__tag-add {
+    --tag-color: var(--signal);
     display: inline-flex;
     align-items: center;
     max-width: 100%;
@@ -280,6 +281,7 @@
 }
 
 .file-card__tag-swatch {
+    --tag-color: var(--signal);
     width: 10px;
     height: 10px;
     border-radius: 50%;

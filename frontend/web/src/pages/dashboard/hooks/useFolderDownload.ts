@@ -34,42 +34,40 @@ export function useFolderDownload(privateKey: CryptoKey | null, setError: (error
         return decryptFile(encryptedBlob, fileKey, item.encryption_nonce, item.mime_type)
     }, [privateKey])
 
-    const collectFolderEntries = useCallback(async (
-        folderId: string,
-        pathPrefix: string,
-        usedPaths: Set<string>,
-    ): Promise<ZipEntry[]> => {
+    const downloadFolder = useCallback(async (folder: ApiFolder) => {
         if (!privateKey) {
-            throw new Error('Private key is locked. Sign in again to unlock your vault.')
+            setError('Private key is locked. Sign in again to unlock your vault.')
+            return
+        }
+        const folderPrivateKey = privateKey
+
+        async function collectFolderEntries(
+            folderId: string,
+            pathPrefix: string,
+            usedPaths: Set<string>,
+        ): Promise<ZipEntry[]> {
+            const [files, folders] = await Promise.all([
+                listFiles(folderId),
+                listFolders(folderId),
+            ])
+            const [visibleFiles, visibleFolders] = await Promise.all([
+                decryptFilesMetadata(files, folderPrivateKey),
+                decryptFoldersMetadata(folders, folderPrivateKey),
+            ])
+
+            const fileEntries = await Promise.all(visibleFiles.map(async (file) => ({
+                path: uniqueZipPath(`${pathPrefix}/${safeZipName(file.filename, 'file')}`, usedPaths),
+                blob: await decryptDownloadedFile(file),
+                modifiedAt: new Date(file.updated_at),
+            })))
+            const nestedEntries = await Promise.all(visibleFolders.map((nestedFolder) =>
+                collectFolderEntries(nestedFolder.id, `${pathPrefix}/${safeZipName(nestedFolder.name, 'folder')}`, usedPaths),
+            ))
+
+            return [...fileEntries, ...nestedEntries.flat()]
         }
 
-        const [files, folders] = await Promise.all([
-            listFiles(folderId),
-            listFolders(folderId),
-        ])
-        const [visibleFiles, visibleFolders] = await Promise.all([
-            decryptFilesMetadata(files, privateKey),
-            decryptFoldersMetadata(folders, privateKey),
-        ])
-
-        const fileEntries = await Promise.all(visibleFiles.map(async (file) => ({
-            path: uniqueZipPath(`${pathPrefix}/${safeZipName(file.filename, 'file')}`, usedPaths),
-            blob: await decryptDownloadedFile(file),
-            modifiedAt: new Date(file.updated_at),
-        })))
-        const nestedEntries = await Promise.all(visibleFolders.map((folder) =>
-            collectFolderEntries(folder.id, `${pathPrefix}/${safeZipName(folder.name, 'folder')}`, usedPaths),
-        ))
-
-        return [...fileEntries, ...nestedEntries.flat()]
-    }, [decryptDownloadedFile, privateKey])
-
-    async function downloadFolder(folder: ApiFolder) {
         try {
-            if (!privateKey) {
-                throw new Error('Private key is locked. Sign in again to unlock your vault.')
-            }
-
             setError(null)
             const folderName = safeZipName(folder.name, 'folder')
             const entries = await collectFolderEntries(folder.id, folderName, new Set())
@@ -85,7 +83,7 @@ export function useFolderDownload(privateKey: CryptoKey | null, setError: (error
         } catch (e) {
             setError(e instanceof Error ? e.message : 'Could not download that folder.')
         }
-    }
+    }, [decryptDownloadedFile, privateKey, setError])
 
     return { downloadFolder }
 }
