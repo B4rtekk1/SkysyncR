@@ -289,7 +289,9 @@ async fn migrations_apply_to_existing_legacy_database_and_backup_destructive_cha
     assert!(table_column_exists(&pool, "users", "verification_token_expires_at").await);
     assert!(table_column_exists(&pool, "users", "sync_on_metered").await);
     assert!(table_column_exists(&pool, "refresh_tokens", "session_expires_at").await);
-    assert!(!table_column_exists(&pool, "refresh_tokens", "user_agent").await);
+    assert!(table_column_exists(&pool, "refresh_tokens", "user_agent").await);
+    assert!(table_column_exists(&pool, "refresh_tokens", "session_id").await);
+    assert!(table_column_exists(&pool, "refresh_token_activity_logs", "session_id").await);
     assert!(table_column_exists(&pool, "file_shares", "owner_id").await);
     assert!(table_column_exists(&pool, "file_shares", "recipient_user_id").await);
     assert!(table_column_exists(&pool, "file_shares", "encrypted_key").await);
@@ -382,7 +384,12 @@ async fn refresh_token_rotation_revokes_old_token_and_accepts_new_token() {
     let old_token = "old-refresh-token";
     let new_token = "new-refresh-token";
 
-    let session_expires_at = create_refresh_token(&pool, user_id, old_token)
+    let metadata = skysyncr::db::refresh_tokens::RefreshTokenMetadata {
+        device_label: Some("Test browser on Linux"),
+        user_agent: Some("test-agent"),
+        ip_address: Some("127.0.0.1"),
+    };
+    let session_expires_at = create_refresh_token(&pool, user_id, old_token, metadata)
         .await
         .unwrap();
 
@@ -391,9 +398,17 @@ async fn refresh_token_rotation_revokes_old_token_and_accepts_new_token() {
         panic!("old token should start valid");
     };
 
-    rotate_refresh_token(&pool, stored.id, user_id, new_token, session_expires_at)
-        .await
-        .unwrap();
+    rotate_refresh_token(
+        &pool,
+        stored.id,
+        user_id,
+        stored.session_id,
+        new_token,
+        session_expires_at,
+        metadata,
+    )
+    .await
+    .unwrap();
 
     match authenticate_refresh_token(&pool, old_token).await.unwrap() {
         RefreshTokenAuth::ReuseDetected { user_id: detected } => assert_eq!(detected, user_id),

@@ -11,6 +11,7 @@ import type {
   RegisterResponse,
   RecoveryBlob,
   ResetPasswordRequest as ResetPasswordPayload,
+  SessionsResponse,
   TokenPair as LoginResponse,
   UserSettings as UserSettingsResponse,
   UserSettingsRequest as UserSettingsPayload,
@@ -21,6 +22,7 @@ import {
   readJson,
   recoveryBlob,
   registerResponse,
+  sessionsResponse,
   tokenPair,
   userSettings,
 } from './validators'
@@ -37,6 +39,7 @@ export type {
   ForgotPasswordPayload,
   RecoveryBlob,
   ResetPasswordPayload,
+  SessionsResponse,
 }
 
 export class ApiRequestError extends Error {
@@ -186,6 +189,28 @@ export async function changePassword(payload: ChangePasswordPayload): Promise<Lo
   const tokens = await readJson(res, tokenPair, 'ChangePasswordResponse')
   saveTokens(tokens)
   return tokens
+}
+
+export async function getSessions(): Promise<SessionsResponse> {
+  const res = await authenticatedFetch(`${url}users/sessions`, {
+    method: 'GET',
+  })
+
+  if (!res.ok) {
+    await throwApiError(res, 'Could not load sessions')
+  }
+
+  return readJson(res, sessionsResponse, 'SessionsResponse')
+}
+
+export async function revokeSession(sessionId: string): Promise<void> {
+  const res = await authenticatedFetch(`${url}users/sessions/${sessionId}`, {
+    method: 'DELETE',
+  })
+
+  if (!res.ok) {
+    await throwApiError(res, 'Could not sign out this session')
+  }
 }
 
 export async function forgotPassword(payload: ForgotPasswordPayload): Promise<void> {

@@ -2,8 +2,10 @@ use crate::auth::AuthUser;
 use crate::crypto::jwt::generate_access_token_capped;
 use crate::crypto::refresh_token::generate_refresh_token;
 use crate::db::refresh_tokens::{
-    RefreshTokenAuth, ValidRefreshToken, authenticate_refresh_token, create_refresh_token,
-    revoke_all_user_refresh_tokens, revoke_refresh_token, rotate_refresh_token,
+    RefreshTokenAuth, RefreshTokenMetadata, ValidRefreshToken, authenticate_refresh_token,
+    create_refresh_token, insert_refresh_token_activity, list_active_user_sessions,
+    list_user_session_activity, revoke_all_user_refresh_tokens, revoke_refresh_token,
+    revoke_user_session, rotate_refresh_token,
 };
 use crate::db::users::*;
 use crate::models::users::{
@@ -17,13 +19,15 @@ use crate::utils::validation::{
 };
 use axum::{
     Json,
-    extract::State,
-    http::{HeaderMap, HeaderValue, header},
+    extract::{Path, State},
+    http::{HeaderMap, HeaderName, HeaderValue, header},
     response::{IntoResponse, Response},
 };
 use bcrypt::{DEFAULT_COST, hash, verify};
 use chrono::Utc;
 use serde::Deserialize;
+use serde::Serialize;
+use uuid::Uuid;
 
 use crate::crypto::email::send_verification_email;
 
@@ -40,6 +44,13 @@ pub struct ResendVerificationRequest {
 const REFRESH_TOKEN_COOKIE: &str = "skysyncr_refresh_token";
 const REFRESH_PERSISTENCE_COOKIE: &str = "skysyncr_refresh_persistent";
 const INVALID_LOGIN_MESSAGE: &str = "Invalid email or password";
+const SESSION_ACTIVITY_LIMIT: i64 = 30;
+
+#[derive(Serialize)]
+pub struct SessionsResponse {
+    pub sessions: Vec<crate::db::refresh_tokens::UserSession>,
+    pub activity: Vec<crate::db::refresh_tokens::UserSessionActivity>,
+}
 
 fn refresh_token_cookie(
     token: &str,
@@ -112,6 +123,114 @@ fn has_cookie(headers: &HeaderMap, name: &str) -> bool {
                 .any(|cookie| cookie.starts_with(&prefix))
         })
     })
+}
+
+fn header_string(headers: &HeaderMap, name: HeaderName, max_len: usize) -> Option<String> {
+    headers
+        .get(name)
+        .and_then(|value| value.to_str().ok())
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(|value| value.chars().take(max_len).collect())
+}
+
+fn request_ip(headers: &HeaderMap) -> Option<String> {
+    header_string(headers, HeaderName::from_static("x-forwarded-for"), 128)
+        .and_then(|value| value.split(',').next().map(str::trim).map(str::to_string))
+        .filter(|value| !value.is_empty())
+        .or_else(|| header_string(headers, HeaderName::from_static("x-real-ip"), 128))
+}
+
+fn browser_name(user_agent: &str) -> &'static str {
+    if user_agent.contains("Edg/") {
+        "Microsoft Edge"
+    } else if user_agent.contains("OPR/") || user_agent.contains("Opera/") {
+        "Opera"
+    } else if user_agent.contains("Firefox/") {
+        "Firefox"
+    } else if user_agent.contains("Chrome/") || user_agent.contains("CriOS/") {
+        "Chrome"
+    } else if user_agent.contains("Safari/") {
+        "Safari"
+    } else {
+        "Browser"
+    }
+}
+
+fn platform_name(user_agent: &str) -> &'static str {
+    if user_agent.contains("Windows") {
+        "Windows"
+    } else if user_agent.contains("iPhone") {
+        "iPhone"
+    } else if user_agent.contains("iPad") {
+        "iPad"
+    } else if user_agent.contains("Android") {
+        "Android"
+    } else if user_agent.contains("Mac OS X") || user_agent.contains("Macintosh") {
+        "macOS"
+    } else if user_agent.contains("Linux") {
+        "Linux"
+    } else {
+        "Unknown device"
+    }
+}
+
+fn device_label_from_headers(headers: &HeaderMap) -> Option<String> {
+    let user_agent = header_string(headers, header::USER_AGENT, 512)?;
+    let browser = browser_name(&user_agent);
+    let platform = platform_name(&user_agent);
+
+    if platform == "Unknown device" && browser == "Browser" {
+        Some("Unknown browser".into())
+    } else {
+        Some(format!("{browser} on {platform}"))
+    }
+}
+
+fn request_metadata_values(headers: &HeaderMap) -> (Option<String>, Option<String>, Option<String>) {
+    (
+        device_label_from_headers(headers),
+        header_string(headers, header::USER_AGENT, 512),
+        request_ip(headers),
+    )
+}
+
+fn owned_refresh_metadata<'a>(
+    device_label: &'a Option<String>,
+    user_agent: &'a Option<String>,
+    ip_address: &'a Option<String>,
+) -> RefreshTokenMetadata<'a> {
+    RefreshTokenMetadata {
+        device_label: device_label.as_deref(),
+        user_agent: user_agent.as_deref(),
+        ip_address: ip_address.as_deref(),
+    }
+}
+
+async fn current_refresh_session_id(
+    state: &AppState,
+    headers: &HeaderMap,
+    expected_user_id: Uuid,
+) -> Result<Option<Uuid>, ApiError> {
+    let Ok(refresh_token) = refresh_token_from_cookie(headers) else {
+        return Ok(None);
+    };
+
+    match authenticate_refresh_token(&state.db_pool, &refresh_token)
+        .await
+        .map_err(|e| internal_error("authenticate current session token", e))?
+    {
+        RefreshTokenAuth::Valid(token) if token.user_id == expected_user_id => {
+            Ok(Some(token.session_id))
+        }
+        RefreshTokenAuth::ReuseDetected { user_id } => {
+            revoke_all_user_refresh_tokens(&state.db_pool, user_id)
+                .await
+                .map_err(|e| internal_error("revoke sessions after token anomaly", e))?;
+            Err(ApiError::Unauthorized("Session invalid".into()))
+        }
+        _ => Ok(None),
+    }
 }
 
 pub async fn current_user(
@@ -246,7 +365,7 @@ pub async fn change_password(
         .map_err(|e| internal_error("revoke sessions after password change", e))?;
 
     let (access_token, refresh_token, expires_in, session_expires_at) =
-        issue_token_pair(&state, auth.user_id).await?;
+        issue_token_pair(&state, auth.user_id, &headers).await?;
 
     let persistent = has_cookie(&headers, REFRESH_PERSISTENCE_COOKIE);
     let mut response_headers = HeaderMap::new();
@@ -396,9 +515,12 @@ pub async fn register_user(
 async fn issue_token_pair(
     state: &AppState,
     user_id: uuid::Uuid,
+    headers: &HeaderMap,
 ) -> Result<(String, String, i64, chrono::DateTime<Utc>), ApiError> {
     let refresh_token = generate_refresh_token();
-    let session_expires_at = create_refresh_token(&state.db_pool, user_id, &refresh_token)
+    let (device_label, user_agent, ip_address) = request_metadata_values(headers);
+    let metadata = owned_refresh_metadata(&device_label, &user_agent, &ip_address);
+    let session_expires_at = create_refresh_token(&state.db_pool, user_id, &refresh_token, metadata)
         .await
         .map_err(|e| internal_error("create refresh token", e))?;
 
@@ -413,6 +535,7 @@ async fn issue_token_pair(
 }
 
 pub async fn login_user(
+    headers: HeaderMap,
     State(state): State<AppState>,
     Json(payload): Json<LoginRequest>,
 ) -> Result<Response, ApiError> {
@@ -468,7 +591,7 @@ pub async fn login_user(
         .map_err(|e| internal_error("reset failed login", e))?;
 
     let (access_token, refresh_token, expires_in, session_expires_at) =
-        issue_token_pair(&state, auth_record.id).await?;
+        issue_token_pair(&state, auth_record.id, &headers).await?;
 
     update_last_login(&state.db_pool, &email)
         .await
@@ -516,12 +639,16 @@ pub async fn refresh_tokens(
 
     let new_refresh_token = generate_refresh_token();
     let persistent = has_cookie(&headers, REFRESH_PERSISTENCE_COOKIE);
+    let (device_label, user_agent, ip_address) = request_metadata_values(&headers);
+    let metadata = owned_refresh_metadata(&device_label, &user_agent, &ip_address);
     rotate_refresh_token(
         &state.db_pool,
         stored.id,
         stored.user_id,
+        stored.session_id,
         &new_refresh_token,
         stored.session_expires_at,
+        metadata,
     )
     .await
     .map_err(|e| internal_error("rotate refresh token", e))?;
@@ -561,6 +688,17 @@ pub async fn logout_user(
         revoke_refresh_token(&state.db_pool, stored.id)
             .await
             .map_err(|e| internal_error("revoke refresh token", e))?;
+        let (device_label, user_agent, ip_address) = request_metadata_values(&headers);
+        let metadata = owned_refresh_metadata(&device_label, &user_agent, &ip_address);
+        insert_refresh_token_activity(
+            &state.db_pool,
+            stored.user_id,
+            stored.session_id,
+            "logout",
+            metadata,
+        )
+        .await
+        .map_err(|e| internal_error("record logout activity", e))?;
     }
 
     let mut response_headers = HeaderMap::new();
@@ -586,6 +724,17 @@ pub async fn logout_all_sessions(
         revoke_all_user_refresh_tokens(&state.db_pool, stored.user_id)
             .await
             .map_err(|e| internal_error("revoke all refresh tokens", e))?;
+        let (device_label, user_agent, ip_address) = request_metadata_values(&headers);
+        let metadata = owned_refresh_metadata(&device_label, &user_agent, &ip_address);
+        insert_refresh_token_activity(
+            &state.db_pool,
+            stored.user_id,
+            stored.session_id,
+            "logout_all",
+            metadata,
+        )
+        .await
+        .map_err(|e| internal_error("record logout all activity", e))?;
     }
 
     let mut response_headers = HeaderMap::new();
@@ -599,6 +748,66 @@ pub async fn logout_all_sessions(
     );
 
     Ok((response_headers, "All sessions revoked").into_response())
+}
+
+pub async fn list_sessions(
+    headers: HeaderMap,
+    State(state): State<AppState>,
+    auth: AuthUser,
+) -> Result<Json<SessionsResponse>, ApiError> {
+    let current_session_id = current_refresh_session_id(&state, &headers, auth.user_id).await?;
+    let sessions = list_active_user_sessions(&state.db_pool, auth.user_id, current_session_id)
+        .await
+        .map_err(|e| internal_error("list sessions", e))?;
+    let activity = list_user_session_activity(&state.db_pool, auth.user_id, SESSION_ACTIVITY_LIMIT)
+        .await
+        .map_err(|e| internal_error("list session activity", e))?;
+
+    Ok(Json(SessionsResponse { sessions, activity }))
+}
+
+pub async fn revoke_session(
+    headers: HeaderMap,
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Path(session_id): Path<Uuid>,
+) -> Result<Response, ApiError> {
+    let current_session_id = current_refresh_session_id(&state, &headers, auth.user_id).await?;
+    let revoked = revoke_user_session(&state.db_pool, auth.user_id, session_id)
+        .await
+        .map_err(|e| internal_error("revoke session", e))?;
+
+    if !revoked {
+        return Err(ApiError::BadRequest("Session not found".into()));
+    }
+
+    let (device_label, user_agent, ip_address) = request_metadata_values(&headers);
+    let metadata = owned_refresh_metadata(&device_label, &user_agent, &ip_address);
+    insert_refresh_token_activity(
+        &state.db_pool,
+        auth.user_id,
+        session_id,
+        "revoked",
+        metadata,
+    )
+    .await
+    .map_err(|e| internal_error("record session revocation activity", e))?;
+
+    if current_session_id == Some(session_id) {
+        let mut response_headers = HeaderMap::new();
+        response_headers.append(
+            header::SET_COOKIE,
+            clear_cookie(REFRESH_TOKEN_COOKIE, state.config.is_dev),
+        );
+        response_headers.append(
+            header::SET_COOKIE,
+            clear_cookie(REFRESH_PERSISTENCE_COOKIE, state.config.is_dev),
+        );
+
+        Ok((response_headers, "Session revoked").into_response())
+    } else {
+        Ok("Session revoked".into_response())
+    }
 }
 
 pub async fn verify_email(

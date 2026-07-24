@@ -86,6 +86,30 @@ export type UserSettings = {
   "trash_retention_days": number
 }
 
+export type UserSession = {
+  "id": string
+  "device_label": string
+  "ip_address": string | null
+  "created_at": string
+  "last_used_at": string
+  "expires_at": string
+  "current": boolean
+}
+
+export type UserSessionActivity = {
+  "id": string
+  "session_id": string
+  "action": string
+  "device_label": string | null
+  "ip_address": string | null
+  "created_at": string
+}
+
+export type SessionsResponse = {
+  "sessions": UserSession[]
+  "activity": UserSessionActivity[]
+}
+
 export type VerifyUserRequest = {
   "token": string
 }
@@ -302,6 +326,7 @@ export type FileUploadRequest = {
   "folder_id"?: string
   "encrypted_key": string
   "encryption_nonce": string
+  "share_keys"?: string
   "file": string
 }
 

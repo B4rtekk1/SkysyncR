@@ -16,6 +16,7 @@ import type {
   RegisterResponse,
   RecoveryBlob,
   ShareRecipient,
+  SessionsResponse,
   SharedFile,
   StorageQuota,
   FileTag,
@@ -185,6 +186,39 @@ export const userSettings: Validator<UserSettings> = (value, path) => {
     device_lock: boolean(prop(item, 'device_lock', path), `${path}.device_lock`),
     sync_on_metered: boolean(prop(item, 'sync_on_metered', path), `${path}.sync_on_metered`),
     trash_retention_days: number(prop(item, 'trash_retention_days', path), `${path}.trash_retention_days`),
+  }
+}
+
+export const userSession: Validator<import('./generated').UserSession> = (value, path) => {
+  const item = object(value, path)
+  return {
+    id: string(prop(item, 'id', path), `${path}.id`),
+    device_label: string(prop(item, 'device_label', path), `${path}.device_label`),
+    ip_address: nullableString(prop(item, 'ip_address', path), `${path}.ip_address`),
+    created_at: string(prop(item, 'created_at', path), `${path}.created_at`),
+    last_used_at: string(prop(item, 'last_used_at', path), `${path}.last_used_at`),
+    expires_at: string(prop(item, 'expires_at', path), `${path}.expires_at`),
+    current: boolean(prop(item, 'current', path), `${path}.current`),
+  }
+}
+
+export const userSessionActivity: Validator<import('./generated').UserSessionActivity> = (value, path) => {
+  const item = object(value, path)
+  return {
+    id: string(prop(item, 'id', path), `${path}.id`),
+    session_id: string(prop(item, 'session_id', path), `${path}.session_id`),
+    action: string(prop(item, 'action', path), `${path}.action`),
+    device_label: nullableString(prop(item, 'device_label', path), `${path}.device_label`),
+    ip_address: nullableString(prop(item, 'ip_address', path), `${path}.ip_address`),
+    created_at: string(prop(item, 'created_at', path), `${path}.created_at`),
+  }
+}
+
+export const sessionsResponse: Validator<SessionsResponse> = (value, path) => {
+  const item = object(value, path)
+  return {
+    sessions: arrayOf(userSession)(prop(item, 'sessions', path), `${path}.sessions`),
+    activity: arrayOf(userSessionActivity)(prop(item, 'activity', path), `${path}.activity`),
   }
 }
 

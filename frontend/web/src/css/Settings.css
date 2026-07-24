@@ -512,6 +512,18 @@
     gap: 4px;
 }
 
+.settings-session-controls {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    gap: 8px;
+}
+
+.settings-session-button {
+    min-width: 86px;
+    padding: 8px 10px;
+}
+
 .settings-session-item strong {
     color: var(--paper);
     font-size: 0.9rem;
@@ -521,6 +533,55 @@
     color: var(--mist);
     font-size: 0.78rem;
     line-height: 1.4;
+}
+
+.settings-session-history {
+    display: grid;
+    width: 100%;
+    gap: 8px;
+}
+
+.settings-session-history h3 {
+    margin: 4px 0 2px;
+    color: var(--paper);
+    font-size: 0.9rem;
+    font-weight: 600;
+}
+
+.settings-activity-item {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 12px;
+    align-items: start;
+    width: 100%;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--panel);
+    padding: 11px 12px;
+}
+
+.settings-activity-item span {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.settings-activity-item strong {
+    color: var(--paper);
+    font-size: 0.84rem;
+}
+
+.settings-activity-item small,
+.settings-activity-item time {
+    color: var(--mist);
+    font-size: 0.74rem;
+    line-height: 1.4;
+}
+
+.settings-activity-item time {
+    text-align: right;
+    white-space: nowrap;
 }
 
 .settings-warning {
@@ -624,6 +685,22 @@
     .settings-actions .btn {
         width: 100%;
         text-align: center;
+    }
+
+    .settings-session-item,
+    .settings-activity-item {
+        grid-template-columns: 1fr;
+        flex-direction: column;
+    }
+
+    .settings-session-controls {
+        width: 100%;
+        justify-content: space-between;
+    }
+
+    .settings-activity-item time {
+        text-align: left;
+        white-space: normal;
     }
 
     .settings-toggle {

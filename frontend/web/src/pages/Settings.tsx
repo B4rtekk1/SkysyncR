@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState, type ChangeEvent } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react'
 import '../App.css'
 import '../css/Settings.css'
 import ThemeToggle from '../components/ThemeToggle'
@@ -7,8 +7,11 @@ import { logout, logoutAllSessions } from '../api/auth'
 import {
     ApiRequestError,
     changePassword,
+    getSessions,
+    revokeSession,
     updateUserSettings,
     type CurrentUserResponse,
+    type SessionsResponse,
 } from '../api/users'
 import { decryptPrivateKey, encryptPrivateKey } from '../crypto/keys'
 import { loadEncryptedPrivateKey, storeEncryptedPrivateKey } from '../crypto/storage'
@@ -39,6 +42,14 @@ const themeOptions: Array<{ value: ThemePreference; label: string }> = [
     { value: 'dark', label: 'Dark' },
 ]
 
+const sessionActionLabels: Record<string, string> = {
+    login: 'Signed in',
+    refresh: 'Session refreshed',
+    logout: 'Signed out',
+    logout_all: 'Signed out everywhere',
+    revoked: 'Session revoked',
+}
+
 type SettingsModalProps = {
     currentUser: CurrentUserResponse | null
     onClose: () => void
@@ -60,6 +71,10 @@ function SettingsModalContent({ currentUser, onClose, onSave }: SettingsModalPro
     const [confirmLogoutAll, setConfirmLogoutAll] = useState(false)
     const [logoutAllSaving, setLogoutAllSaving] = useState(false)
     const [logoutAllError, setLogoutAllError] = useState<string | null>(null)
+    const [sessionsData, setSessionsData] = useState<SessionsResponse | null>(null)
+    const [sessionsLoading, setSessionsLoading] = useState(false)
+    const [sessionsError, setSessionsError] = useState<string | null>(null)
+    const [revokingSessionId, setRevokingSessionId] = useState<string | null>(null)
     const dialogRef = useRef<HTMLElement>(null)
     const { theme, themePreference, setThemePreference } = useTheme()
     const initials = useMemo(() => {
@@ -77,6 +92,24 @@ function SettingsModalContent({ currentUser, onClose, onSave }: SettingsModalPro
     }, [onClose])
 
     useModalA11y({ dialogRef, onClose: requestClose })
+
+    const loadSessions = useCallback(async () => {
+        if (!currentUser) return
+
+        setSessionsLoading(true)
+        setSessionsError(null)
+        try {
+            setSessionsData(await getSessions())
+        } catch {
+            setSessionsError('Could not load signed-in devices.')
+        } finally {
+            setSessionsLoading(false)
+        }
+    }, [currentUser])
+
+    useEffect(() => {
+        void loadSessions()
+    }, [loadSessions])
 
     function updateSetting<K extends keyof SettingsState>(key: K, value: SettingsState[K]) {
         setSettings((prev) => ({ ...prev, [key]: value }))
@@ -262,6 +295,33 @@ function SettingsModalContent({ currentUser, onClose, onSave }: SettingsModalPro
         } finally {
             setLogoutAllSaving(false)
         }
+    }
+
+    async function signOutSession(sessionId: string, current: boolean) {
+        setSessionsError(null)
+        setRevokingSessionId(sessionId)
+        try {
+            await revokeSession(sessionId)
+            if (current) {
+                await logout()
+                window.location.href = '/login'
+                return
+            }
+            await loadSessions()
+        } catch {
+            setSessionsError('Could not sign out this device. Try again.')
+        } finally {
+            setRevokingSessionId(null)
+        }
+    }
+
+    function formatSessionTime(value: string): string {
+        const date = new Date(value)
+        if (Number.isNaN(date.getTime())) return 'Unknown time'
+        return new Intl.DateTimeFormat(undefined, {
+            dateStyle: 'medium',
+            timeStyle: 'short',
+        }).format(date)
     }
 
     return (
@@ -555,19 +615,51 @@ function SettingsModalContent({ currentUser, onClose, onSave }: SettingsModalPro
                                 </div>
                             </div>
                             <div className="settings-session-list">
-                                <div className="settings-session-item">
-                                    <span>
-                                        <strong>Current browser</strong>
-                                        <small>This device can access your encrypted vault until you sign out.</small>
-                                    </span>
-                                    <span className="settings-badge">Active</span>
-                                </div>
-                                <div className="settings-session-item">
-                                    <span>
-                                        <strong>Other devices</strong>
-                                        <small>End refresh sessions on every browser and device signed in to this account.</small>
-                                    </span>
-                                </div>
+                                {sessionsLoading && <p className="settings-muted">Loading signed-in devices...</p>}
+                                {!sessionsLoading && sessionsData?.sessions.length === 0 && (
+                                    <p className="settings-muted">No active sessions were found.</p>
+                                )}
+                                {sessionsData?.sessions.map((session) => (
+                                    <div className="settings-session-item" key={session.id}>
+                                        <span>
+                                            <strong>{session.device_label}</strong>
+                                            <small>
+                                                Last active {formatSessionTime(session.last_used_at)}
+                                                {session.ip_address ? ` from ${session.ip_address}` : ''}
+                                            </small>
+                                            <small>Session expires {formatSessionTime(session.expires_at)}</small>
+                                        </span>
+                                        <span className="settings-session-controls">
+                                            {session.current && <span className="settings-badge">Current</span>}
+                                            <button
+                                                className="btn btn--outline settings-session-button"
+                                                type="button"
+                                                disabled={revokingSessionId === session.id}
+                                                onClick={() => void signOutSession(session.id, session.current)}
+                                            >
+                                                {revokingSessionId === session.id ? 'Signing out...' : 'Sign out'}
+                                            </button>
+                                        </span>
+                                    </div>
+                                ))}
+                            </div>
+                            <div className="settings-session-history">
+                                <h3>Activity history</h3>
+                                {sessionsData?.activity.length === 0 && (
+                                    <p className="settings-muted">No session activity has been recorded yet.</p>
+                                )}
+                                {sessionsData?.activity.slice(0, 8).map((event) => (
+                                    <div className="settings-activity-item" key={event.id}>
+                                        <span>
+                                            <strong>{sessionActionLabels[event.action] ?? event.action}</strong>
+                                            <small>
+                                                {event.device_label ?? 'Unknown device'}
+                                                {event.ip_address ? ` from ${event.ip_address}` : ''}
+                                            </small>
+                                        </span>
+                                        <time dateTime={event.created_at}>{formatSessionTime(event.created_at)}</time>
+                                    </div>
+                                ))}
                             </div>
                             {confirmLogoutAll && (
                                 <p className="settings-warning">
@@ -575,6 +667,7 @@ function SettingsModalContent({ currentUser, onClose, onSave }: SettingsModalPro
                                 </p>
                             )}
                             {logoutAllError && <p className="settings-error">{logoutAllError}</p>}
+                            {sessionsError && <p className="settings-error">{sessionsError}</p>}
                             <div className="settings-session-actions">
                                 <button className="btn btn--outline" type="button" onClick={signOut}>
                                     Sign out this device

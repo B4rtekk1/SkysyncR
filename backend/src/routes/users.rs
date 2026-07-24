@@ -1,6 +1,7 @@
 use crate::handlers::users::{
-    change_password, current_user, login_user, logout_all_sessions, logout_user, refresh_tokens,
-    register_user, resend_verification_email, update_user_settings, verify_email,
+    change_password, current_user, list_sessions, login_user, logout_all_sessions, logout_user,
+    refresh_tokens, register_user, resend_verification_email, revoke_session, update_user_settings,
+    verify_email,
 };
 use crate::state::AppState;
 use axum::Router;
@@ -12,6 +13,8 @@ pub fn users_routes() -> Router<AppState> {
         .route("/users/me", get(current_user))
         .route("/users/settings", patch(update_user_settings))
         .route("/users/change-password", post(change_password))
+        .route("/users/sessions", get(list_sessions))
+        .route("/users/sessions/{session_id}", axum::routing::delete(revoke_session))
         .route("/users/refresh", post(refresh_tokens))
         .route("/users/logout", post(logout_user))
         .route("/users/logout-all", post(logout_all_sessions))

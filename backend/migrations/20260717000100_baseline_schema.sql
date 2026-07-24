@@ -94,13 +94,36 @@ CREATE TABLE IF NOT EXISTS refresh_tokens
 (
     id                 UUID PRIMARY KEY     DEFAULT gen_random_uuid(),
     user_id            UUID        NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+    session_id         UUID        NOT NULL DEFAULT gen_random_uuid(),
     token_hash         TEXT        NOT NULL UNIQUE,
     expires_at         timestamptz NOT NULL,
     session_expires_at timestamptz NOT NULL DEFAULT (NOW() + interval '90 days'),
+    device_label       TEXT,
+    user_agent         TEXT,
+    ip_address         TEXT,
+    last_used_at       timestamptz NOT NULL DEFAULT NOW(),
     revoked            BOOLEAN     NOT NULL DEFAULT FALSE,
     created_at         timestamptz NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_refresh_tokens_user_id ON refresh_tokens (user_id);
+CREATE INDEX IF NOT EXISTS idx_refresh_tokens_user_session ON refresh_tokens (user_id, session_id);
+CREATE INDEX IF NOT EXISTS idx_refresh_tokens_user_active
+    ON refresh_tokens (user_id, revoked, session_expires_at, expires_at);
+
+CREATE TABLE IF NOT EXISTS refresh_token_activity_logs
+(
+    id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id      UUID        NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+    session_id   UUID        NOT NULL,
+    action       TEXT        NOT NULL CHECK (action IN ('login', 'refresh', 'logout', 'logout_all', 'revoked')),
+    device_label TEXT,
+    ip_address   TEXT,
+    created_at   timestamptz NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_refresh_token_activity_user_created
+    ON refresh_token_activity_logs (user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_refresh_token_activity_session
+    ON refresh_token_activity_logs (session_id, created_at DESC);
 
 CREATE TABLE IF NOT EXISTS file_shares
 (
