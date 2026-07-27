@@ -145,7 +145,8 @@ pub async fn authenticate_refresh_token(
     .fetch_optional(pool)
     .await?;
 
-    let Some((id, session_id, user_id, revoked, valid_exp, session_expires_at, valid_session)) = row
+    let Some((id, session_id, user_id, revoked, valid_exp, session_expires_at, valid_session)) =
+        row
     else {
         return Ok(RefreshTokenAuth::NotFound);
     };
@@ -411,15 +412,13 @@ pub async fn list_user_session_activity(
     Ok(rows
         .into_iter()
         .map(
-            |(id, session_id, action, device_label, ip_address, created_at)| {
-                UserSessionActivity {
-                    id,
-                    session_id,
-                    action,
-                    device_label,
-                    ip_address,
-                    created_at,
-                }
+            |(id, session_id, action, device_label, ip_address, created_at)| UserSessionActivity {
+                id,
+                session_id,
+                action,
+                device_label,
+                ip_address,
+                created_at,
             },
         )
         .collect())

@@ -13,6 +13,7 @@ import type {
   GroupMember,
   GroupRole,
   GroupShareRecipient,
+  OperationLogResponse,
   RegisterResponse,
   RecoveryBlob,
   ShareRecipient,
@@ -219,6 +220,26 @@ export const sessionsResponse: Validator<SessionsResponse> = (value, path) => {
   return {
     sessions: arrayOf(userSession)(prop(item, 'sessions', path), `${path}.sessions`),
     activity: arrayOf(userSessionActivity)(prop(item, 'activity', path), `${path}.activity`),
+  }
+}
+
+export const operationLogEntry: Validator<import('./generated').OperationLogEntry> = (value, path) => {
+  const item = object(value, path)
+  return {
+    id: string(prop(item, 'id', path), `${path}.id`),
+    operation: string(prop(item, 'operation', path), `${path}.operation`),
+    resource_id: nullableString(prop(item, 'resource_id', path), `${path}.resource_id`),
+    resource_type: nullableString(prop(item, 'resource_type', path), `${path}.resource_type`),
+    device_label: nullableString(prop(item, 'device_label', path), `${path}.device_label`),
+    details: object(prop(item, 'details', path), `${path}.details`),
+    created_at: string(prop(item, 'created_at', path), `${path}.created_at`),
+  }
+}
+
+export const operationLogResponse: Validator<OperationLogResponse> = (value, path) => {
+  const item = object(value, path)
+  return {
+    operations: arrayOf(operationLogEntry)(prop(item, 'operations', path), `${path}.operations`),
   }
 }
 

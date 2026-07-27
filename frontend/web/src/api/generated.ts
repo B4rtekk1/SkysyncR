@@ -110,6 +110,20 @@ export type SessionsResponse = {
   "activity": UserSessionActivity[]
 }
 
+export type OperationLogEntry = {
+  "id": string
+  "operation": string
+  "resource_id": string | null
+  "resource_type": string | null
+  "device_label": string | null
+  "details": Record<string, unknown>
+  "created_at": string
+}
+
+export type OperationLogResponse = {
+  "operations": OperationLogEntry[]
+}
+
 export type VerifyUserRequest = {
   "token": string
 }

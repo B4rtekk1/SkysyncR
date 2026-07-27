@@ -1,6 +1,7 @@
 use crate::auth::AuthUser;
 use crate::crypto::jwt::generate_access_token_capped;
 use crate::crypto::refresh_token::generate_refresh_token;
+use crate::db::audit_logs::{insert_user_audit_log, list_user_operation_logs};
 use crate::db::refresh_tokens::{
     RefreshTokenAuth, RefreshTokenMetadata, ValidRefreshToken, authenticate_refresh_token,
     create_refresh_token, insert_refresh_token_activity, list_active_user_sessions,
@@ -50,6 +51,34 @@ const SESSION_ACTIVITY_LIMIT: i64 = 30;
 pub struct SessionsResponse {
     pub sessions: Vec<crate::db::refresh_tokens::UserSession>,
     pub activity: Vec<crate::db::refresh_tokens::UserSessionActivity>,
+}
+
+#[derive(Serialize)]
+pub struct OperationLogResponse {
+    pub operations: Vec<crate::db::audit_logs::OperationLogRecord>,
+}
+
+async fn log_user_operation(
+    state: &AppState,
+    user_id: Uuid,
+    operation: &str,
+    device_label: Option<&str>,
+    details: serde_json::Value,
+) {
+    if let Err(e) = insert_user_audit_log(
+        &state.db_pool,
+        &state.config.audit_log_encryption_key,
+        user_id,
+        operation,
+        None,
+        Some("account"),
+        device_label,
+        details,
+    )
+    .await
+    {
+        tracing::warn!(error = %e, operation, "failed to write user operation log");
+    }
 }
 
 fn refresh_token_cookie(
@@ -187,7 +216,9 @@ fn device_label_from_headers(headers: &HeaderMap) -> Option<String> {
     }
 }
 
-fn request_metadata_values(headers: &HeaderMap) -> (Option<String>, Option<String>, Option<String>) {
+fn request_metadata_values(
+    headers: &HeaderMap,
+) -> (Option<String>, Option<String>, Option<String>) {
     (
         device_label_from_headers(headers),
         header_string(headers, header::USER_AGENT, 512),
@@ -315,6 +346,27 @@ pub async fn update_user_settings(
     .map_err(|e| internal_error("update user settings", e))?
     .ok_or_else(|| ApiError::Unauthorized("User not found".into()))?;
 
+    log_user_operation(
+        &state,
+        auth.user_id,
+        "user.settings.update",
+        None,
+        serde_json::json!({
+            "changed": {
+                "display_name": payload.display_name.is_some(),
+                "avatar_url": payload.avatar_url.is_some(),
+                "default_view": payload.default_view.is_some(),
+                "layout_mode": payload.layout_mode.is_some(),
+                "upload_protection": payload.upload_protection.is_some(),
+                "compact_metadata": payload.compact_metadata.is_some(),
+                "device_lock": payload.device_lock.is_some(),
+                "sync_on_metered": payload.sync_on_metered.is_some(),
+                "trash_retention_days": payload.trash_retention_days.is_some(),
+            }
+        }),
+    )
+    .await;
+
     Ok(Json(UserSettingsResponse {
         display_name: settings.display_name,
         avatar_url: settings.avatar_url,
@@ -363,6 +415,16 @@ pub async fn change_password(
     revoke_all_user_refresh_tokens(&state.db_pool, auth.user_id)
         .await
         .map_err(|e| internal_error("revoke sessions after password change", e))?;
+
+    let (device_label, _, _) = request_metadata_values(&headers);
+    log_user_operation(
+        &state,
+        auth.user_id,
+        "user.password.change",
+        device_label.as_deref(),
+        serde_json::json!({ "sessions_revoked": true }),
+    )
+    .await;
 
     let (access_token, refresh_token, expires_in, session_expires_at) =
         issue_token_pair(&state, auth.user_id, &headers).await?;
@@ -520,9 +582,10 @@ async fn issue_token_pair(
     let refresh_token = generate_refresh_token();
     let (device_label, user_agent, ip_address) = request_metadata_values(headers);
     let metadata = owned_refresh_metadata(&device_label, &user_agent, &ip_address);
-    let session_expires_at = create_refresh_token(&state.db_pool, user_id, &refresh_token, metadata)
-        .await
-        .map_err(|e| internal_error("create refresh token", e))?;
+    let session_expires_at =
+        create_refresh_token(&state.db_pool, user_id, &refresh_token, metadata)
+            .await
+            .map_err(|e| internal_error("create refresh token", e))?;
 
     let (access_token, expires_in) = generate_access_token_capped(
         &user_id.to_string(),
@@ -597,8 +660,18 @@ pub async fn login_user(
         .await
         .map_err(|e| internal_error("update last login", e))?;
 
-    let mut response_headers = HeaderMap::new();
     let persistent = payload.remember.unwrap_or(true);
+    let (device_label, _, _) = request_metadata_values(&headers);
+    log_user_operation(
+        &state,
+        auth_record.id,
+        "user.login",
+        device_label.as_deref(),
+        serde_json::json!({ "remember": persistent }),
+    )
+    .await;
+
+    let mut response_headers = HeaderMap::new();
     response_headers.append(
         header::SET_COOKIE,
         refresh_token_cookie(
@@ -699,6 +772,14 @@ pub async fn logout_user(
         )
         .await
         .map_err(|e| internal_error("record logout activity", e))?;
+        log_user_operation(
+            &state,
+            stored.user_id,
+            "user.logout",
+            device_label.as_deref(),
+            serde_json::json!({ "session_id": stored.session_id }),
+        )
+        .await;
     }
 
     let mut response_headers = HeaderMap::new();
@@ -735,6 +816,14 @@ pub async fn logout_all_sessions(
         )
         .await
         .map_err(|e| internal_error("record logout all activity", e))?;
+        log_user_operation(
+            &state,
+            stored.user_id,
+            "user.logout_all",
+            device_label.as_deref(),
+            serde_json::json!({ "session_id": stored.session_id }),
+        )
+        .await;
     }
 
     let mut response_headers = HeaderMap::new();
@@ -766,6 +855,22 @@ pub async fn list_sessions(
     Ok(Json(SessionsResponse { sessions, activity }))
 }
 
+pub async fn list_operation_log(
+    State(state): State<AppState>,
+    auth: AuthUser,
+) -> Result<Json<OperationLogResponse>, ApiError> {
+    let operations = list_user_operation_logs(
+        &state.db_pool,
+        &state.config.audit_log_encryption_key,
+        auth.user_id,
+        100,
+    )
+    .await
+    .map_err(|e| internal_error("list operation log", e))?;
+
+    Ok(Json(OperationLogResponse { operations }))
+}
+
 pub async fn revoke_session(
     headers: HeaderMap,
     State(state): State<AppState>,
@@ -792,6 +897,18 @@ pub async fn revoke_session(
     )
     .await
     .map_err(|e| internal_error("record session revocation activity", e))?;
+
+    log_user_operation(
+        &state,
+        auth.user_id,
+        "user.session.revoke",
+        device_label.as_deref(),
+        serde_json::json!({
+            "session_id": session_id,
+            "current_session": current_session_id == Some(session_id),
+        }),
+    )
+    .await;
 
     if current_session_id == Some(session_id) {
         let mut response_headers = HeaderMap::new();

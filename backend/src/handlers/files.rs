@@ -1569,8 +1569,15 @@ async fn log_file_audit(
     file_id: Uuid,
     device_label: Option<&str>,
 ) {
-    if let Err(err) =
-        insert_file_audit_log(&state.db_pool, user_id, action, file_id, device_label).await
+    if let Err(err) = insert_file_audit_log(
+        &state.db_pool,
+        &state.config.audit_log_encryption_key,
+        user_id,
+        action,
+        file_id,
+        device_label,
+    )
+    .await
     {
         tracing::warn!(
             error = %err,

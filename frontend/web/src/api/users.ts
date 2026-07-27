@@ -7,6 +7,7 @@ import type {
   CurrentUser as CurrentUserResponse,
   ForgotPasswordRequest as ForgotPasswordPayload,
   LoginRequest as LoginPayload,
+  OperationLogResponse,
   RegisterRequest as RegisterPayload,
   RegisterResponse,
   RecoveryBlob,
@@ -18,6 +19,7 @@ import type {
 } from './generated'
 import {
   currentUser,
+  operationLogResponse,
   parseApiErrorBody,
   readJson,
   recoveryBlob,
@@ -40,6 +42,7 @@ export type {
   RecoveryBlob,
   ResetPasswordPayload,
   SessionsResponse,
+  OperationLogResponse,
 }
 
 export class ApiRequestError extends Error {
@@ -201,6 +204,18 @@ export async function getSessions(): Promise<SessionsResponse> {
   }
 
   return readJson(res, sessionsResponse, 'SessionsResponse')
+}
+
+export async function getOperationLog(): Promise<OperationLogResponse> {
+  const res = await authenticatedFetch(`${url}users/operation-log`, {
+    method: 'GET',
+  })
+
+  if (!res.ok) {
+    await throwApiError(res, 'Could not load operation log')
+  }
+
+  return readJson(res, operationLogResponse, 'OperationLogResponse')
 }
 
 export async function revokeSession(sessionId: string): Promise<void> {

@@ -7,10 +7,12 @@ import { logout, logoutAllSessions } from '../api/auth'
 import {
     ApiRequestError,
     changePassword,
+    getOperationLog,
     getSessions,
     revokeSession,
     updateUserSettings,
     type CurrentUserResponse,
+    type OperationLogResponse,
     type SessionsResponse,
 } from '../api/users'
 import { decryptPrivateKey, encryptPrivateKey } from '../crypto/keys'
@@ -50,6 +52,26 @@ const sessionActionLabels: Record<string, string> = {
     revoked: 'Session revoked',
 }
 
+const operationLabels: Record<string, string> = {
+    'file.upload': 'Uploaded file',
+    'file.download': 'Downloaded file',
+    'file.rename': 'Renamed file',
+    'file.move': 'Moved file',
+    'file.update': 'Updated file',
+    'file.delete': 'Deleted file',
+    'file.restore': 'Restored file',
+    'file.version.restore': 'Restored file version',
+    'file.share': 'Shared file',
+    'file.unshare': 'Stopped sharing file',
+    'file.note.update': 'Updated file note',
+    'user.login': 'Signed in',
+    'user.logout': 'Signed out',
+    'user.logout_all': 'Signed out everywhere',
+    'user.session.revoke': 'Revoked session',
+    'user.settings.update': 'Updated settings',
+    'user.password.change': 'Changed password',
+}
+
 type SettingsModalProps = {
     currentUser: CurrentUserResponse | null
     onClose: () => void
@@ -75,6 +97,9 @@ function SettingsModalContent({ currentUser, onClose, onSave }: SettingsModalPro
     const [sessionsLoading, setSessionsLoading] = useState(false)
     const [sessionsError, setSessionsError] = useState<string | null>(null)
     const [revokingSessionId, setRevokingSessionId] = useState<string | null>(null)
+    const [operationLog, setOperationLog] = useState<OperationLogResponse | null>(null)
+    const [operationLogLoading, setOperationLogLoading] = useState(false)
+    const [operationLogError, setOperationLogError] = useState<string | null>(null)
     const dialogRef = useRef<HTMLElement>(null)
     const { theme, themePreference, setThemePreference } = useTheme()
     const initials = useMemo(() => {
@@ -107,9 +132,27 @@ function SettingsModalContent({ currentUser, onClose, onSave }: SettingsModalPro
         }
     }, [currentUser])
 
+    const loadOperationLog = useCallback(async () => {
+        if (!currentUser) return
+
+        setOperationLogLoading(true)
+        setOperationLogError(null)
+        try {
+            setOperationLog(await getOperationLog())
+        } catch {
+            setOperationLogError('Could not load operation log.')
+        } finally {
+            setOperationLogLoading(false)
+        }
+    }, [currentUser])
+
     useEffect(() => {
         void loadSessions()
     }, [loadSessions])
+
+    useEffect(() => {
+        void loadOperationLog()
+    }, [loadOperationLog])
 
     function updateSetting<K extends keyof SettingsState>(key: K, value: SettingsState[K]) {
         setSettings((prev) => ({ ...prev, [key]: value }))
@@ -207,6 +250,7 @@ function SettingsModalContent({ currentUser, onClose, onSave }: SettingsModalPro
                 trashRetentionDays: settingsToSave.trashRetentionDays,
             })
             setSaved(true)
+            void loadOperationLog()
         } catch {
             setSaved(false)
             setSaveError('Could not save settings.')
@@ -265,6 +309,7 @@ function SettingsModalContent({ currentUser, onClose, onSave }: SettingsModalPro
             setNewPassword('')
             setConfirmNewPassword('')
             setPasswordSaved(true)
+            void loadOperationLog()
         } catch (err) {
             showPasswordChangeError(err)
         } finally {
@@ -308,6 +353,7 @@ function SettingsModalContent({ currentUser, onClose, onSave }: SettingsModalPro
                 return
             }
             await loadSessions()
+            await loadOperationLog()
         } catch {
             setSessionsError('Could not sign out this device. Try again.')
         } finally {
@@ -684,6 +730,37 @@ function SettingsModalContent({ currentUser, onClose, onSave }: SettingsModalPro
                                             ? 'Confirm sign out everywhere'
                                             : 'Sign out everywhere'}
                                 </button>
+                            </div>
+                        </section>
+
+                        <section className="settings-panel settings-panel--wide settings-panel--operation-log">
+                            <div className="settings-panel__head">
+                                <div>
+                                    <p className="settings-kicker">Encrypted audit</p>
+                                    <h2>Operation log</h2>
+                                </div>
+                                <span className="settings-badge">Encrypted</span>
+                            </div>
+                            <div className="settings-session-history settings-operation-log">
+                                {operationLogLoading && <p className="settings-muted">Loading operation log...</p>}
+                                {!operationLogLoading && operationLog?.operations.length === 0 && (
+                                    <p className="settings-muted">No user operations have been recorded yet.</p>
+                                )}
+                                {operationLog?.operations.map((event) => (
+                                    <div className="settings-activity-item settings-operation-item" key={event.id}>
+                                        <span>
+                                            <strong>{operationLabels[event.operation] ?? event.operation}</strong>
+                                            <small>ID {event.id}</small>
+                                            <small>
+                                                {event.device_label ?? 'Unknown device'}
+                                                {event.resource_type ? ` · ${event.resource_type}` : ''}
+                                                {event.resource_id ? ` · ${event.resource_id}` : ''}
+                                            </small>
+                                        </span>
+                                        <time dateTime={event.created_at}>{formatSessionTime(event.created_at)}</time>
+                                    </div>
+                                ))}
+                                {operationLogError && <p className="settings-error">{operationLogError}</p>}
                             </div>
                         </section>
                     </div>

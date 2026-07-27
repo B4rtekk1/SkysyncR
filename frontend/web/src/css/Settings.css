@@ -584,6 +584,19 @@
     white-space: nowrap;
 }
 
+.settings-panel--operation-log {
+    grid-column: 1 / -1;
+}
+
+.settings-operation-log {
+    max-height: 360px;
+    overflow: auto;
+}
+
+.settings-operation-item small {
+    overflow-wrap: anywhere;
+}
+
 .settings-warning {
     margin: 0;
     color: var(--paper);

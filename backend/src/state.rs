@@ -19,6 +19,7 @@ pub struct AppConfig {
     pub file_transfer_timeout_seconds: u64,
     pub trash_retention_days: i64,
     pub trash_purge_interval_hours: u64,
+    pub audit_log_encryption_key: String,
     pub is_dev: bool,
 }
 
@@ -78,6 +79,8 @@ impl AppConfig {
 
         Self {
             jwt_secret: std::env::var("JWT_SECRET").expect("JWT_SECRET must be set"),
+            audit_log_encryption_key: std::env::var("AUDIT_LOG_ENCRYPTION_KEY")
+                .unwrap_or_else(|_| std::env::var("JWT_SECRET").expect("JWT_SECRET must be set")),
             max_failed_login_attempts,
             lockout_duration_minutes,
             verification_token_ttl_hours,

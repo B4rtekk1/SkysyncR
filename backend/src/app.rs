@@ -57,7 +57,7 @@ const CONTENT_SECURITY_POLICY: &str = concat!(
 
 fn cors_layer() -> CorsLayer {
     let origins: Vec<HeaderValue> = std::env::var("CORS_ORIGINS")
-        .unwrap_or_else(|_| "http://localhost:5173".to_string())
+        .unwrap_or_else(|_| "http://localhost:8080".to_string())
         .split(',')
         .filter_map(|o| o.trim().parse().ok())
         .collect();
@@ -66,7 +66,7 @@ fn cors_layer() -> CorsLayer {
         let origin = origins
             .first()
             .cloned()
-            .unwrap_or_else(|| "http://localhost:5173".parse().unwrap());
+            .unwrap_or_else(|| "http://localhost:8080".parse().unwrap());
         AllowOrigin::exact(origin)
     } else {
         AllowOrigin::list(origins)

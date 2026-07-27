@@ -120,7 +120,7 @@ pub async fn send_verification_email(
     token: &str,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let frontend_url =
-        std::env::var("FRONTEND_URL").unwrap_or_else(|_| "http://localhost:5173".to_string());
+        std::env::var("FRONTEND_URL").unwrap_or_else(|_| "http://localhost:8080".to_string());
     let link = format!("{}/verify#token={}", frontend_url, token);
 
     let config = email_config()?;
@@ -150,7 +150,7 @@ pub async fn send_password_reset_email(
     token: &str,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let frontend_url =
-        std::env::var("FRONTEND_URL").unwrap_or_else(|_| "http://localhost:5173".to_string());
+        std::env::var("FRONTEND_URL").unwrap_or_else(|_| "http://localhost:8080".to_string());
     let link = format!("{}/reset-password#token={}", frontend_url, token);
 
     let config = email_config()?;

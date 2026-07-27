@@ -1,3 +1,4 @@
+pub mod audit_logs;
 pub mod calendar;
 mod file_records;
 pub mod files;

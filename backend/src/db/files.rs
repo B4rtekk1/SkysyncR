@@ -2,6 +2,7 @@ use chrono::{DateTime, Utc};
 use sqlx::{PgPool, Postgres, QueryBuilder, Row, Transaction};
 use uuid::Uuid;
 
+use super::audit_logs::insert_user_audit_log;
 use super::file_records::SharedFileRow;
 pub use super::file_records::{
     DownloadFileRecord, FileAuditRecord, FilePurgeTarget, FileRecord, FileShareRecord,
@@ -447,25 +448,27 @@ pub async fn restore_user_file_version(
 
 pub async fn insert_file_audit_log(
     pool: &PgPool,
+    encryption_key: &str,
     user_id: Uuid,
     action: &str,
     file_id: Uuid,
     device_label: Option<&str>,
 ) -> Result<(), sqlx::Error> {
-    sqlx::query(
-        r#"
-        INSERT INTO audit_logs (user_id, action, resource_id, resource_type, device_label)
-        VALUES ($1, $2, $3, 'file', $4)
-        "#,
+    insert_user_audit_log(
+        pool,
+        encryption_key,
+        user_id,
+        action,
+        Some(file_id),
+        Some("file"),
+        device_label,
+        serde_json::json!({
+            "resource_id": file_id,
+            "resource_type": "file",
+            "device_label": device_label,
+        }),
     )
-    .bind(user_id)
-    .bind(action)
-    .bind(file_id)
-    .bind(device_label)
-    .execute(pool)
-    .await?;
-
-    Ok(())
+    .await
 }
 
 pub async fn list_user_file_audit_logs(
