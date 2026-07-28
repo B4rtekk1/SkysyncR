@@ -123,6 +123,27 @@ pub async fn list_file_tags(
     .await
 }
 
+pub async fn list_user_file_tags(
+    pool: &PgPool,
+    user_id: Uuid,
+) -> Result<Vec<FileTagRecord>, sqlx::Error> {
+    sqlx::query_as::<_, FileTagRecord>(
+        r#"
+        SELECT ft.file_id, t.id AS tag_id, t.name, t.color, NULL::timestamptz AS created_at
+        FROM file_tags ft
+        JOIN tags t ON t.id = ft.tag_id
+        JOIN files f ON f.id = ft.file_id
+        WHERE t.owner_id = $1
+          AND f.owner_id = $1
+          AND f.is_deleted = FALSE
+        ORDER BY ft.file_id, lower(t.name), t.name
+        "#,
+    )
+    .bind(user_id)
+    .fetch_all(pool)
+    .await
+}
+
 pub async fn add_file_tag(
     pool: &PgPool,
     user_id: Uuid,

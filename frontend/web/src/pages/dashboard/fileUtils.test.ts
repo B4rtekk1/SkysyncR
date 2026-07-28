@@ -1,6 +1,15 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { formatBytes, formatRelative, isJavaScriptFile, isMarkdownFile, isPythonFile, isTypeScriptFile, kindFromFile, scramble } from './fileUtils.ts'
+import {
+  formatBytes,
+  formatRelative,
+  isJavaScriptFile,
+  isMarkdownFile,
+  isPythonFile,
+  isTypeScriptFile,
+  kindFromFile,
+  scramble,
+} from './fileUtils.ts'
 
 test('kindFromFile prefers MIME families for common media files', () => {
   assert.equal(kindFromFile('download.bin', 'image/png'), 'image')
@@ -14,6 +23,9 @@ test('kindFromFile recognizes office, archive and code extensions', () => {
   assert.equal(kindFromFile('letter.docx', null), 'document')
   assert.equal(kindFromFile('backup.tar', null), 'archive')
   assert.equal(kindFromFile('config.yaml', null), 'code')
+  assert.equal(kindFromFile('main.c', null), 'code')
+  assert.equal(kindFromFile('kernel.cu', null), 'code')
+  assert.equal(kindFromFile('Program.cs', null), 'code')
 })
 
 test('kindFromFile treats text source files as code but plain text as text', () => {

@@ -113,7 +113,6 @@ export function FileIcon({ filename, kind, mime }: { filename: string; kind: Fil
                 </svg>
             )
         }
-
         return (
             <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true">
                 <path d="M8.5 8L5 12l3.5 4M15.5 8L19 12l-3.5 4M13 6.5l-2 11" {...common} />
@@ -141,5 +140,3 @@ export function FileIcon({ filename, kind, mime }: { filename: string; kind: Fil
         </svg>
     )
 }
-
-

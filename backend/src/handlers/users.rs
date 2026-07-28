@@ -44,6 +44,7 @@ pub struct ResendVerificationRequest {
 
 const REFRESH_TOKEN_COOKIE: &str = "skysyncr_refresh_token";
 const REFRESH_PERSISTENCE_COOKIE: &str = "skysyncr_refresh_persistent";
+const REFRESH_COOKIE_PATH: &str = "/";
 const INVALID_LOGIN_MESSAGE: &str = "Invalid email or password";
 const SESSION_ACTIVITY_LIMIT: i64 = 30;
 const DEVICE_ID_HEADER: &str = "x-skysyncr-device-id";
@@ -96,7 +97,7 @@ fn refresh_token_cookie(
     };
     let secure = if is_dev { "" } else { "; Secure" };
     HeaderValue::from_str(&format!(
-        "{REFRESH_TOKEN_COOKIE}={token}{max_age_attr}; Path=/users; HttpOnly; SameSite=Lax{secure}"
+        "{REFRESH_TOKEN_COOKIE}={token}{max_age_attr}; Path={REFRESH_COOKIE_PATH}; HttpOnly; SameSite=Lax{secure}"
     ))
     .map_err(|e| internal_error("build refresh cookie", e))
 }
@@ -110,7 +111,7 @@ fn refresh_persistence_cookie(is_dev: bool, persistent: bool) -> Result<HeaderVa
     };
 
     HeaderValue::from_str(&format!(
-        "{REFRESH_PERSISTENCE_COOKIE}=1{max_age}; Path=/users; HttpOnly; SameSite=Lax{secure}"
+        "{REFRESH_PERSISTENCE_COOKIE}=1{max_age}; Path={REFRESH_COOKIE_PATH}; HttpOnly; SameSite=Lax{secure}"
     ))
     .map_err(|e| internal_error("build refresh cookie", e))
 }
@@ -118,7 +119,7 @@ fn refresh_persistence_cookie(is_dev: bool, persistent: bool) -> Result<HeaderVa
 fn clear_cookie(name: &str, is_dev: bool) -> HeaderValue {
     let secure = if is_dev { "" } else { "; Secure" };
     HeaderValue::from_str(&format!(
-        "{name}=; Max-Age=0; Path=/users; HttpOnly; SameSite=Lax{secure}"
+        "{name}=; Max-Age=0; Path={REFRESH_COOKIE_PATH}; HttpOnly; SameSite=Lax{secure}"
     ))
     .expect("static clear cookie is valid")
 }
@@ -986,4 +987,36 @@ pub async fn resend_verification_email(
     }
 
     Ok("If this account needs verification, a new link has been sent")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn refresh_cookies_are_available_to_api_proxy_paths() {
+        let expires_at = Utc::now() + chrono::Duration::hours(1);
+
+        let refresh = refresh_token_cookie("refresh-token", expires_at, true, true)
+            .expect("refresh cookie")
+            .to_str()
+            .expect("refresh cookie header")
+            .to_string();
+        let persistence = refresh_persistence_cookie(true, true)
+            .expect("persistence cookie")
+            .to_str()
+            .expect("persistence cookie header")
+            .to_string();
+        let cleared = clear_cookie(REFRESH_TOKEN_COOKIE, true)
+            .to_str()
+            .expect("clear cookie header")
+            .to_string();
+
+        assert!(refresh.contains("Path=/;"));
+        assert!(persistence.contains("Path=/;"));
+        assert!(cleared.contains("Path=/;"));
+        assert!(!refresh.contains("Path=/users"));
+        assert!(!persistence.contains("Path=/users"));
+        assert!(!cleared.contains("Path=/users"));
+    }
 }

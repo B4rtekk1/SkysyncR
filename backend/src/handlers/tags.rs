@@ -9,7 +9,7 @@ use uuid::Uuid;
 use crate::auth::AuthUser;
 use crate::db::tags::{
     FileTagRecord, NewTag, TagRecord, add_file_tag, create_user_tag, delete_user_tag,
-    list_file_tags, list_user_tags, remove_file_tag, update_user_tag,
+    list_file_tags, list_user_file_tags, list_user_tags, remove_file_tag, update_user_tag,
 };
 use crate::state::AppState;
 use crate::utils::errors::{ApiError, internal_error};
@@ -108,6 +108,17 @@ pub async fn list_tags_for_file(
     let tags = list_file_tags(&state.db_pool, auth.user_id, file_id)
         .await
         .map_err(|e| internal_error("list file tags", e))?;
+
+    Ok(Json(tags))
+}
+
+pub async fn list_tags_for_user_files(
+    State(state): State<AppState>,
+    auth: AuthUser,
+) -> Result<Json<Vec<FileTagRecord>>, ApiError> {
+    let tags = list_user_file_tags(&state.db_pool, auth.user_id)
+        .await
+        .map_err(|e| internal_error("list user file tags", e))?;
 
     Ok(Json(tags))
 }

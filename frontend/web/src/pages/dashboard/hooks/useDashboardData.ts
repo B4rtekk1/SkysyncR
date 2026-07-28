@@ -9,7 +9,7 @@ import {
     type ApiFolder,
     type StorageQuota,
 } from '../../../api/files'
-import { listFileTags, listTags, type FileTag, type Tag } from '../../../api/tags'
+import { listAllFileTags, listTags, type FileTag, type Tag } from '../../../api/tags'
 import { applySavedOrder, clearLegacyLocalFileMetadata, loadFavouriteIds } from '../storage'
 import { decryptFilesMetadata, decryptFoldersMetadata } from '../encryptedMetadata'
 import { migratePlaintextFileMetadata } from '../metadataMigration'
@@ -53,11 +53,19 @@ export function useDashboardData({ view, activeFolderId, privateKey }: UseDashbo
     }, [])
 
     const loadTagsForFiles = useCallback(async (files: ApiFile[]) => {
-        const [tagData, fileTagEntries] = await Promise.all([
+        const visibleFileIds = new Set(files.map((file) => file.id))
+        const [tagData, fileTags] = await Promise.all([
             listTags(),
-            Promise.all(files.map(async (file) => [file.id, await listFileTags(file.id)] as const)),
+            listAllFileTags(),
         ])
-        return { tagData, fileTagsByFileId: new Map(fileTagEntries) }
+        const fileTagsByFileId = new Map<string, FileTag[]>()
+        for (const fileTag of fileTags) {
+            if (!visibleFileIds.has(fileTag.file_id)) continue
+            const current = fileTagsByFileId.get(fileTag.file_id) ?? []
+            current.push(fileTag)
+            fileTagsByFileId.set(fileTag.file_id, current)
+        }
+        return { tagData, fileTagsByFileId }
     }, [])
 
     const refreshQuota = useCallback(async (options: RefreshQuotaOptions = {}) => {

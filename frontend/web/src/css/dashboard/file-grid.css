@@ -315,7 +315,7 @@
     left: 14px;
     height: 3px;
     border-radius: 999px;
-    background: linear-gradient(90deg, rgba(var(--file-accent-rgb), 0.32), rgba(var(--file-accent-rgb), 0.92), rgba(var(--file-accent-rgb), 0.32));
+    background: rgba(var(--file-accent-rgb), 0.72);
     opacity: 0.72;
 }
 
@@ -399,7 +399,7 @@
     height: 34px;
     border: none;
     border-radius: 8px;
-    background: color-mix(in srgb, var(--panel) 84%, transparent);
+    background: transparent;
     padding: 0;
     color: var(--mist);
     cursor: pointer;
@@ -424,7 +424,7 @@
 
 .file-card__fav:hover {
     color: var(--amber);
-    background: rgba(255, 176, 76, 0.09);
+    background: transparent;
     transform: translateY(-1px);
 }
 
@@ -930,22 +930,118 @@
 }
 
 .file-card.is-drop-target {
-    background:
-        linear-gradient(180deg, color-mix(in srgb, var(--file-accent) 16%, transparent), transparent 58%),
-        color-mix(in srgb, var(--panel) 85%, var(--file-accent) 15%);
+    background: color-mix(in srgb, var(--panel) 85%, var(--file-accent) 15%);
 }
 
 .file-card.is-drop-target::after {
     opacity: 0.9;
 }
 
-html[data-theme='light'] .file-card {
-    box-shadow: 0 12px 24px -26px rgba(15, 23, 42, 0.42);
+/* Grid cards: give the file its own clear visual hierarchy instead of treating
+   every control as a floating element. */
+.file-grid:not(.file-grid--list) .file-card {
+    min-height: 194px;
+    padding: 16px;
+    border-color: color-mix(in srgb, var(--line) 88%, var(--file-accent) 12%);
+    border-radius: 16px;
+    background: color-mix(in srgb, var(--panel) 96%, var(--file-accent) 4%);
+    box-shadow: 0 18px 36px -34px var(--shadow-soft, rgba(0, 0, 0, 0.55));
 }
 
-html[data-theme='light'] .file-card__top > svg,
-html[data-theme='light'] .file-card__fav {
-    background: #f8fafc;
+.file-grid:not(.file-grid--list) .file-card:hover {
+    border-color: rgba(var(--file-accent-rgb), 0.46);
+    box-shadow: 0 22px 42px -32px var(--shadow-soft, rgba(0, 0, 0, 0.68));
+}
+
+.file-grid:not(.file-grid--list) .file-card__select {
+    top: 14px;
+    left: 14px;
+}
+
+.file-grid:not(.file-grid--list) .file-card__select span {
+    width: 20px;
+    height: 20px;
+    border-radius: 7px;
+    background: color-mix(in srgb, var(--panel) 70%, var(--panel-2));
+}
+
+.file-grid:not(.file-grid--list) .file-card__handle {
+    display: none;
+}
+
+.file-grid:not(.file-grid--list) .file-card__fav {
+    top: 14px;
+    right: 14px;
+}
+
+.file-grid:not(.file-grid--list) .file-card__top {
+    min-height: 52px;
+    margin: 2px 0 15px;
+    padding: 0 34px 0 38px;
+}
+
+.file-grid:not(.file-grid--list) .file-card__top > svg {
+    width: 52px;
+    height: 52px;
+    padding: 0;
+    border: none;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+}
+
+.file-grid:not(.file-grid--list) .file-card:hover .file-card__top > svg {
+    border: none;
+    background: transparent;
+    box-shadow: none;
+    transform: none;
+}
+
+.file-grid:not(.file-grid--list) .file-card__name-slot {
+    margin-bottom: 7px;
+}
+
+.file-grid:not(.file-grid--list) .file-card__name {
+    font-size: 0.98rem;
+    font-weight: 700;
+    letter-spacing: -0.012em;
+}
+
+.file-grid:not(.file-grid--list) .file-card__meta {
+    gap: 8px;
+    color: color-mix(in srgb, var(--mist) 82%, var(--paper));
+    font-size: 0.75rem;
+}
+
+.file-grid:not(.file-grid--list) .file-card__tags,
+.file-grid:not(.file-grid--list) .file-card__signals {
+    margin-top: 9px;
+}
+
+.file-grid:not(.file-grid--list) .file-card__actions {
+    min-height: 46px;
+    margin: 14px -16px -16px;
+    padding: 6px 10px 6px 16px;
+    border-top: none;
+    background: color-mix(in srgb, var(--panel-2) 68%, transparent);
+}
+
+.file-grid:not(.file-grid--list) .file-card__action--preview,
+.file-grid:not(.file-grid--list) .file-card__action--more,
+.file-grid:not(.file-grid--list) .file-card__action--confirm,
+.file-grid:not(.file-grid--list) .file-card__action--cancel {
+    width: 32px;
+    height: 32px;
+    border-radius: 9px;
+}
+
+.file-grid:not(.file-grid--list) .file-card__action--preview {
+    border-color: rgba(var(--file-accent-rgb), 0.34);
+    background: rgba(var(--file-accent-rgb), 0.12);
+}
+
+html[data-theme='light'] .file-card {
+    box-shadow: 0 12px 24px -26px rgba(15, 23, 42, 0.42);
 }
 
 html[data-theme='light'] .file-card--can-preview:hover {
@@ -984,7 +1080,13 @@ html[data-theme='light'] .file-card--can-preview:hover {
 
 .file-grid--list .file-card__handle {
     top: 50%;
-    left: 12px;
+    left: 44px;
+    transform: translateY(-50%);
+}
+
+.file-grid--list .file-card__select {
+    top: 50%;
+    left: 14px;
     transform: translateY(-50%);
 }
 
@@ -1002,7 +1104,11 @@ html[data-theme='light'] .file-card--can-preview:hover {
 .file-grid--list .file-card__top > svg {
     width: 38px;
     height: 38px;
-    padding: 8px;
+    padding: 0;
+    border: none;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
 }
 
 .file-grid--list .file-card__badge {
@@ -1016,13 +1122,13 @@ html[data-theme='light'] .file-card--can-preview:hover {
 .file-grid--list .file-card__name-slot {
     grid-column: 1;
     margin: 0;
-    padding-left: 34px;
+    padding-left: 58px;
 }
 
 .file-grid--list .file-card__meta {
     grid-column: 1;
     min-height: 0;
-    padding-left: 34px;
+    padding-left: 58px;
     -webkit-line-clamp: 1;
 }
 

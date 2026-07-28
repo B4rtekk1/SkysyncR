@@ -67,7 +67,34 @@ export function formatRelative(iso: string) {
 
 export type FileKind = 'sheet' | 'document' | 'presentation' | 'pdf' | 'archive' | 'video' | 'audio' | 'text' | 'image' | 'code' | 'file'
 
-const CODE_EXTENSIONS = ['js', 'jsx', 'ts', 'tsx', 'json', 'html', 'css', 'rs', 'py', 'pyw', 'pyi', 'java', 'go', 'xml', 'yaml', 'yml']
+const CODE_EXTENSIONS = [
+    'js',
+    'jsx',
+    'ts',
+    'tsx',
+    'json',
+    'html',
+    'css',
+    'rs',
+    'py',
+    'pyw',
+    'pyi',
+    'java',
+    'go',
+    'xml',
+    'yaml',
+    'yml',
+    'c',
+    'h',
+    'cc',
+    'cpp',
+    'cxx',
+    'hpp',
+    'hxx',
+    'cs',
+    'cu',
+    'cuh',
+]
 
 export function kindFromFile(filename: string, mime: string | null): FileKind {
     const ext = filename.split('.').pop()?.toLowerCase() ?? ''

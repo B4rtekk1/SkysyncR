@@ -7,7 +7,6 @@ import {
     MORE_ICON,
     MOVE_TO_PARENT_ICON,
     NOTE_ICON,
-    PREVIEW_ICON,
     RENAME_ICON,
     SHARE_ICON,
     TRASH_OPEN_ICON,
@@ -20,17 +19,16 @@ type FileCardActionsProps = {
     isRenaming: boolean
     renameSaving: boolean
     canRename: boolean
-    canPreview: boolean
     canDownload: boolean
     canShare: boolean
     canNote: boolean
     isInfoOpen: boolean
     infoPopover: ReactNode
+    tagControl?: ReactNode
     onSaveRename: () => void
     onCancelRename: () => void
     onStartRename: () => void
     onToggleInfo: () => void
-    onPreview?: ((item: Item) => void) | undefined
     onDownload?: ((item: Item) => void) | undefined
     onShare?: ((item: Item) => void | Promise<void>) | undefined
     onNote?: ((item: Item) => void) | undefined
@@ -55,17 +53,16 @@ export function FileCardActions({
     isRenaming,
     renameSaving,
     canRename,
-    canPreview,
     canDownload,
     canShare,
     canNote,
     isInfoOpen,
     infoPopover,
+    tagControl,
     onSaveRename,
     onCancelRename,
     onStartRename,
     onToggleInfo,
-    onPreview,
     onDownload,
     onShare,
     onNote,
@@ -135,16 +132,6 @@ export function FileCardActions({
         })
     }
 
-    if (view === 'all' && onDelete) {
-        secondaryActions.push({
-            key: 'trash',
-            label: 'Move to trash',
-            icon: TRASH_OPEN_ICON,
-            danger: true,
-            onSelect: () => onDelete(item.id),
-        })
-    }
-
     if (view === 'trash' && onRestore) {
         secondaryActions.push({
             key: 'restore',
@@ -185,6 +172,7 @@ export function FileCardActions({
 
     return (
         <div className="file-card__actions">
+            {tagControl}
             {isRenaming && (
                 <>
                     <button
@@ -216,18 +204,18 @@ export function FileCardActions({
                 </>
             )}
 
-            {canPreview && (
+            {!isRenaming && view === 'all' && onDelete && (
                 <button
-                    className="file-card__action file-card__action--preview"
+                    className="file-card__action file-card__action--trash"
+                    type="button"
                     onClick={(e) => {
                         e.stopPropagation()
-                        onPreview?.(item)
+                        onDelete(item.id)
                     }}
-                    aria-label={`Preview ${item.filename}`}
-                    title="Preview"
-                    type="button"
+                    aria-label={`Move ${item.filename} to trash`}
+                    title="Move to trash"
                 >
-                    {PREVIEW_ICON}
+                    {TRASH_OPEN_ICON}
                 </button>
             )}
 

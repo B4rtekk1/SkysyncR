@@ -45,6 +45,15 @@ export async function listFileTags(fileId: string): Promise<FileTag[]> {
     return readJson(res, fileTags, 'FileTag[]')
 }
 
+export async function listAllFileTags(): Promise<FileTag[]> {
+    const res = await authenticatedFetch(`${API_BASE}file-tags`, {
+        method: 'GET',
+        cache: 'no-store',
+    })
+    if (!res.ok) throw new Error(await parseErrorMessage(res))
+    return readJson(res, fileTags, 'FileTag[]')
+}
+
 export async function addFileTag(fileId: string, tagId: string): Promise<FileTag> {
     const res = await authenticatedFetch(`${API_BASE}files/${fileId}/tags/${tagId}`, {
         method: 'PUT',

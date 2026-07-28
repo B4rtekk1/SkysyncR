@@ -113,6 +113,7 @@ export function FileCard({
     const [renameSaving, setRenameSaving] = useState(false)
     const renameInputRef = useRef<HTMLInputElement>(null)
     const cardRef = useRef<HTMLElement>(null)
+    const tagMenuRef = useRef<HTMLDivElement>(null)
     const infoPositionFrameRef = useRef<number | null>(null)
     const canToggleFavourite = Boolean(onToggleFavourite && !shared)
     const canRename = Boolean(onRename && !shared && view !== 'trash' && !pending)
@@ -183,8 +184,16 @@ export function FileCard({
             if (event.key === 'Escape') setTagMenuOpen(false)
         }
 
+        const handlePointerDown = (event: MouseEvent) => {
+            if (!tagMenuRef.current?.contains(event.target as Node)) setTagMenuOpen(false)
+        }
+
         window.addEventListener('keydown', handleKeyDown)
-        return () => window.removeEventListener('keydown', handleKeyDown)
+        window.addEventListener('mousedown', handlePointerDown)
+        return () => {
+            window.removeEventListener('keydown', handleKeyDown)
+            window.removeEventListener('mousedown', handlePointerDown)
+        }
     }, [tagMenuOpen])
 
     useEffect(() => {
@@ -402,84 +411,6 @@ export function FileCard({
                     )}
                 </div>
             )}
-            {(tags.length > 0 || canTag) && (
-                <div className="file-card__tags" onClick={(event) => event.stopPropagation()}>
-                    {visibleTags.map((tag) => (
-                        <span
-                            key={tag.tag_id}
-                            className="file-card__tag"
-                            style={{ '--tag-color': tag.color ?? '#38bdf8' } as CSSProperties}
-                            title={tag.name}
-                        >
-                            {tag.name}
-                        </span>
-                    ))}
-                    {hiddenTagCount > 0 && (
-                        <span className="file-card__tag file-card__tag--more" title={tags.map((tag) => tag.name).join(', ')}>
-                            +{hiddenTagCount}
-                        </span>
-                    )}
-                    {canTag && (
-                        <div className="file-card__tag-menu-wrap">
-                            <button
-                                className="file-card__tag-add"
-                                type="button"
-                                onClick={() => setTagMenuOpen((open) => !open)}
-                                aria-haspopup="menu"
-                                aria-expanded={tagMenuOpen}
-                                aria-label={`Manage tags for ${item.filename}`}
-                            >
-                                +
-                            </button>
-                            {tagMenuOpen && (
-                                <div className="file-card__tag-menu" role="menu" aria-label="File tags">
-                                    <div className="file-card__tag-options">
-                                        {allTags.length === 0 && <span className="file-card__tag-empty">No tags yet</span>}
-                                        {allTags.map((tag) => {
-                                            const selectedTag = assignedTagIds.has(tag.id)
-                                            return (
-                                                <label key={tag.id} className="file-card__tag-option">
-                                                    <input
-                                                        type="checkbox"
-                                                        checked={selectedTag}
-                                                        onChange={() => {
-                                                            if (selectedTag) void onRemoveTag?.(item.id, tag.id)
-                                                            else void onAddTag?.(item.id, tag.id)
-                                                        }}
-                                                    />
-                                                    <span
-                                                        className="file-card__tag-swatch"
-                                                        style={{ '--tag-color': tag.color ?? '#38bdf8' } as CSSProperties}
-                                                        aria-hidden="true"
-                                                    />
-                                                    <span>{tag.name}</span>
-                                                </label>
-                                            )
-                                        })}
-                                    </div>
-                                    <div className="file-card__tag-create">
-                                        <input
-                                            type="text"
-                                            value={tagDraft}
-                                            placeholder="New tag"
-                                            onChange={(event) => setTagDraft(event.target.value)}
-                                            onKeyDown={(event) => {
-                                                if (event.key === 'Enter') {
-                                                    event.preventDefault()
-                                                    void saveTagDraft()
-                                                }
-                                            }}
-                                        />
-                                        <button type="button" onClick={() => void saveTagDraft()} disabled={tagSaving || !tagDraft.trim()}>
-                                            Add
-                                        </button>
-                                    </div>
-                                </div>
-                            )}
-                        </div>
-                    )}
-                </div>
-            )}
             {hasAction && (
                 <FileCardActions
                     item={item}
@@ -487,11 +418,91 @@ export function FileCard({
                     isRenaming={isRenaming}
                     renameSaving={renameSaving}
                     canRename={canRename}
-                    canPreview={canPreview}
                     canDownload={canDownload}
                     canShare={canShare}
                     canNote={canNote}
                     isInfoOpen={isInfoOpen}
+                    tagControl={
+                        (tags.length > 0 || canTag) ? (
+                            <div className="file-card__tags file-card__tags--actions" onClick={(event) => event.stopPropagation()}>
+                                {visibleTags.map((tag) => (
+                                    <span
+                                        key={tag.tag_id}
+                                        className="file-card__tag"
+                                        style={{ '--tag-color': tag.color ?? '#38bdf8' } as CSSProperties}
+                                        title={tag.name}
+                                    >
+                                        {tag.name}
+                                    </span>
+                                ))}
+                                {hiddenTagCount > 0 && (
+                                    <span className="file-card__tag file-card__tag--more" title={tags.map((tag) => tag.name).join(', ')}>
+                                        +{hiddenTagCount}
+                                    </span>
+                                )}
+                                {canTag && (
+                                    <div className="file-card__tag-menu-wrap" ref={tagMenuRef}>
+                                        <button
+                                            className="file-card__tag-add"
+                                            type="button"
+                                            onClick={() => setTagMenuOpen((open) => !open)}
+                                            aria-haspopup="menu"
+                                            aria-expanded={tagMenuOpen}
+                                            aria-label={`Manage tags for ${item.filename}`}
+                                        >
+                                            <span aria-hidden="true">+</span>
+                                            <span>Add tag</span>
+                                        </button>
+                                        {tagMenuOpen && (
+                                            <div className="file-card__tag-menu" role="menu" aria-label="File tags">
+                                                <div className="file-card__tag-options">
+                                                    {allTags.length === 0 && <span className="file-card__tag-empty">No tags yet</span>}
+                                                    {allTags.map((tag) => {
+                                                        const selectedTag = assignedTagIds.has(tag.id)
+                                                        return (
+                                                            <label key={tag.id} className="file-card__tag-option">
+                                                                <input
+                                                                    type="checkbox"
+                                                                    checked={selectedTag}
+                                                                    onChange={() => {
+                                                                        if (selectedTag) void onRemoveTag?.(item.id, tag.id)
+                                                                        else void onAddTag?.(item.id, tag.id)
+                                                                    }}
+                                                                />
+                                                                <span
+                                                                    className="file-card__tag-swatch"
+                                                                    style={{ '--tag-color': tag.color ?? '#38bdf8' } as CSSProperties}
+                                                                    aria-hidden="true"
+                                                                />
+                                                                <span>{tag.name}</span>
+                                                            </label>
+                                                        )
+                                                    })}
+                                                </div>
+                                                <div className="file-card__tag-create">
+                                                    <input
+                                                        type="text"
+                                                        value={tagDraft}
+                                                        placeholder="New tag"
+                                                        onChange={(event) => setTagDraft(event.target.value)}
+                                                        onKeyDown={(event) => {
+                                                            if (event.key === 'Enter') {
+                                                                event.preventDefault()
+                                                                void saveTagDraft()
+                                                            }
+                                                        }}
+                                                    />
+                                                    <button type="button" onClick={() => void saveTagDraft()} disabled={tagSaving || !tagDraft.trim()}>
+                                                        Add
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+                        ) : undefined
+                    }
                     infoPopover={
                         isInfoOpen ? (
                             <FileInfoPopover
@@ -515,7 +526,6 @@ export function FileCard({
                         if (!isInfoOpen) scheduleInfoPositionUpdate()
                         setIsInfoOpen((current) => !current)
                     }}
-                    onPreview={onPreview}
                     onDownload={onDownload}
                     onShare={onShare}
                     onNote={onNote}
