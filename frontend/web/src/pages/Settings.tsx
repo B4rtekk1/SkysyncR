@@ -12,6 +12,7 @@ import {
     revokeSession,
     updateUserSettings,
     type CurrentUserResponse,
+    type OperationLogEntry,
     type OperationLogResponse,
     type SessionsResponse,
 } from '../api/users'
@@ -70,6 +71,40 @@ const operationLabels: Record<string, string> = {
     'user.session.revoke': 'Revoked session',
     'user.settings.update': 'Updated settings',
     'user.password.change': 'Changed password',
+}
+
+function safeLogFilenamePart(value: string): string {
+    return value
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9._-]+/g, '-')
+        .replace(/^-+|-+$/g, '') || 'user'
+}
+
+function downloadJsonFile(filename: string, value: unknown) {
+    const blob = new Blob([JSON.stringify(value, null, 2)], { type: 'application/json' })
+    const href = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = href
+    link.download = filename
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    URL.revokeObjectURL(href)
+}
+
+function buildOperationLogExport(
+    currentUser: CurrentUserResponse,
+    operations: OperationLogEntry[],
+) {
+    return {
+        exported_at: new Date().toISOString(),
+        user: {
+            id: currentUser.id,
+            email: currentUser.email,
+        },
+        operations,
+    }
 }
 
 type SettingsModalProps = {
@@ -147,11 +182,11 @@ function SettingsModalContent({ currentUser, onClose, onSave }: SettingsModalPro
     }, [currentUser])
 
     useEffect(() => {
-        void loadSessions()
+        void Promise.resolve().then(loadSessions)
     }, [loadSessions])
 
     useEffect(() => {
-        void loadOperationLog()
+        void Promise.resolve().then(loadOperationLog)
     }, [loadOperationLog])
 
     function updateSetting<K extends keyof SettingsState>(key: K, value: SettingsState[K]) {
@@ -319,7 +354,7 @@ function SettingsModalContent({ currentUser, onClose, onSave }: SettingsModalPro
 
     async function signOut() {
         await logout()
-        window.location.href = '/login'
+        window.location.assign('/login')
     }
 
     async function signOutEverywhere() {
@@ -333,7 +368,7 @@ function SettingsModalContent({ currentUser, onClose, onSave }: SettingsModalPro
         setLogoutAllSaving(true)
         try {
             await logoutAllSessions()
-            window.location.href = '/login'
+            window.location.assign('/login')
         } catch {
             setLogoutAllError('Could not sign out all sessions. Try again.')
             setConfirmLogoutAll(false)
@@ -349,7 +384,7 @@ function SettingsModalContent({ currentUser, onClose, onSave }: SettingsModalPro
             await revokeSession(sessionId)
             if (current) {
                 await logout()
-                window.location.href = '/login'
+                window.location.assign('/login')
                 return
             }
             await loadSessions()
@@ -359,6 +394,15 @@ function SettingsModalContent({ currentUser, onClose, onSave }: SettingsModalPro
         } finally {
             setRevokingSessionId(null)
         }
+    }
+
+    function downloadOperationLog() {
+        if (!currentUser || !operationLog?.operations.length) return
+
+        const datePart = new Date().toISOString().slice(0, 10)
+        const userPart = safeLogFilenamePart(currentUser.email)
+        const payload = buildOperationLogExport(currentUser, operationLog.operations)
+        downloadJsonFile(`skysyncr-operation-log-${userPart}-${datePart}.json`, payload)
     }
 
     function formatSessionTime(value: string): string {
@@ -739,7 +783,17 @@ function SettingsModalContent({ currentUser, onClose, onSave }: SettingsModalPro
                                     <p className="settings-kicker">Encrypted audit</p>
                                     <h2>Operation log</h2>
                                 </div>
-                                <span className="settings-badge">Encrypted</span>
+                                <div className="settings-panel__actions">
+                                    <button
+                                        className="btn btn--outline settings-log-download"
+                                        type="button"
+                                        onClick={downloadOperationLog}
+                                        disabled={operationLogLoading || !operationLog?.operations.length}
+                                    >
+                                        Download log
+                                    </button>
+                                    <span className="settings-badge">Encrypted</span>
+                                </div>
                             </div>
                             <div className="settings-session-history settings-operation-log">
                                 {operationLogLoading && <p className="settings-muted">Loading operation log...</p>}

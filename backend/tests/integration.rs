@@ -433,6 +433,7 @@ async fn refresh_token_rotation_revokes_old_token_and_accepts_new_token() {
     let new_token = "new-refresh-token";
 
     let metadata = skysyncr::db::refresh_tokens::RefreshTokenMetadata {
+        device_id: Some("test-device-id"),
         device_label: Some("Test browser on Linux"),
         user_agent: Some("test-agent"),
         ip_address: Some("127.0.0.1"),

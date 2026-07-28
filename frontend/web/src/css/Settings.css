@@ -187,6 +187,14 @@
     margin-bottom: 18px;
 }
 
+.settings-panel__actions {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+}
+
 .settings-panel h2 {
     margin: 2px 0 0;
     color: var(--paper);
@@ -593,6 +601,17 @@
     overflow: auto;
 }
 
+.settings-log-download {
+    padding: 8px 10px;
+    font-size: 0.78rem;
+    white-space: nowrap;
+}
+
+.settings-log-download:disabled {
+    cursor: default;
+    opacity: 0.55;
+}
+
 .settings-operation-item small {
     overflow-wrap: anywhere;
 }
@@ -718,6 +737,11 @@
 
     .settings-toggle {
         align-items: flex-start;
+    }
+
+    .settings-panel__head,
+    .settings-panel__actions {
+        flex-wrap: wrap;
     }
 
     .settings-retention {

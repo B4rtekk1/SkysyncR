@@ -58,8 +58,21 @@ export default defineConfig(({ mode }) => {
       },
     },
     server: {
+      host: '0.0.0.0',
+      port: 5173,
+      strictPort: true,
       headers: {
         'Content-Security-Policy': developmentPolicy,
+      },
+      proxy: {
+        '/api': {
+          target: 'http://backend:3000',
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/api/, ''),
+        },
+      },
+      watch: {
+        usePolling: env.VITE_USE_POLLING !== 'false',
       },
     },
     preview: {

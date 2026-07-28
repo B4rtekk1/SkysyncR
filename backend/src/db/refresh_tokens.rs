@@ -26,12 +26,13 @@ pub async fn create_refresh_token(
             token_hash,
             expires_at,
             session_expires_at,
+            device_id,
             device_label,
             user_agent,
             ip_address,
             last_used_at
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())
         "#,
     )
     .bind(user_id)
@@ -39,6 +40,7 @@ pub async fn create_refresh_token(
     .bind(token_hash)
     .bind(expires_at)
     .bind(session_expires_at)
+    .bind(metadata.device_id)
     .bind(metadata.device_label)
     .bind(metadata.user_agent)
     .bind(metadata.ip_address)
@@ -52,6 +54,7 @@ pub async fn create_refresh_token(
 
 #[derive(Clone, Copy)]
 pub struct RefreshTokenMetadata<'a> {
+    pub device_id: Option<&'a str>,
     pub device_label: Option<&'a str>,
     pub user_agent: Option<&'a str>,
     pub ip_address: Option<&'a str>,
@@ -222,6 +225,28 @@ pub async fn revoke_all_user_refresh_tokens(
     Ok(())
 }
 
+pub async fn revoke_user_device_refresh_tokens(
+    pool: &PgPool,
+    user_id: Uuid,
+    device_id: &str,
+) -> Result<(), sqlx::Error> {
+    sqlx::query(
+        r#"
+        UPDATE refresh_tokens
+        SET revoked = TRUE
+        WHERE user_id = $1
+          AND device_id = $2
+          AND revoked = FALSE
+        "#,
+    )
+    .bind(user_id)
+    .bind(device_id)
+    .execute(pool)
+    .await?;
+
+    Ok(())
+}
+
 pub async fn rotate_refresh_token(
     pool: &PgPool,
     old_token_id: Uuid,
@@ -255,12 +280,13 @@ pub async fn rotate_refresh_token(
             token_hash,
             expires_at,
             session_expires_at,
+            device_id,
             device_label,
             user_agent,
             ip_address,
             last_used_at
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())
         "#,
     )
     .bind(user_id)
@@ -268,6 +294,7 @@ pub async fn rotate_refresh_token(
     .bind(token_hash)
     .bind(expires_at)
     .bind(session_expires_at)
+    .bind(metadata.device_id)
     .bind(metadata.device_label)
     .bind(metadata.user_agent)
     .bind(metadata.ip_address)

@@ -177,6 +177,11 @@ export function useFileUpload({
     const activeRef = useRef<string | null>(null)
     const publicKeyRef = useRef(publicKey)
     const refreshQuotaRef = useRef(refreshQuota)
+    const pumpQueueRef = useRef<() => void>(() => {})
+
+    const requestQueuePump = useCallback(() => {
+        queueMicrotask(() => pumpQueueRef.current())
+    }, [])
 
     useEffect(() => {
         publicKeyRef.current = publicKey
@@ -253,6 +258,7 @@ export function useFileUpload({
                     restored.forEach((job) => next.add(job.tempId))
                     return next
                 })
+                requestQueuePump()
             })
             .catch(() => {
                 setError('Unable to restore the upload queue.')
@@ -261,7 +267,7 @@ export function useFileUpload({
         return () => {
             cancelled = true
         }
-    }, [setError, setItems, setPendingIds])
+    }, [requestQueuePump, setError, setItems, setPendingIds])
 
     const runJob = useCallback(
         async (job: UploadJob) => {
@@ -348,25 +354,34 @@ export function useFileUpload({
                 job.reject(new Error(message))
             } finally {
                 job.controller = null
-                if (activeRef.current === job.id) activeRef.current = null
+                if (activeRef.current === job.id) {
+                    activeRef.current = null
+                    requestQueuePump()
+                }
             }
         },
-        [setError, setItems, setPendingIds, updateTransfer],
+        [requestQueuePump, setError, setItems, setPendingIds, updateTransfer],
     )
 
     useEffect(() => {
-        if (activeRef.current) return
-        if (!publicKeyRef.current) return
+        pumpQueueRef.current = () => {
+            if (activeRef.current) return
+            if (!publicKeyRef.current) return
 
-        const next = transfers.find((transfer) => transfer.status === 'queued')
-        if (!next) return
+            const next = Array.from(jobsRef.current.values())
+                .filter((job) => job.transfer.status === 'queued')
+                .sort((a, b) => a.transfer.createdAt - b.transfer.createdAt)[0]
+            if (!next) return
 
-        const job = jobsRef.current.get(next.id)
-        if (!job) return
-
-        updateTransfer(next.id, { status: 'uploading', attempts: next.attempts + 1, error: null })
-        void runJob(job)
-    }, [runJob, transfers, updateTransfer])
+            updateTransfer(next.id, {
+                status: 'uploading',
+                attempts: next.transfer.attempts + 1,
+                error: null,
+            })
+            void runJob(next)
+        }
+        requestQueuePump()
+    }, [requestQueuePump, runJob, transfers, updateTransfer])
 
     const ingestFileArray = useCallback(
         async (files: File[]) => {
@@ -425,10 +440,11 @@ export function useFileUpload({
             }))
 
             setTransfers((prev) => [...queued.map((entry) => entry.transfer), ...prev])
+            requestQueuePump()
             const settled = await Promise.allSettled(queued.map((entry) => entry.promise))
             return settled.flatMap((result) => (result.status === 'fulfilled' ? [result.value] : []))
         },
-        [folderId, setError, setItems, setPendingIds],
+        [folderId, requestQueuePump, setError, setItems, setPendingIds],
     )
 
     const ingestFiles = useCallback(

@@ -7,6 +7,7 @@ import type {
   CurrentUser as CurrentUserResponse,
   ForgotPasswordRequest as ForgotPasswordPayload,
   LoginRequest as LoginPayload,
+  OperationLogEntry,
   OperationLogResponse,
   RegisterRequest as RegisterPayload,
   RegisterResponse,
@@ -43,6 +44,7 @@ export type {
   ResetPasswordPayload,
   SessionsResponse,
   OperationLogResponse,
+  OperationLogEntry,
 }
 
 export class ApiRequestError extends Error {

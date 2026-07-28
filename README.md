@@ -13,9 +13,11 @@ The local stack starts:
 - `db`: PostgreSQL 17 available to the app inside the Docker network.
 - `migrate`: one-shot SQLx migration job.
 - `backend`: Rust API server inside the Docker network.
-- `frontend`: Nginx serving the Vite build and proxying `/api/` to the backend.
+- `frontend`: Vite dev server with hot reload, proxying `/api/` to the backend.
 
 Open the app at `http://localhost:8080`.
+
+Frontend source files are bind-mounted into the container. Vite uses polling by default for reliable file watching on Docker Desktop and OneDrive-backed folders. Set `VITE_USE_POLLING=false` if native file watching works on your machine.
 
 Useful local commands:
 

@@ -6,7 +6,7 @@ use crate::db::refresh_tokens::{
     RefreshTokenAuth, RefreshTokenMetadata, ValidRefreshToken, authenticate_refresh_token,
     create_refresh_token, insert_refresh_token_activity, list_active_user_sessions,
     list_user_session_activity, revoke_all_user_refresh_tokens, revoke_refresh_token,
-    revoke_user_session, rotate_refresh_token,
+    revoke_user_device_refresh_tokens, revoke_user_session, rotate_refresh_token,
 };
 use crate::db::users::*;
 use crate::models::users::{
@@ -46,6 +46,7 @@ const REFRESH_TOKEN_COOKIE: &str = "skysyncr_refresh_token";
 const REFRESH_PERSISTENCE_COOKIE: &str = "skysyncr_refresh_persistent";
 const INVALID_LOGIN_MESSAGE: &str = "Invalid email or password";
 const SESSION_ACTIVITY_LIMIT: i64 = 30;
+const DEVICE_ID_HEADER: &str = "x-skysyncr-device-id";
 
 #[derive(Serialize)]
 pub struct SessionsResponse {
@@ -218,8 +219,14 @@ fn device_label_from_headers(headers: &HeaderMap) -> Option<String> {
 
 fn request_metadata_values(
     headers: &HeaderMap,
-) -> (Option<String>, Option<String>, Option<String>) {
+) -> (
+    Option<String>,
+    Option<String>,
+    Option<String>,
+    Option<String>,
+) {
     (
+        header_string(headers, HeaderName::from_static(DEVICE_ID_HEADER), 128),
         device_label_from_headers(headers),
         header_string(headers, header::USER_AGENT, 512),
         request_ip(headers),
@@ -227,11 +234,13 @@ fn request_metadata_values(
 }
 
 fn owned_refresh_metadata<'a>(
+    device_id: &'a Option<String>,
     device_label: &'a Option<String>,
     user_agent: &'a Option<String>,
     ip_address: &'a Option<String>,
 ) -> RefreshTokenMetadata<'a> {
     RefreshTokenMetadata {
+        device_id: device_id.as_deref(),
         device_label: device_label.as_deref(),
         user_agent: user_agent.as_deref(),
         ip_address: ip_address.as_deref(),
@@ -416,7 +425,7 @@ pub async fn change_password(
         .await
         .map_err(|e| internal_error("revoke sessions after password change", e))?;
 
-    let (device_label, _, _) = request_metadata_values(&headers);
+    let (_, device_label, _, _) = request_metadata_values(&headers);
     log_user_operation(
         &state,
         auth.user_id,
@@ -580,8 +589,13 @@ async fn issue_token_pair(
     headers: &HeaderMap,
 ) -> Result<(String, String, i64, chrono::DateTime<Utc>), ApiError> {
     let refresh_token = generate_refresh_token();
-    let (device_label, user_agent, ip_address) = request_metadata_values(headers);
-    let metadata = owned_refresh_metadata(&device_label, &user_agent, &ip_address);
+    let (device_id, device_label, user_agent, ip_address) = request_metadata_values(headers);
+    if let Some(device_id) = device_id.as_deref() {
+        revoke_user_device_refresh_tokens(&state.db_pool, user_id, device_id)
+            .await
+            .map_err(|e| internal_error("revoke previous device sessions", e))?;
+    }
+    let metadata = owned_refresh_metadata(&device_id, &device_label, &user_agent, &ip_address);
     let session_expires_at =
         create_refresh_token(&state.db_pool, user_id, &refresh_token, metadata)
             .await
@@ -661,7 +675,7 @@ pub async fn login_user(
         .map_err(|e| internal_error("update last login", e))?;
 
     let persistent = payload.remember.unwrap_or(true);
-    let (device_label, _, _) = request_metadata_values(&headers);
+    let (_, device_label, _, _) = request_metadata_values(&headers);
     log_user_operation(
         &state,
         auth_record.id,
@@ -712,8 +726,8 @@ pub async fn refresh_tokens(
 
     let new_refresh_token = generate_refresh_token();
     let persistent = has_cookie(&headers, REFRESH_PERSISTENCE_COOKIE);
-    let (device_label, user_agent, ip_address) = request_metadata_values(&headers);
-    let metadata = owned_refresh_metadata(&device_label, &user_agent, &ip_address);
+    let (device_id, device_label, user_agent, ip_address) = request_metadata_values(&headers);
+    let metadata = owned_refresh_metadata(&device_id, &device_label, &user_agent, &ip_address);
     rotate_refresh_token(
         &state.db_pool,
         stored.id,
@@ -761,8 +775,8 @@ pub async fn logout_user(
         revoke_refresh_token(&state.db_pool, stored.id)
             .await
             .map_err(|e| internal_error("revoke refresh token", e))?;
-        let (device_label, user_agent, ip_address) = request_metadata_values(&headers);
-        let metadata = owned_refresh_metadata(&device_label, &user_agent, &ip_address);
+        let (device_id, device_label, user_agent, ip_address) = request_metadata_values(&headers);
+        let metadata = owned_refresh_metadata(&device_id, &device_label, &user_agent, &ip_address);
         insert_refresh_token_activity(
             &state.db_pool,
             stored.user_id,
@@ -805,8 +819,8 @@ pub async fn logout_all_sessions(
         revoke_all_user_refresh_tokens(&state.db_pool, stored.user_id)
             .await
             .map_err(|e| internal_error("revoke all refresh tokens", e))?;
-        let (device_label, user_agent, ip_address) = request_metadata_values(&headers);
-        let metadata = owned_refresh_metadata(&device_label, &user_agent, &ip_address);
+        let (device_id, device_label, user_agent, ip_address) = request_metadata_values(&headers);
+        let metadata = owned_refresh_metadata(&device_id, &device_label, &user_agent, &ip_address);
         insert_refresh_token_activity(
             &state.db_pool,
             stored.user_id,
@@ -886,8 +900,8 @@ pub async fn revoke_session(
         return Err(ApiError::BadRequest("Session not found".into()));
     }
 
-    let (device_label, user_agent, ip_address) = request_metadata_values(&headers);
-    let metadata = owned_refresh_metadata(&device_label, &user_agent, &ip_address);
+    let (device_id, device_label, user_agent, ip_address) = request_metadata_values(&headers);
+    let metadata = owned_refresh_metadata(&device_id, &device_label, &user_agent, &ip_address);
     insert_refresh_token_activity(
         &state.db_pool,
         auth.user_id,
