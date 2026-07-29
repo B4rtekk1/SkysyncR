@@ -9,6 +9,7 @@ import { EmptyPane } from './EmptyPane'
 import { FolderBreadcrumbs } from './FolderBreadcrumbs'
 import { GroupsPanel } from './GroupsPanel'
 import { TransferQueuePanel } from './TransferQueuePanel'
+import type { TransferHistoryEntry } from './TransferQueuePanel'
 import type { FileCardDropPosition } from '../hooks/useManualCardOrdering'
 import type { UploadTransfer } from '../hooks/useFileUpload'
 import type {
@@ -68,6 +69,7 @@ type DashboardContentProps = {
     onOpenFolderCreate: () => void
     onUploadChange: (event: ChangeEvent<HTMLInputElement>) => void
     uploadTransfers: UploadTransfer[]
+    transferHistory: TransferHistoryEntry[]
     onPauseTransfer: (id: string) => void
     onResumeTransfer: (id: string) => void
     onRetryTransfer: (id: string) => void
@@ -221,6 +223,7 @@ export function DashboardContent({
     onOpenFolderCreate,
     onUploadChange,
     uploadTransfers,
+    transferHistory,
     onPauseTransfer,
     onResumeTransfer,
     onRetryTransfer,
@@ -444,17 +447,15 @@ export function DashboardContent({
                 </p>
             )}
 
-            {view === 'all' && (
-                <TransferQueuePanel
-                    transfers={uploadTransfers}
-                    onPause={onPauseTransfer}
-                    onResume={onResumeTransfer}
-                    onRetry={onRetryTransfer}
-                    onRemove={onRemoveTransfer}
-                    onPauseAll={onPauseAllTransfers}
-                    onResumeAll={onResumeAllTransfers}
-                />
-            )}
+            <TransferQueuePanel
+                transfers={transferHistory}
+                onPause={onPauseTransfer}
+                onResume={onResumeTransfer}
+                onRetry={onRetryTransfer}
+                onRemove={onRemoveTransfer}
+                onPauseAll={onPauseAllTransfers}
+                onResumeAll={onResumeAllTransfers}
+            />
 
             {selectedCount > 0 && (view === 'all' || view === 'favourites' || view === 'trash') && (
                 <div className="bulk-actions" role="region" aria-label="Bulk file actions">

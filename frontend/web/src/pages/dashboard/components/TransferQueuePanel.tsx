@@ -1,8 +1,11 @@
 import type { UploadTransfer } from '../hooks/useFileUpload'
+import type { DownloadTransfer } from '../hooks/useDownloadTransfers'
 import { formatBytes } from '../fileUtils'
 
+export type TransferHistoryEntry = UploadTransfer | DownloadTransfer
+
 type TransferQueuePanelProps = {
-    transfers: UploadTransfer[]
+    transfers: TransferHistoryEntry[]
     onPause: (id: string) => void
     onResume: (id: string) => void
     onRetry: (id: string) => void
@@ -11,13 +14,28 @@ type TransferQueuePanelProps = {
     onResumeAll: () => void
 }
 
-const STATUS_LABELS: Record<UploadTransfer['status'], string> = {
+const STATUS_LABELS: Record<TransferHistoryEntry['status'], string> = {
     queued: 'Queued',
     encrypting: 'Encrypting',
     uploading: 'Uploading',
+    downloading: 'Downloading',
+    verifying: 'Verifying',
+    decrypting: 'Decrypting',
     paused: 'Paused',
     failed: 'Failed',
-    completed: 'Synced',
+    completed: 'Done',
+}
+
+function isDownloadTransfer(transfer: TransferHistoryEntry): transfer is DownloadTransfer {
+    return 'direction' in transfer && transfer.direction === 'download'
+}
+
+function integrityLabel(transfer: TransferHistoryEntry): string | null {
+    if (!isDownloadTransfer(transfer) || !transfer.integrity) return null
+    if (transfer.integrity.status === 'verified') {
+        return `SHA-256 verified (${transfer.integrity.actualChecksum?.slice(0, 12)}...)`
+    }
+    return 'SHA-256 header missing'
 }
 
 export function TransferQueuePanel({
@@ -29,21 +47,20 @@ export function TransferQueuePanel({
     onPauseAll,
     onResumeAll,
 }: TransferQueuePanelProps) {
-    const activeTransfers = transfers.filter((transfer) => transfer.status !== 'completed')
-    if (activeTransfers.length === 0) return null
+    if (transfers.length === 0) return null
 
-    const canPauseAll = activeTransfers.some((transfer) =>
+    const canPauseAll = transfers.some((transfer) =>
         transfer.status === 'queued' || transfer.status === 'encrypting' || transfer.status === 'uploading',
     )
-    const canResumeAll = activeTransfers.some((transfer) => transfer.status === 'paused' || transfer.status === 'failed')
+    const canResumeAll = transfers.some((transfer) => !isDownloadTransfer(transfer) && (transfer.status === 'paused' || transfer.status === 'failed'))
 
     return (
-        <section className="transfer-queue" aria-label="Upload transfer queue">
+        <section className="transfer-queue" aria-label="Transfer history">
             <div className="transfer-queue__head">
                 <div>
                     <h2 className="transfer-queue__title">Transfers</h2>
                     <p className="transfer-queue__meta">
-                        {activeTransfers.length} {activeTransfers.length === 1 ? 'file' : 'files'} in queue
+                        {transfers.length} {transfers.length === 1 ? 'file' : 'files'} in history
                     </p>
                 </div>
                 <div className="transfer-queue__actions">
@@ -57,11 +74,16 @@ export function TransferQueuePanel({
             </div>
 
             <div className="transfer-queue__list">
-                {activeTransfers.map((transfer) => {
+                {transfers.map((transfer) => {
+                    const download = isDownloadTransfer(transfer)
                     const isRunning = transfer.status === 'encrypting' || transfer.status === 'uploading'
-                    const canPause = transfer.status === 'queued' || isRunning
-                    const canResume = transfer.status === 'paused'
-                    const canRetry = transfer.status === 'failed'
+                    const canPause = !download && (transfer.status === 'queued' || isRunning)
+                    const canResume = !download && transfer.status === 'paused'
+                    const canRetry = !download && transfer.status === 'failed'
+                    const canRemove =
+                        download || transfer.status === 'paused' || transfer.status === 'failed' || transfer.status === 'queued' || transfer.status === 'completed'
+                    const integrity = integrityLabel(transfer)
+                    const integrityStatus = isDownloadTransfer(transfer) ? transfer.integrity?.status : null
 
                     return (
                         <article className="transfer-queue__row" key={transfer.id}>
@@ -70,8 +92,9 @@ export function TransferQueuePanel({
                                     {transfer.name}
                                 </span>
                                 <span className="transfer-queue__detail">
-                                    {formatBytes(transfer.size)} · attempt {Math.max(transfer.attempts, 1)}
+                                    {download ? 'Download' : 'Upload'} · {formatBytes(transfer.size)} · attempt {Math.max(transfer.attempts, 1)}
                                 </span>
+                                {integrity && <span className={`transfer-queue__integrity transfer-queue__integrity--${integrityStatus}`}>{integrity}</span>}
                                 {transfer.error && <span className="transfer-queue__error">{transfer.error}</span>}
                             </div>
                             <span className={`transfer-queue__status transfer-queue__status--${transfer.status}`}>
@@ -93,7 +116,7 @@ export function TransferQueuePanel({
                                         Retry
                                     </button>
                                 )}
-                                {(transfer.status === 'paused' || transfer.status === 'failed' || transfer.status === 'queued') && (
+                                {canRemove && (
                                     <button className="transfer-queue__icon-button" type="button" onClick={() => onRemove(transfer.id)}>
                                         Remove
                                     </button>

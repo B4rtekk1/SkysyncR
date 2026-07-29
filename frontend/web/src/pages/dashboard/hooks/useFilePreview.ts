@@ -13,6 +13,7 @@ import {
 } from '../../../crypto/fileEncryption'
 import { type FileKind, kindFromFile } from '../fileUtils'
 import type { FilePreviewState, Item } from '../types'
+import type { DownloadTransfer } from './useDownloadTransfers'
 
 const MAX_TEXT_PREVIEW_BYTES = 1024 * 1024
 
@@ -45,13 +46,17 @@ export function useFilePreview(
     publicKey: string | null,
     setError: (error: string | null) => void,
     onFileUpdated: (file: ApiFile) => void,
+    transferHistory?: {
+        startDownloadTransfer: (name: string, size: number) => string
+        updateDownloadTransfer: (id: string, patch: Partial<DownloadTransfer>) => void
+    },
 ) {
     const [filePreview, setFilePreview] = useState<FilePreviewState | null>(null)
     const filePreviewUrlRef = useRef<string | null>(null)
     const filePreviewRequestRef = useRef(0)
     const findShortcutActiveRef = useRef(false)
 
-    const decryptDownloadedFile = useCallback(async (item: Item): Promise<Blob> => {
+    const decryptEncryptedBlob = useCallback(async (item: Item, encryptedBlob: Blob): Promise<Blob> => {
         if (!privateKey) {
             throw new Error('Private key is locked. Sign in again to unlock your vault.')
         }
@@ -59,14 +64,18 @@ export function useFilePreview(
             throw new Error('File encryption metadata is missing.')
         }
 
-        const { blob: encryptedBlob, checksum } = await downloadFileWithIntegrity(item.id)
-        await verifyBlobChecksum(encryptedBlob, checksum)
         const fileKey = await unwrapFileKeyForUser(item.encrypted_key, privateKey)
         if (isChunkedFileNonce(item.encryption_nonce)) {
             return streamToBlob(decryptFileStream(encryptedBlob, fileKey, item.encryption_nonce), item.mime_type)
         }
         return decryptFile(encryptedBlob, fileKey, item.encryption_nonce, item.mime_type)
     }, [privateKey])
+
+    const decryptDownloadedFile = useCallback(async (item: Item): Promise<Blob> => {
+        const { blob: encryptedBlob, checksum } = await downloadFileWithIntegrity(item.id)
+        await verifyBlobChecksum(encryptedBlob, checksum)
+        return decryptEncryptedBlob(item, encryptedBlob)
+    }, [decryptEncryptedBlob])
 
     const clearFilePreviewUrl = useCallback(() => {
         if (filePreviewUrlRef.current) {
@@ -117,8 +126,16 @@ export function useFilePreview(
     }, [closeFilePreview, filePreview])
 
     async function handleDownload(item: Item) {
+        const transferId = transferHistory?.startDownloadTransfer(item.filename, item.size_bytes)
+        const updateTransfer = (patch: Partial<DownloadTransfer>) => {
+            if (transferId) transferHistory?.updateDownloadTransfer(transferId, patch)
+        }
         try {
-            const blob = await decryptDownloadedFile(item)
+            const { blob: encryptedBlob, checksum } = await downloadFileWithIntegrity(item.id)
+            updateTransfer({ status: 'verifying' })
+            const integrity = await verifyBlobChecksum(encryptedBlob, checksum)
+            updateTransfer({ status: 'decrypting', integrity })
+            const blob = await decryptEncryptedBlob(item, encryptedBlob)
             const url = URL.createObjectURL(blob)
             const link = document.createElement('a')
             link.href = url
@@ -127,8 +144,11 @@ export function useFilePreview(
             link.click()
             link.remove()
             URL.revokeObjectURL(url)
+            updateTransfer({ status: 'completed', error: null })
         } catch (e) {
-            setError(e instanceof Error ? e.message : 'Could not download that file.')
+            const message = e instanceof Error ? e.message : 'Could not download that file.'
+            updateTransfer({ status: 'failed', error: message })
+            setError(message)
         }
     }
 

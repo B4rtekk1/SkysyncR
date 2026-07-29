@@ -557,15 +557,31 @@ export async function downloadFileWithIntegrity(id: string): Promise<VerifiedDow
     }
 }
 
-export async function verifyBlobChecksum(blob: Blob, expectedChecksum: string | null): Promise<'verified' | 'missing'> {
-    if (!expectedChecksum) return 'missing'
+export type IntegrityVerificationResult = {
+    status: 'verified' | 'missing'
+    expectedChecksum: string | null
+    actualChecksum: string | null
+}
+
+export async function verifyBlobChecksum(blob: Blob, expectedChecksum: string | null): Promise<IntegrityVerificationResult> {
+    if (!expectedChecksum) {
+        return {
+            status: 'missing',
+            expectedChecksum: null,
+            actualChecksum: null,
+        }
+    }
 
     const actual = await sha256Hex(blob)
     if (actual.toLowerCase() !== expectedChecksum.toLowerCase()) {
         throw new Error('Downloaded file failed integrity verification.')
     }
 
-    return 'verified'
+    return {
+        status: 'verified',
+        expectedChecksum,
+        actualChecksum: actual,
+    }
 }
 
 export type PublicDownload = {

@@ -28,6 +28,7 @@ import { useDashboardSession } from './dashboard/hooks/useDashboardSession'
 import { useFilePreview } from './dashboard/hooks/useFilePreview'
 import { useFileFilterControls } from './dashboard/hooks/useFileFilterControls'
 import { useFileUpload } from './dashboard/hooks/useFileUpload'
+import { useDownloadTransfers } from './dashboard/hooks/useDownloadTransfers'
 import { useFolderActions } from './dashboard/hooks/useFolderActions'
 import { useFolderDownload } from './dashboard/hooks/useFolderDownload'
 import { useLayoutModeSwitch } from './dashboard/hooks/useLayoutModeSwitch'
@@ -138,11 +139,18 @@ function Dashboard() {
         updateFileTags,
     } = useDashboardData({ view, activeFolderId, privateKey })
 
+    const {
+        downloadTransfers,
+        startDownloadTransfer,
+        updateDownloadTransfer,
+        removeDownloadTransfer,
+    } = useDownloadTransfers()
     const { filePreview, closeFilePreview, handleDownload, handleFilePreview, handleSaveTextFile } = useFilePreview(
         privateKey,
         publicKey,
         setError,
         handleFileUpdated,
+        { startDownloadTransfer, updateDownloadTransfer },
     )
     const { downloadFolder } = useFolderDownload(privateKey, setError)
     const {
@@ -245,6 +253,15 @@ function Dashboard() {
         setError,
         refreshQuota,
     })
+    const transferHistory = useMemo(
+        () => [...downloadTransfers, ...uploadTransfers].sort((a, b) => b.updatedAt - a.updatedAt),
+        [downloadTransfers, uploadTransfers],
+    )
+
+    function removeTransferHistoryEntry(id: string) {
+        removeTransfer(id)
+        removeDownloadTransfer(id)
+    }
     const {
         fileCreateOpen,
         setFileCreateOpen,
@@ -751,10 +768,11 @@ function Dashboard() {
                     onOpenFolderCreate={() => setFolderCreateOpen(true)}
                     onUploadChange={onUploadChange}
                     uploadTransfers={uploadTransfers}
+                    transferHistory={transferHistory}
                     onPauseTransfer={pauseTransfer}
                     onResumeTransfer={resumeTransfer}
                     onRetryTransfer={retryTransfer}
-                    onRemoveTransfer={removeTransfer}
+                    onRemoveTransfer={removeTransferHistoryEntry}
                     onPauseAllTransfers={pauseAllTransfers}
                     onResumeAllTransfers={resumeAllTransfers}
                     folderTrail={folderTrail}
