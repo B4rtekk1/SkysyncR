@@ -15,15 +15,19 @@ pub struct OperationLogRecord {
     pub created_at: DateTime<Utc>,
 }
 
+pub struct NewAuditLog<'a> {
+    pub user_id: Uuid,
+    pub action: &'a str,
+    pub resource_id: Option<Uuid>,
+    pub resource_type: Option<&'a str>,
+    pub device_label: Option<&'a str>,
+    pub details: Value,
+}
+
 pub async fn insert_user_audit_log(
     pool: &PgPool,
     encryption_key: &str,
-    user_id: Uuid,
-    action: &str,
-    resource_id: Option<Uuid>,
-    resource_type: Option<&str>,
-    device_label: Option<&str>,
-    details: Value,
+    log: NewAuditLog<'_>,
 ) -> Result<(), sqlx::Error> {
     sqlx::query(
         r#"
@@ -39,12 +43,12 @@ pub async fn insert_user_audit_log(
         VALUES ($1, $2, $3, $4, $5, '{}'::jsonb, pgp_sym_encrypt($6::text, $7))
         "#,
     )
-    .bind(user_id)
-    .bind(action)
-    .bind(resource_id)
-    .bind(resource_type)
-    .bind(device_label)
-    .bind(details.to_string())
+    .bind(log.user_id)
+    .bind(log.action)
+    .bind(log.resource_id)
+    .bind(log.resource_type)
+    .bind(log.device_label)
+    .bind(log.details.to_string())
     .bind(encryption_key)
     .execute(pool)
     .await?;

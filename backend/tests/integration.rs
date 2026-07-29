@@ -1,8 +1,8 @@
 use chrono::{Duration, Utc};
 use skysyncr::crypto::jwt::{generate_access_token_capped, verify_access_token};
 use skysyncr::db::files::{
-    NewFileRecord, NewFileShare, consume_public_file_share_for_download, create_file_record,
-    get_user_file_for_content_update_in_tx, get_user_file_for_download,
+    NewFileRecord, NewFileShare, UpdatedFileContent, consume_public_file_share_for_download,
+    create_file_record, get_user_file_for_content_update_in_tx, get_user_file_for_download,
     list_files_shared_with_user, rename_user_file, update_user_file_content, update_user_file_note,
     upsert_user_file_share,
 };
@@ -257,18 +257,20 @@ async fn migrations_apply_to_existing_legacy_database_and_backup_destructive_cha
     .await
     .expect("insert legacy file");
 
-    sqlx::query(
-        r#"
-        INSERT INTO file_shares (file_id, shared_by_user_id, shared_with_user_id)
-        VALUES ($1, $2, $3)
-        "#,
-    )
-    .bind(file_id)
-    .bind(owner_id)
-    .bind(recipient_id)
-    .execute(&pool)
-    .await
-    .expect("insert legacy share without encrypted key");
+    let mut legacy_share_insert = sqlx::QueryBuilder::new(
+        "INSERT INTO file_shares (file_id, shared_by_user_id, shared_with_user_id) ",
+    );
+    legacy_share_insert.push_values([(file_id, owner_id, recipient_id)], |mut values, share| {
+        values
+            .push_bind(share.0)
+            .push_bind(share.1)
+            .push_bind(share.2);
+    });
+    legacy_share_insert
+        .build()
+        .execute(&pool)
+        .await
+        .expect("insert legacy share without encrypted key");
 
     sqlx::query(
         r#"
@@ -702,11 +704,13 @@ async fn file_share_write_permission_gates_metadata_and_blocks_content_updates()
         &mut write_tx,
         writer_id,
         file.id,
-        "draft-v2.txt.enc".to_string(),
-        24,
-        b"writer-wrapped-key".to_vec(),
-        b"nonce-v2".to_vec(),
-        Some("checksum-v2".to_string()),
+        UpdatedFileContent {
+            storage_path: "draft-v2.txt.enc".to_string(),
+            size_bytes: 24,
+            encrypted_key: b"writer-wrapped-key".to_vec(),
+            encryption_nonce: b"nonce-v2".to_vec(),
+            checksum: Some("checksum-v2".to_string()),
+        },
     )
     .await
     .unwrap();

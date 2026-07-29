@@ -218,10 +218,10 @@ pub async fn download_public_folder_file(
     if let Ok(value) = HeaderValue::from_str(&file.size_bytes.to_string()) {
         headers.insert(axum::http::header::CONTENT_LENGTH, value);
     }
-    if let Some(checksum) = file.checksum.as_deref() {
-        if let Ok(value) = HeaderValue::from_str(checksum) {
-            headers.insert("x-skysyncr-sha256", value);
-        }
+    if let Some(checksum) = file.checksum.as_deref()
+        && let Ok(value) = HeaderValue::from_str(checksum)
+    {
+        headers.insert("x-skysyncr-sha256", value);
     }
     if let Ok(value) =
         HeaderValue::from_str(&general_purpose::STANDARD.encode(file.filename.as_bytes()))
@@ -233,10 +233,10 @@ pub async fn download_public_folder_file(
     {
         headers.insert("x-skysyncr-encryption-nonce", value);
     }
-    if let Some(mime_type) = file.mime_type.as_deref() {
-        if let Ok(value) = HeaderValue::from_str(mime_type) {
-            headers.insert("x-skysyncr-mime-type", value);
-        }
+    if let Some(mime_type) = file.mime_type.as_deref()
+        && let Ok(value) = HeaderValue::from_str(mime_type)
+    {
+        headers.insert("x-skysyncr-mime-type", value);
     }
     let disposition = format!(
         "attachment; filename=\"{}\"",

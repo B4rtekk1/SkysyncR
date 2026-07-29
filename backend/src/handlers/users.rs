@@ -1,7 +1,7 @@
 use crate::auth::AuthUser;
 use crate::crypto::jwt::generate_access_token_capped;
 use crate::crypto::refresh_token::generate_refresh_token;
-use crate::db::audit_logs::{insert_user_audit_log, list_user_operation_logs};
+use crate::db::audit_logs::{NewAuditLog, insert_user_audit_log, list_user_operation_logs};
 use crate::db::refresh_tokens::{
     RefreshTokenAuth, RefreshTokenMetadata, ValidRefreshToken, authenticate_refresh_token,
     create_refresh_token, insert_refresh_token_activity, list_active_user_sessions,
@@ -70,12 +70,14 @@ async fn log_user_operation(
     if let Err(e) = insert_user_audit_log(
         &state.db_pool,
         &state.config.audit_log_encryption_key,
-        user_id,
-        operation,
-        None,
-        Some("account"),
-        device_label,
-        details,
+        NewAuditLog {
+            user_id,
+            action: operation,
+            resource_id: None,
+            resource_type: Some("account"),
+            device_label,
+            details,
+        },
     )
     .await
     {

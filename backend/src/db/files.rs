@@ -2,7 +2,7 @@ use chrono::{DateTime, Utc};
 use sqlx::{PgPool, Postgres, QueryBuilder, Row, Transaction};
 use uuid::Uuid;
 
-use super::audit_logs::insert_user_audit_log;
+use super::audit_logs::{NewAuditLog, insert_user_audit_log};
 use super::file_records::SharedFileRow;
 pub use super::file_records::{
     DownloadFileRecord, FileAuditRecord, FilePurgeTarget, FileRecord, FileShareRecord,
@@ -10,6 +10,14 @@ pub use super::file_records::{
     UpdateFileContentTarget,
 };
 use super::storage::try_apply_storage_delta;
+
+pub struct UpdatedFileContent {
+    pub storage_path: String,
+    pub size_bytes: i64,
+    pub encrypted_key: Vec<u8>,
+    pub encryption_nonce: Vec<u8>,
+    pub checksum: Option<String>,
+}
 
 pub async fn list_user_files(
     pool: &PgPool,
@@ -414,11 +422,13 @@ pub async fn restore_user_file_version(
         &mut tx,
         user_id,
         file_id,
-        version.storage_path,
-        version.size_bytes,
-        version.encrypted_key,
-        version.encryption_nonce,
-        version.checksum,
+        UpdatedFileContent {
+            storage_path: version.storage_path,
+            size_bytes: version.size_bytes,
+            encrypted_key: version.encrypted_key,
+            encryption_nonce: version.encryption_nonce,
+            checksum: version.checksum,
+        },
     )
     .await?;
 
@@ -457,16 +467,18 @@ pub async fn insert_file_audit_log(
     insert_user_audit_log(
         pool,
         encryption_key,
-        user_id,
-        action,
-        Some(file_id),
-        Some("file"),
-        device_label,
-        serde_json::json!({
-            "resource_id": file_id,
-            "resource_type": "file",
-            "device_label": device_label,
-        }),
+        NewAuditLog {
+            user_id,
+            action,
+            resource_id: Some(file_id),
+            resource_type: Some("file"),
+            device_label,
+            details: serde_json::json!({
+                "resource_id": file_id,
+                "resource_type": "file",
+                "device_label": device_label,
+            }),
+        },
     )
     .await
 }
@@ -856,7 +868,7 @@ pub async fn list_expired_deleted_files(
         WHERE f.is_deleted = TRUE
           AND f.deleted_at IS NOT NULL
           AND f.deleted_at <= NOW() - (COALESCE(u.trash_retention_days, $1::int)::int * interval '1 day')
-        ORDER BY f.deleted_at ASC
+        ORDER BY f.deleted_at
         LIMIT $2
         "#,
     )
@@ -1082,11 +1094,7 @@ pub async fn update_user_file_content(
     tx: &mut Transaction<'_, Postgres>,
     user_id: Uuid,
     file_id: Uuid,
-    storage_path: String,
-    size_bytes: i64,
-    encrypted_key: Vec<u8>,
-    encryption_nonce: Vec<u8>,
-    checksum: Option<String>,
+    content: UpdatedFileContent,
 ) -> Result<Option<FileRecord>, sqlx::Error> {
     sqlx::query_as::<_, FileRecord>(
         r#"
@@ -1127,11 +1135,11 @@ pub async fn update_user_file_content(
             deleted_at
         "#,
     )
-    .bind(storage_path)
-    .bind(size_bytes)
-    .bind(encrypted_key)
-    .bind(encryption_nonce)
-    .bind(checksum)
+    .bind(content.storage_path)
+    .bind(content.size_bytes)
+    .bind(content.encrypted_key)
+    .bind(content.encryption_nonce)
+    .bind(content.checksum)
     .bind(file_id)
     .bind(user_id)
     .fetch_optional(&mut **tx)

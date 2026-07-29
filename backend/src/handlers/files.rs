@@ -21,15 +21,15 @@ use uuid::Uuid;
 use crate::auth::AuthUser;
 use crate::db::files::{
     FileRecord, FileShareRecord, NewFileRecord, NewFileShare, ShareRecipientRecord,
-    SharedFileRecord, add_user_file_favourite, consume_public_file_share_for_download,
-    create_file_record, create_file_version_snapshot_in_tx, delete_user_file_share,
-    folder_belongs_to_user, get_file_share_recipient, get_user_file_for_content_update_in_tx,
-    get_user_file_for_download, insert_file_audit_log, list_files_shared_with_user,
-    list_user_file_audit_logs, list_user_file_shares, list_user_file_versions, list_user_files,
-    move_user_file, remove_user_file_favourite, rename_user_file, restore_user_file,
-    restore_user_file_version, soft_delete_user_file, update_user_file_content,
-    update_user_file_note, update_user_file_share, update_user_file_share_keys_in_tx,
-    upsert_user_file_share, user_file_exists,
+    SharedFileRecord, UpdatedFileContent, add_user_file_favourite,
+    consume_public_file_share_for_download, create_file_record, create_file_version_snapshot_in_tx,
+    delete_user_file_share, folder_belongs_to_user, get_file_share_recipient,
+    get_user_file_for_content_update_in_tx, get_user_file_for_download, insert_file_audit_log,
+    list_files_shared_with_user, list_user_file_audit_logs, list_user_file_shares,
+    list_user_file_versions, list_user_files, move_user_file, remove_user_file_favourite,
+    rename_user_file, restore_user_file, restore_user_file_version, soft_delete_user_file,
+    update_user_file_content, update_user_file_note, update_user_file_share,
+    update_user_file_share_keys_in_tx, upsert_user_file_share, user_file_exists,
 };
 use crate::db::storage::try_apply_storage_delta;
 use crate::observability::RequestId;
@@ -306,11 +306,13 @@ pub async fn complete_resumable_upload(
         &mut tx,
         auth.user_id,
         record.id,
-        storage_path_string.clone(),
-        file_size,
-        record.encrypted_key.clone(),
-        record.encryption_nonce.clone(),
-        Some(checksum),
+        UpdatedFileContent {
+            storage_path: storage_path_string.clone(),
+            size_bytes: file_size,
+            encrypted_key: record.encrypted_key.clone(),
+            encryption_nonce: record.encryption_nonce.clone(),
+            checksum: Some(checksum),
+        },
     )
     .await
     .map_err(|e| internal_error("align resumable file storage path", e))?;
@@ -725,11 +727,13 @@ pub async fn update_file_content(
         &mut tx,
         auth.user_id,
         file_id,
-        new_storage_path_string,
-        file_size,
-        payload.encrypted_key,
-        payload.encryption_nonce,
-        Some(payload.checksum),
+        UpdatedFileContent {
+            storage_path: new_storage_path_string,
+            size_bytes: file_size,
+            encrypted_key: payload.encrypted_key,
+            encryption_nonce: payload.encryption_nonce,
+            checksum: Some(payload.checksum),
+        },
     )
     .await
     .map_err(|e| {
@@ -1103,10 +1107,10 @@ pub async fn download_file(
     if let Ok(value) = HeaderValue::from_str(&file.size_bytes.to_string()) {
         headers.insert(axum::http::header::CONTENT_LENGTH, value);
     }
-    if let Some(checksum) = file.checksum.as_deref() {
-        if let Ok(value) = HeaderValue::from_str(checksum) {
-            headers.insert("x-skysyncr-sha256", value);
-        }
+    if let Some(checksum) = file.checksum.as_deref()
+        && let Ok(value) = HeaderValue::from_str(checksum)
+    {
+        headers.insert("x-skysyncr-sha256", value);
     }
     if let Ok(value) =
         HeaderValue::from_str(&general_purpose::STANDARD.encode(file.filename.as_bytes()))
@@ -1118,10 +1122,10 @@ pub async fn download_file(
     {
         headers.insert("x-skysyncr-encryption-nonce", value);
     }
-    if let Some(mime_type) = file.mime_type.as_deref() {
-        if let Ok(value) = HeaderValue::from_str(mime_type) {
-            headers.insert("x-skysyncr-mime-type", value);
-        }
+    if let Some(mime_type) = file.mime_type.as_deref()
+        && let Ok(value) = HeaderValue::from_str(mime_type)
+    {
+        headers.insert("x-skysyncr-mime-type", value);
     }
     let disposition = format!(
         "attachment; filename=\"{}\"",
@@ -1168,10 +1172,10 @@ pub async fn download_public_file(
     if let Ok(value) = HeaderValue::from_str(&file.size_bytes.to_string()) {
         headers.insert(axum::http::header::CONTENT_LENGTH, value);
     }
-    if let Some(checksum) = file.checksum.as_deref() {
-        if let Ok(value) = HeaderValue::from_str(checksum) {
-            headers.insert("x-skysyncr-sha256", value);
-        }
+    if let Some(checksum) = file.checksum.as_deref()
+        && let Ok(value) = HeaderValue::from_str(checksum)
+    {
+        headers.insert("x-skysyncr-sha256", value);
     }
     if let Ok(value) =
         HeaderValue::from_str(&general_purpose::STANDARD.encode(file.filename.as_bytes()))
@@ -1183,10 +1187,10 @@ pub async fn download_public_file(
     {
         headers.insert("x-skysyncr-encryption-nonce", value);
     }
-    if let Some(mime_type) = file.mime_type.as_deref() {
-        if let Ok(value) = HeaderValue::from_str(mime_type) {
-            headers.insert("x-skysyncr-mime-type", value);
-        }
+    if let Some(mime_type) = file.mime_type.as_deref()
+        && let Ok(value) = HeaderValue::from_str(mime_type)
+    {
+        headers.insert("x-skysyncr-mime-type", value);
     }
     let disposition = format!(
         "attachment; filename=\"{}\"",
@@ -1589,17 +1593,16 @@ async fn log_file_audit(
         return;
     }
 
-    if matches!(action, "file.delete" | "file.rename" | "file.update") {
-        if let Err(err) =
+    if matches!(action, "file.delete" | "file.rename" | "file.update")
+        && let Err(err) =
             detect_and_alert_after_file_mutation(&state.db_pool, user_id, device_label).await
-        {
-            tracing::warn!(
-                error = %err,
-                user_id = %user_id,
-                file_id = %file_id,
-                action,
-                "failed to evaluate ransomware activity"
-            );
-        }
+    {
+        tracing::warn!(
+            error = %err,
+            user_id = %user_id,
+            file_id = %file_id,
+            action,
+            "failed to evaluate ransomware activity"
+        );
     }
 }
