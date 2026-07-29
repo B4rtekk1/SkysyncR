@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom'
+import { Link } from '../../router'
 import ThemeToggle from '../../components/ThemeToggle'
 
 function VerifyNav() {

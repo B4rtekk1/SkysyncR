@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Link, useLocation, useNavigate } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from '../router'
 import '../App.css'
 import TransferLog from '../components/TransferLog'
 import ThemeToggle from '../components/ThemeToggle'

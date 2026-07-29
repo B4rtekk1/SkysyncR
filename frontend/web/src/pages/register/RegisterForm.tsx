@@ -1,5 +1,5 @@
 import { type SubmitEvent, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from '../../router'
 import { registerUser } from '../../api/users'
 import { generateKeyPair, exportPublicKey, encryptPrivateKey, decryptPrivateKey, generateRecoveryKey } from '../../crypto/keys'
 import { storeActivePrivateKey, storeEncryptedPrivateKey } from '../../crypto/storage'

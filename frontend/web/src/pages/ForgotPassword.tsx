@@ -1,5 +1,5 @@
 import { type SubmitEvent, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link } from '../router'
 import '../App.css'
 import '../css/Login.css'
 import VaultPanel from '../components/VaultPanel'

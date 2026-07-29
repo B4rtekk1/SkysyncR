@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import type { NavigateFunction } from 'react-router-dom'
+import type { NavigateFunction } from '../../../router'
 import { logout } from '../../../api/auth'
 import { getUnlockedVaultSession } from '../../../api/session'
 import type { CurrentUserResponse } from '../../../api/users'

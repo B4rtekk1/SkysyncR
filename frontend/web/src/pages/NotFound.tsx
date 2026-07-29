@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom'
+import { Link } from '../router'
 import '../App.css'
 import ThemeToggle from '../components/ThemeToggle'
 

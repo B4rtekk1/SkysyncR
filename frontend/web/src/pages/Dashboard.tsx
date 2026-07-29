@@ -5,7 +5,7 @@ import React, {
     type ChangeEvent,
     type DragEvent,
 } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate } from '../router'
 import '../App.css'
 import '../css/dashboard.css'
 import type { Item, ShareableItem, ViewKey } from './dashboard/types'

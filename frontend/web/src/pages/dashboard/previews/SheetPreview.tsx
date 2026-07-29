@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import * as XLSX from 'xlsx'
+import readXlsxFile from 'read-excel-file/browser'
 import '../../../css/dashboard/preview-sheet.css'
 import type { Item } from '../types'
 import { formatBytes } from '../fileUtils'
@@ -38,35 +38,72 @@ function formatCellValue(value: SheetCell) {
     return String(value)
 }
 
-async function parseWorkbook(url: string): Promise<ParsedSheet[]> {
-    const response = await fetch(url)
-    const data = await response.arrayBuffer()
-    const workbook = XLSX.read(data, { type: 'array', cellDates: true })
+function isCsvFile(filename: string) {
+    return filename.toLowerCase().endsWith('.csv')
+}
 
-    return workbook.SheetNames.map((name) => {
-        const worksheet = workbook.Sheets[name]
-        const rawRows = worksheet
-            ? XLSX.utils.sheet_to_json<SheetCell[]>(worksheet, {
-                  header: 1,
-                  blankrows: false,
-                  defval: '',
-              })
-            : []
-        const rowLimit = Math.min(rawRows.length, MAX_PREVIEW_ROWS)
-        const sourceRows = rawRows.slice(0, rowLimit)
-        const maxColumnCount = sourceRows.reduce((max, row) => Math.max(max, row.length), 0)
-        const columnLimit = Math.min(maxColumnCount, MAX_PREVIEW_COLUMNS)
-        const rows = sourceRows.map((row) =>
-            Array.from({ length: columnLimit }, (_, index) => formatCellValue(row[index] ?? '')),
-        )
+function parseCsvRows(text: string): string[][] {
+    const rows: string[][] = []
+    let row: string[] = []
+    let cell = ''
+    let quoted = false
 
-        return {
-            name,
-            rows,
-            truncatedRows: rawRows.length > MAX_PREVIEW_ROWS,
-            truncatedColumns: maxColumnCount > MAX_PREVIEW_COLUMNS,
+    for (let index = 0; index < text.length; index += 1) {
+        const char = text[index]
+        const next = text[index + 1]
+
+        if (char === '"' && quoted && next === '"') {
+            cell += '"'
+            index += 1
+        } else if (char === '"') {
+            quoted = !quoted
+        } else if (char === ',' && !quoted) {
+            row.push(cell)
+            cell = ''
+        } else if ((char === '\n' || char === '\r') && !quoted) {
+            if (char === '\r' && next === '\n') index += 1
+            row.push(cell)
+            if (row.some((value) => value !== '')) rows.push(row)
+            row = []
+            cell = ''
+        } else {
+            cell += char
         }
-    })
+    }
+
+    row.push(cell)
+    if (row.some((value) => value !== '')) rows.push(row)
+
+    return rows
+}
+
+function toParsedSheet(name: string, rawRows: SheetCell[][]): ParsedSheet {
+    const rowLimit = Math.min(rawRows.length, MAX_PREVIEW_ROWS)
+    const sourceRows = rawRows.slice(0, rowLimit)
+    const maxColumnCount = sourceRows.reduce((max, row) => Math.max(max, row.length), 0)
+    const columnLimit = Math.min(maxColumnCount, MAX_PREVIEW_COLUMNS)
+    const rows = sourceRows.map((row) =>
+        Array.from({ length: columnLimit }, (_, index) => formatCellValue(row[index] ?? '')),
+    )
+
+    return {
+        name,
+        rows,
+        truncatedRows: rawRows.length > MAX_PREVIEW_ROWS,
+        truncatedColumns: maxColumnCount > MAX_PREVIEW_COLUMNS,
+    }
+}
+
+async function parseWorkbook(url: string, filename: string): Promise<ParsedSheet[]> {
+    const response = await fetch(url)
+
+    if (isCsvFile(filename)) {
+        return [toParsedSheet('CSV', parseCsvRows(await response.text()))]
+    }
+
+    const blob = await response.blob()
+    const sheets = await readXlsxFile(blob)
+    return sheets.map((sheet) => toParsedSheet(sheet.sheet, sheet.data as SheetCell[][]))
 }
 
 export function SheetPreview({
@@ -94,7 +131,7 @@ export function SheetPreview({
     useEffect(() => {
         let active = true
 
-        parseWorkbook(url)
+        parseWorkbook(url, item.filename)
             .then((parsedSheets) => {
                 if (!active) return
                 setParseState({ status: 'ready', sheets: parsedSheets, url })
@@ -112,7 +149,7 @@ export function SheetPreview({
         return () => {
             active = false
         }
-    }, [url])
+    }, [item.filename, url])
 
     return (
         <div className="sheet-preview">

@@ -4,7 +4,7 @@ import React, {
     type PointerEventHandler,
     type RefObject,
 } from 'react'
-import { Link } from 'react-router-dom'
+import { Link } from '../../../router'
 import type { StorageQuota } from '../../../api/files'
 import {
     DRAG_HANDLE_ICON,

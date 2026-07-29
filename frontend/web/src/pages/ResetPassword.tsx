@@ -1,5 +1,5 @@
 import { type SubmitEvent, useEffect, useMemo, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from '../router'
 import '../App.css'
 import '../css/Login.css'
 import VaultPanel from '../components/VaultPanel'

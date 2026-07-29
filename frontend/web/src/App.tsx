@@ -1,5 +1,5 @@
 import {lazy, Suspense, useEffect} from 'react'
-import {Routes, Route, useNavigate} from 'react-router-dom'
+import {Routes, Route, useNavigate} from './router'
 
 const Landing = lazy(() => import('./pages/Landing'))
 const Login = lazy(() => import('./pages/Login'))

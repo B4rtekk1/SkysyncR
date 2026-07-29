@@ -1,4 +1,4 @@
-import { useLocation } from 'react-router-dom'
+import { useLocation } from '../router'
 import '../App.css'
 import '../css/Login.css'
 import VerifyNav from './verify/VerifyNav'

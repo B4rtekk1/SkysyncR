@@ -1,5 +1,5 @@
 import { type SubmitEvent, useEffect, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from '../../router'
 import { clearTokens } from '../../api/auth.ts'
 import { getUnlockedVaultSession, setUnlockedVaultSession } from '../../api/session.ts'
 import { ApiRequestError, getCurrentUser, loginUser, resendVerificationEmail } from '../../api/users.ts'

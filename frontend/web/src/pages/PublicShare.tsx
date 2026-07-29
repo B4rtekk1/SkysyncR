@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useParams } from '../router'
 import '../App.css'
 import ThemeToggle from '../components/ThemeToggle'
 import {

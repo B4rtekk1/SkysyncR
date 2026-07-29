@@ -15,8 +15,7 @@
     "pdfjs-dist": "^6.1.200",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
-    "react-router-dom": "^7.18.0",
-    "xlsx": "^0.18.5"
+    "read-excel-file": "^9.3.5"
   },
   "devDependencies": {
     "@babel/core": "^7.29.7",
