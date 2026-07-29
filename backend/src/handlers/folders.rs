@@ -9,6 +9,7 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use base64::{Engine as _, engine::general_purpose};
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use tokio::fs;
 use tokio_util::io::ReaderStream;
@@ -17,12 +18,13 @@ use uuid::Uuid;
 use crate::auth::AuthUser;
 use crate::db::files::FileRecord;
 use crate::db::folders::{
-    FolderRecord, FolderShareRecipientRecord, FolderShareRecord, NewFolderRecord, NewFolderShare,
-    add_user_folder_favourite, create_folder_record, delete_user_folder_share,
-    folder_belongs_to_user, folder_is_descendant_of, get_folder_share_recipient,
-    get_public_folder_file_for_download, get_public_folder_tree, list_public_folder_tree_files,
-    list_user_favourite_folders, list_user_folder_shares, list_user_folders, move_user_folder,
-    remove_user_folder_favourite, rename_user_folder, restore_user_folder, soft_delete_user_folder,
+    FolderPointRestoreResult, FolderRecord, FolderShareRecipientRecord, FolderShareRecord,
+    NewFolderRecord, NewFolderShare, add_user_folder_favourite, create_folder_record,
+    delete_user_folder_share, folder_belongs_to_user, folder_is_descendant_of,
+    get_folder_share_recipient, get_public_folder_file_for_download, get_public_folder_tree,
+    list_public_folder_tree_files, list_user_favourite_folders, list_user_folder_shares,
+    list_user_folders, move_user_folder, remove_user_folder_favourite, rename_user_folder,
+    restore_user_folder, restore_user_folder_to_point, soft_delete_user_folder,
     update_user_folder_share, upsert_user_folder_share, user_folder_exists,
 };
 use crate::observability::RequestId;
@@ -73,6 +75,11 @@ pub struct RenameFolderRequest {
 #[derive(Deserialize)]
 pub struct MoveFolderRequest {
     pub parent_folder_id: Option<String>,
+}
+
+#[derive(Deserialize)]
+pub struct RestoreFolderPointRequest {
+    pub restore_at: DateTime<Utc>,
 }
 
 #[derive(Serialize)]
@@ -442,6 +449,31 @@ pub async fn restore_folder(
     }
 
     Ok(StatusCode::NO_CONTENT)
+}
+
+pub async fn restore_folder_point(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Path(folder_id): Path<Uuid>,
+    Json(payload): Json<RestoreFolderPointRequest>,
+) -> Result<Json<FolderPointRestoreResult>, ApiError> {
+    if payload.restore_at > Utc::now() {
+        return Err(ApiError::BadRequest(
+            "restore_at cannot be in the future".into(),
+        ));
+    }
+
+    let result =
+        restore_user_folder_to_point(&state.db_pool, auth.user_id, folder_id, payload.restore_at)
+            .await
+            .map_err(|e| internal_error("restore folder point", e))?
+            .ok_or_else(|| {
+                ApiError::BadRequest(
+                    "Folder restore point not found or storage quota exceeded".into(),
+                )
+            })?;
+
+    Ok(Json(result))
 }
 
 pub async fn permanent_delete_folder(

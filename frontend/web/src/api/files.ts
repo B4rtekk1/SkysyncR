@@ -7,6 +7,7 @@ import type {
     FileSharePermission,
     FileVersion,
     Folder as ApiFolder,
+    FolderPointRestoreResult,
     ShareRecipient as FileShareRecipient,
     SharedFile,
     StorageQuota,
@@ -19,6 +20,7 @@ import {
     fileVersions,
     files,
     folder,
+    folderPointRestoreResult,
     folders,
     parseApiErrorBody,
     readJson,
@@ -46,6 +48,7 @@ export type {
     FileSharePerson,
     FileShareRecipient,
     FileVersion,
+    FolderPointRestoreResult,
     SharedFile,
     StorageQuota,
 }
@@ -434,6 +437,18 @@ export async function moveFolder(id: string, parentFolderId: string | null): Pro
     })
     if (!res.ok) throw new Error(await parseErrorMessage(res))
     return readJson(res, folder, 'Folder')
+}
+
+export async function restoreFolderPoint(id: string, restoreAt: string): Promise<FolderPointRestoreResult> {
+    const res = await authenticatedFetch(`${API_BASE}folders/${id}/restore-point`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ restore_at: restoreAt }),
+    })
+    if (!res.ok) throw new Error(await parseErrorMessage(res))
+    return readJson(res, folderPointRestoreResult, 'FolderPointRestoreResult')
 }
 
 export async function updateFileContent(params: {

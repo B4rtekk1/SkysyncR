@@ -3,6 +3,10 @@ import react, { reactCompilerPreset } from '@vitejs/plugin-react'
 import babel from '@rolldown/plugin-babel'
 
 function contentSecurityPolicy(connectSources: string[], scriptSources = ["'self'"]) {
+  const validConnectSources = Array.from(new Set(
+    [...connectSources, 'blob:'].filter((source) => !source.startsWith('/')),
+  ))
+
   return [
     "default-src 'none'",
     "base-uri 'none'",
@@ -15,7 +19,7 @@ function contentSecurityPolicy(connectSources: string[], scriptSources = ["'self
     "font-src 'self' https://fonts.gstatic.com",
     "media-src 'self' blob:",
     "worker-src 'self' blob:",
-    `connect-src ${connectSources.join(' ')}`,
+    `connect-src ${validConnectSources.join(' ')}`,
   ].join('; ')
 }
 

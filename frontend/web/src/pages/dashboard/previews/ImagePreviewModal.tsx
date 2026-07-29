@@ -8,6 +8,7 @@ import { useTextFilePreview } from './useTextFilePreview'
 
 const PdfPreview = lazy(() => import('./PdfPreview').then((module) => ({ default: module.PdfPreview })))
 const SlidesPreview = lazy(() => import('./SlidesPreview').then((module) => ({ default: module.SlidesPreview })))
+const SheetPreview = lazy(() => import('./SheetPreview').then((module) => ({ default: module.SheetPreview })))
 const VideoPreviewPlayer = lazy(() =>
     import('./VideoPreviewPlayer').then((module) => ({ default: module.VideoPreviewPlayer })),
 )
@@ -252,6 +253,11 @@ export function ImagePreviewModal({
                     {preview.url && preview.kind === 'presentation' && (
                         <Suspense fallback={<PreviewFallback label="Loading presentation preview..." />}>
                             <SlidesPreview item={preview.item} url={preview.url} onDownload={onDownload} />
+                        </Suspense>
+                    )}
+                    {preview.url && preview.kind === 'sheet' && (
+                        <Suspense fallback={<PreviewFallback label="Loading spreadsheet preview..." />}>
+                            <SheetPreview item={preview.item} url={preview.url} onDownload={onDownload} />
                         </Suspense>
                     )}
                     {preview.text !== null && (

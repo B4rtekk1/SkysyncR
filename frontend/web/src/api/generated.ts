@@ -358,6 +358,18 @@ export type MoveFolderRequest = {
   "parent_folder_id": string | null
 }
 
+export type RestoreFolderPointRequest = {
+  "restore_at": string
+}
+
+export type FolderPointRestoreResult = {
+  "restored_at": string
+  "folder_count": number
+  "file_count": number
+  "deleted_folder_count": number
+  "deleted_file_count": number
+}
+
 export type StartUploadRequest = {
   "upload_id": string
 }

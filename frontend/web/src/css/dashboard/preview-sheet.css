@@ -1,0 +1,223 @@
+/* sheet-preview.css */
+.sheet-preview {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(190px, 240px);
+    gap: 12px;
+    width: 100%;
+    height: 100%;
+    min-height: 520px;
+}
+
+.sheet-preview__viewer {
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+    display: grid;
+    border: 1px solid rgba(246, 248, 251, 0.12);
+    border-radius: 10px;
+    background: var(--panel);
+    box-shadow: 0 20px 60px -34px rgba(0, 0, 0, 0.75);
+}
+
+.sheet-preview__table-wrap {
+    min-width: 0;
+    min-height: 0;
+    overflow: auto;
+    background: var(--panel);
+}
+
+.sheet-preview__table {
+    width: max-content;
+    min-width: 100%;
+    border-collapse: collapse;
+    color: var(--paper);
+    font-family: var(--font-mono), ui-monospace, SFMono-Regular, Consolas, 'Liberation Mono', monospace;
+    font-size: 0.78rem;
+}
+
+.sheet-preview__table th,
+.sheet-preview__table td {
+    max-width: 360px;
+    min-width: 92px;
+    height: 30px;
+    padding: 6px 10px;
+    overflow: hidden;
+    border: 1px solid var(--line);
+    text-align: left;
+    text-overflow: ellipsis;
+    vertical-align: top;
+    white-space: nowrap;
+}
+
+.sheet-preview__table th {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background: var(--panel-2);
+    color: var(--paper);
+    font-weight: 700;
+}
+
+.sheet-preview__table .sheet-preview__row-number {
+    left: 0;
+    z-index: 3;
+    width: 54px;
+    min-width: 54px;
+    max-width: 54px;
+    color: var(--mist);
+    text-align: right;
+}
+
+.sheet-preview__table td {
+    background: color-mix(in srgb, var(--panel) 96%, var(--signal));
+}
+
+.sheet-preview__table tr:nth-child(2n) td {
+    background: var(--panel-2);
+}
+
+.sheet-preview__side {
+    min-width: 0;
+    overflow: hidden;
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr) auto auto;
+    gap: 10px;
+    border: 1px solid rgba(246, 248, 251, 0.12);
+    border-radius: 10px;
+    background: rgba(5, 12, 22, 0.48);
+}
+
+.sheet-preview__badge {
+    display: grid;
+    place-items: center;
+    min-height: 116px;
+    margin: 14px 14px 0;
+    border: 1px solid rgba(var(--signal-rgb), 0.28);
+    border-radius: 8px;
+    background: rgba(var(--signal-rgb), 0.1);
+    color: var(--signal);
+}
+
+.sheet-preview__badge span {
+    font-family: var(--font-mono), monospace;
+    font-size: 1.35rem;
+    font-weight: 800;
+    text-transform: uppercase;
+}
+
+.sheet-preview__tabs {
+    min-height: 0;
+    overflow: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 0 14px;
+}
+
+.sheet-preview__tabs button {
+    width: 100%;
+    min-height: 32px;
+    padding: 6px 9px;
+    overflow: hidden;
+    border: 1px solid var(--line);
+    border-radius: 7px;
+    background: var(--panel-2);
+    color: var(--mist);
+    cursor: pointer;
+    font: inherit;
+    font-size: 0.78rem;
+    text-align: left;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.sheet-preview__tabs button:hover,
+.sheet-preview__tabs button:focus-visible,
+.sheet-preview__tabs button.is-active {
+    border-color: rgba(var(--signal-rgb), 0.42);
+    background: rgba(var(--signal-rgb), 0.1);
+    color: var(--signal);
+}
+
+.sheet-preview__notice {
+    margin: 0;
+    padding: 0 14px;
+    color: var(--mist);
+    font-size: 0.76rem;
+    line-height: 1.35;
+}
+
+.sheet-preview__info {
+    align-self: end;
+}
+
+.sheet-preview__fallback {
+    display: grid;
+    place-items: center;
+    align-content: center;
+    gap: 12px;
+    width: 100%;
+    height: 100%;
+    min-height: 360px;
+    padding: 24px;
+    color: var(--paper);
+    text-align: center;
+}
+
+.sheet-preview__fallback p {
+    margin: 0;
+    color: var(--mist);
+}
+
+@media (max-width: 920px) {
+    .sheet-preview {
+        grid-template-columns: 1fr;
+        grid-template-rows: minmax(0, 1fr) auto;
+    }
+
+    .sheet-preview__side {
+        grid-template-rows: auto auto auto;
+    }
+
+    .sheet-preview__tabs {
+        flex-direction: row;
+        overflow-x: auto;
+        overflow-y: hidden;
+    }
+
+    .sheet-preview__tabs button {
+        width: auto;
+        max-width: 180px;
+        flex: 0 0 auto;
+    }
+
+    .sheet-preview__info {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 560px) {
+    .sheet-preview {
+        min-height: 0;
+        gap: 10px;
+    }
+
+    .sheet-preview__viewer {
+        min-height: 420px;
+    }
+
+    .sheet-preview__table {
+        font-size: 0.74rem;
+    }
+
+    .sheet-preview__table th,
+    .sheet-preview__table td {
+        min-width: 82px;
+        max-width: 240px;
+        padding: 6px 8px;
+    }
+
+    .sheet-preview__info {
+        grid-template-columns: 1fr;
+    }
+}

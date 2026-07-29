@@ -1,7 +1,7 @@
 use base64::{Engine as _, engine::general_purpose};
 use chrono::{DateTime, Utc};
 use serde::{Serialize, Serializer};
-use sqlx::{FromRow, PgPool, Row};
+use sqlx::{FromRow, PgPool, Postgres, Row, Transaction};
 use uuid::Uuid;
 
 use super::file_records::{DownloadFileRecord, FileRecord};
@@ -67,6 +67,15 @@ pub struct NewFolderShare {
     pub recipient_email: String,
     pub permission: String,
     pub encrypted_key: Vec<u8>,
+}
+
+#[derive(Serialize)]
+pub struct FolderPointRestoreResult {
+    pub restored_at: DateTime<Utc>,
+    pub folder_count: i64,
+    pub file_count: i64,
+    pub deleted_folder_count: i64,
+    pub deleted_file_count: i64,
 }
 
 pub async fn list_user_folders(
@@ -576,7 +585,11 @@ pub async fn rename_user_folder(
     name: String,
     description: Option<String>,
 ) -> Result<Option<FolderRecord>, sqlx::Error> {
-    sqlx::query_as::<_, FolderRecord>(
+    let mut tx = pool.begin().await?;
+
+    snapshot_user_folder_metadata_in_tx(&mut tx, user_id, folder_id, "rename").await?;
+
+    let folder = sqlx::query_as::<_, FolderRecord>(
         r#"
         UPDATE folders
         SET name = $1,
@@ -616,8 +629,16 @@ pub async fn rename_user_folder(
     .bind(description)
     .bind(folder_id)
     .bind(user_id)
-    .fetch_optional(pool)
-    .await
+    .fetch_optional(&mut *tx)
+    .await?;
+
+    if folder.is_none() {
+        tx.rollback().await?;
+        return Ok(None);
+    }
+
+    tx.commit().await?;
+    Ok(folder)
 }
 
 pub async fn move_user_folder(
@@ -626,7 +647,11 @@ pub async fn move_user_folder(
     folder_id: Uuid,
     parent_folder_id: Option<Uuid>,
 ) -> Result<Option<FolderRecord>, sqlx::Error> {
-    sqlx::query_as::<_, FolderRecord>(
+    let mut tx = pool.begin().await?;
+
+    snapshot_user_folder_metadata_in_tx(&mut tx, user_id, folder_id, "move").await?;
+
+    let folder = sqlx::query_as::<_, FolderRecord>(
         r#"
         UPDATE folders
         SET parent_folder_id = $1,
@@ -664,8 +689,16 @@ pub async fn move_user_folder(
     .bind(parent_folder_id)
     .bind(folder_id)
     .bind(user_id)
-    .fetch_optional(pool)
-    .await
+    .fetch_optional(&mut *tx)
+    .await?;
+
+    if folder.is_none() {
+        tx.rollback().await?;
+        return Ok(None);
+    }
+
+    tx.commit().await?;
+    Ok(folder)
 }
 
 pub async fn folder_is_descendant_of(
@@ -778,6 +811,9 @@ pub async fn soft_delete_user_folder(
 ) -> Result<u64, sqlx::Error> {
     let mut tx = pool.begin().await?;
 
+    snapshot_user_folder_tree_metadata_in_tx(&mut tx, user_id, folder_id, "delete").await?;
+    snapshot_user_folder_tree_files_metadata_in_tx(&mut tx, user_id, folder_id, "delete").await?;
+
     let row = sqlx::query(
         r#"
         WITH RECURSIVE folder_tree AS (
@@ -827,6 +863,11 @@ pub async fn soft_delete_user_folder(
 
     let folder_count: i64 = row.try_get("folder_count")?;
     let file_bytes: i64 = row.try_get("file_bytes")?;
+    if folder_count == 0 {
+        tx.rollback().await?;
+        return Ok(0);
+    }
+
     if file_bytes > 0 {
         super::storage::try_apply_storage_delta(&mut tx, user_id, -file_bytes).await?;
     }
@@ -841,6 +882,9 @@ pub async fn restore_user_folder(
     folder_id: Uuid,
 ) -> Result<u64, sqlx::Error> {
     let mut tx = pool.begin().await?;
+
+    snapshot_user_folder_tree_metadata_in_tx(&mut tx, user_id, folder_id, "restore").await?;
+    snapshot_user_folder_tree_files_metadata_in_tx(&mut tx, user_id, folder_id, "restore").await?;
 
     let target = sqlx::query_scalar::<_, bool>(
         r#"
@@ -859,7 +903,7 @@ pub async fn restore_user_folder(
     .await?;
 
     if !target {
-        tx.commit().await?;
+        tx.rollback().await?;
         return Ok(0);
     }
 
@@ -947,6 +991,556 @@ pub async fn restore_user_folder(
     let folder_count: i64 = row.try_get("folder_count")?;
     tx.commit().await?;
     Ok(folder_count as u64)
+}
+
+pub async fn restore_user_folder_to_point(
+    pool: &PgPool,
+    user_id: Uuid,
+    folder_id: Uuid,
+    restore_at: DateTime<Utc>,
+) -> Result<Option<FolderPointRestoreResult>, sqlx::Error> {
+    let mut tx = pool.begin().await?;
+
+    let root_known = sqlx::query_scalar::<_, bool>(
+        r#"
+        SELECT EXISTS (
+            SELECT 1
+            FROM folders
+            WHERE id = $1
+              AND owner_id = $2
+            UNION
+            SELECT 1
+            FROM folder_metadata_snapshots
+            WHERE folder_id = $1
+              AND owner_id = $2
+        )
+        "#,
+    )
+    .bind(folder_id)
+    .bind(user_id)
+    .fetch_one(&mut *tx)
+    .await?;
+
+    if !root_known {
+        tx.commit().await?;
+        return Ok(None);
+    }
+
+    snapshot_user_folder_tree_metadata_in_tx(&mut tx, user_id, folder_id, "point-restore").await?;
+    snapshot_user_folder_tree_files_metadata_in_tx(&mut tx, user_id, folder_id, "point-restore")
+        .await?;
+
+    sqlx::query(
+        r#"
+        CREATE TEMP TABLE current_folder_tree (
+            id UUID NOT NULL PRIMARY KEY
+        ) ON COMMIT DROP
+        "#,
+    )
+    .execute(&mut *tx)
+    .await?;
+
+    sqlx::query(
+        r#"
+        INSERT INTO current_folder_tree (id)
+        WITH RECURSIVE tree AS (
+            SELECT id
+            FROM folders
+            WHERE id = $1
+              AND owner_id = $2
+
+            UNION ALL
+
+            SELECT child.id
+            FROM folders child
+            JOIN tree parent ON child.parent_folder_id = parent.id
+            WHERE child.owner_id = $2
+        )
+        SELECT id FROM tree
+        "#,
+    )
+    .bind(folder_id)
+    .bind(user_id)
+    .execute(&mut *tx)
+    .await?;
+
+    sqlx::query(
+        r#"
+        CREATE TEMP TABLE restore_folder_state (
+            folder_id UUID NOT NULL PRIMARY KEY,
+            owner_id UUID NOT NULL,
+            name TEXT NOT NULL,
+            description TEXT,
+            parent_folder_id UUID,
+            encrypted_key BYTEA,
+            is_deleted BOOLEAN NOT NULL,
+            deleted_at timestamptz,
+            folder_created_at timestamptz NOT NULL
+        ) ON COMMIT DROP
+        "#,
+    )
+    .execute(&mut *tx)
+    .await?;
+
+    sqlx::query(
+        r#"
+        INSERT INTO restore_folder_state (
+            folder_id,
+            owner_id,
+            name,
+            description,
+            parent_folder_id,
+            encrypted_key,
+            is_deleted,
+            deleted_at,
+            folder_created_at
+        )
+        WITH RECURSIVE effective AS (
+            SELECT
+                f.id AS folder_id,
+                CASE WHEN s.id IS NULL THEN f.owner_id ELSE s.owner_id END AS owner_id,
+                CASE WHEN s.id IS NULL THEN f.name ELSE s.name END AS name,
+                CASE WHEN s.id IS NULL THEN f.description ELSE s.description END AS description,
+                CASE WHEN s.id IS NULL THEN f.parent_folder_id ELSE s.parent_folder_id END AS parent_folder_id,
+                CASE WHEN s.id IS NULL THEN f.encrypted_key ELSE s.encrypted_key END AS encrypted_key,
+                CASE WHEN s.id IS NULL THEN f.is_deleted ELSE s.is_deleted END AS is_deleted,
+                CASE WHEN s.id IS NULL THEN f.deleted_at ELSE s.deleted_at END AS deleted_at,
+                CASE WHEN s.id IS NULL THEN f.created_at ELSE s.folder_created_at END AS folder_created_at
+            FROM folders f
+            LEFT JOIN LATERAL (
+                SELECT *
+                FROM folder_metadata_snapshots snapshot
+                WHERE snapshot.folder_id = f.id
+                  AND snapshot.owner_id = $2
+                  AND snapshot.captured_at > $3
+                ORDER BY snapshot.captured_at ASC
+                LIMIT 1
+            ) s ON TRUE
+            WHERE f.owner_id = $2
+        ),
+        tree AS (
+            SELECT *
+            FROM effective
+            WHERE folder_id = $1
+              AND folder_created_at <= $3
+              AND is_deleted = FALSE
+
+            UNION ALL
+
+            SELECT child.*
+            FROM effective child
+            JOIN tree parent ON child.parent_folder_id = parent.folder_id
+            WHERE child.folder_created_at <= $3
+              AND child.is_deleted = FALSE
+        )
+        SELECT * FROM tree
+        "#,
+    )
+    .bind(folder_id)
+    .bind(user_id)
+    .bind(restore_at)
+    .execute(&mut *tx)
+    .await?;
+
+    let folder_count =
+        sqlx::query_scalar::<_, i64>("SELECT COUNT(*)::bigint FROM restore_folder_state")
+            .fetch_one(&mut *tx)
+            .await?;
+    if folder_count == 0 {
+        tx.commit().await?;
+        return Ok(None);
+    }
+
+    sqlx::query(
+        r#"
+        CREATE TEMP TABLE restore_file_state (
+            file_id UUID NOT NULL PRIMARY KEY,
+            owner_id UUID NOT NULL,
+            filename TEXT NOT NULL,
+            folder_id UUID NOT NULL,
+            note TEXT,
+            storage_path TEXT NOT NULL,
+            size_bytes BIGINT NOT NULL,
+            encrypted_key BYTEA NOT NULL,
+            encryption_nonce BYTEA NOT NULL,
+            checksum TEXT
+        ) ON COMMIT DROP
+        "#,
+    )
+    .execute(&mut *tx)
+    .await?;
+
+    sqlx::query(
+        r#"
+        INSERT INTO restore_file_state (
+            file_id,
+            owner_id,
+            filename,
+            folder_id,
+            note,
+            storage_path,
+            size_bytes,
+            encrypted_key,
+            encryption_nonce,
+            checksum
+        )
+        WITH effective AS (
+            SELECT
+                f.id AS file_id,
+                CASE WHEN s.id IS NULL THEN f.owner_id ELSE s.owner_id END AS owner_id,
+                CASE WHEN s.id IS NULL THEN f.filename ELSE s.filename END AS filename,
+                CASE WHEN s.id IS NULL THEN f.folder_id ELSE s.folder_id END AS folder_id,
+                CASE WHEN s.id IS NULL THEN f.note ELSE s.note END AS note,
+                CASE WHEN s.id IS NULL THEN f.is_deleted ELSE s.is_deleted END AS is_deleted,
+                CASE WHEN s.id IS NULL THEN f.deleted_at ELSE s.deleted_at END AS deleted_at,
+                CASE WHEN s.id IS NULL THEN f.created_at ELSE s.file_created_at END AS file_created_at
+            FROM files f
+            LEFT JOIN LATERAL (
+                SELECT *
+                FROM file_metadata_snapshots snapshot
+                WHERE snapshot.file_id = f.id
+                  AND snapshot.owner_id = $2
+                  AND snapshot.captured_at > $3
+                ORDER BY snapshot.captured_at ASC
+                LIMIT 1
+            ) s ON TRUE
+            WHERE f.owner_id = $2
+        )
+        SELECT
+            e.file_id,
+            e.owner_id,
+            e.filename,
+            e.folder_id,
+            e.note,
+            CASE WHEN v.file_version_id IS NULL THEN f.storage_path ELSE v.storage_path END AS storage_path,
+            CASE WHEN v.file_version_id IS NULL THEN f.size_bytes ELSE v.size_bytes END AS size_bytes,
+            CASE WHEN v.file_version_id IS NULL THEN f.encrypted_key ELSE COALESCE(v.encrypted_key, f.encrypted_key) END AS encrypted_key,
+            CASE WHEN v.file_version_id IS NULL THEN f.encryption_nonce ELSE COALESCE(v.encryption_nonce, f.encryption_nonce) END AS encryption_nonce,
+            CASE WHEN v.file_version_id IS NULL THEN f.checksum ELSE v.checksum END AS checksum
+        FROM effective e
+        JOIN files f ON f.id = e.file_id
+        JOIN restore_folder_state rfs ON rfs.folder_id = e.folder_id
+        LEFT JOIN LATERAL (
+            SELECT
+                id AS file_version_id,
+                storage_path,
+                size_bytes,
+                encrypted_key,
+                encryption_nonce,
+                checksum
+            FROM file_versions version
+            WHERE version.file_id = e.file_id
+              AND version.created_at > $3
+            ORDER BY version.created_at ASC
+            LIMIT 1
+        ) v ON TRUE
+        WHERE e.file_created_at <= $3
+          AND e.is_deleted = FALSE
+        "#,
+    )
+    .bind(folder_id)
+    .bind(user_id)
+    .bind(restore_at)
+    .execute(&mut *tx)
+    .await?;
+
+    sqlx::query(
+        r#"
+        CREATE TEMP TABLE affected_file_ids (
+            file_id UUID NOT NULL PRIMARY KEY
+        ) ON COMMIT DROP
+        "#,
+    )
+    .execute(&mut *tx)
+    .await?;
+
+    sqlx::query(
+        r#"
+        INSERT INTO affected_file_ids (file_id)
+        SELECT id AS file_id
+        FROM files
+        WHERE owner_id = $1
+          AND folder_id IN (SELECT id FROM current_folder_tree)
+        UNION
+        SELECT file_id
+        FROM restore_file_state
+        "#,
+    )
+    .bind(user_id)
+    .execute(&mut *tx)
+    .await?;
+
+    let current_active_bytes = sqlx::query_scalar::<_, i64>(
+        r#"
+        SELECT COALESCE(SUM(size_bytes), 0)::bigint
+        FROM files
+        WHERE owner_id = $1
+          AND is_deleted = FALSE
+          AND id IN (SELECT file_id FROM affected_file_ids)
+        "#,
+    )
+    .bind(user_id)
+    .fetch_one(&mut *tx)
+    .await?;
+    let desired_active_bytes = sqlx::query_scalar::<_, i64>(
+        "SELECT COALESCE(SUM(size_bytes), 0)::bigint FROM restore_file_state",
+    )
+    .fetch_one(&mut *tx)
+    .await?;
+    let storage_delta = desired_active_bytes - current_active_bytes;
+    if storage_delta != 0
+        && !super::storage::try_apply_storage_delta(&mut tx, user_id, storage_delta).await?
+    {
+        tx.commit().await?;
+        return Ok(None);
+    }
+
+    let restored_folders = sqlx::query(
+        r#"
+        UPDATE folders f
+        SET name = r.name,
+            description = r.description,
+            parent_folder_id = r.parent_folder_id,
+            encrypted_key = r.encrypted_key,
+            is_deleted = FALSE,
+            deleted_at = NULL,
+            updated_at = NOW()
+        FROM restore_folder_state r
+        WHERE f.id = r.folder_id
+          AND f.owner_id = $1
+        "#,
+    )
+    .bind(user_id)
+    .execute(&mut *tx)
+    .await?
+    .rows_affected() as i64;
+
+    let restored_files = sqlx::query(
+        r#"
+        UPDATE files f
+        SET filename = r.filename,
+            folder_id = r.folder_id,
+            note = r.note,
+            storage_path = r.storage_path,
+            size_bytes = r.size_bytes,
+            encrypted_key = r.encrypted_key,
+            encryption_nonce = r.encryption_nonce,
+            checksum = r.checksum,
+            is_deleted = FALSE,
+            deleted_at = NULL,
+            updated_at = NOW()
+        FROM restore_file_state r
+        WHERE f.id = r.file_id
+          AND f.owner_id = $1
+        "#,
+    )
+    .bind(user_id)
+    .execute(&mut *tx)
+    .await?
+    .rows_affected() as i64;
+
+    let deleted_files = sqlx::query(
+        r#"
+        UPDATE files
+        SET is_deleted = TRUE,
+            deleted_at = COALESCE(deleted_at, NOW()),
+            updated_at = NOW()
+        WHERE owner_id = $1
+          AND is_deleted = FALSE
+          AND id IN (SELECT file_id FROM affected_file_ids)
+          AND id NOT IN (SELECT file_id FROM restore_file_state)
+        "#,
+    )
+    .bind(user_id)
+    .execute(&mut *tx)
+    .await?
+    .rows_affected() as i64;
+
+    let deleted_folders = sqlx::query(
+        r#"
+        UPDATE folders
+        SET is_deleted = TRUE,
+            deleted_at = COALESCE(deleted_at, NOW()),
+            updated_at = NOW()
+        WHERE owner_id = $1
+          AND is_deleted = FALSE
+          AND id IN (SELECT id FROM current_folder_tree)
+          AND id NOT IN (SELECT folder_id FROM restore_folder_state)
+        "#,
+    )
+    .bind(user_id)
+    .execute(&mut *tx)
+    .await?
+    .rows_affected() as i64;
+
+    tx.commit().await?;
+
+    Ok(Some(FolderPointRestoreResult {
+        restored_at: restore_at,
+        folder_count: restored_folders,
+        file_count: restored_files,
+        deleted_folder_count: deleted_folders,
+        deleted_file_count: deleted_files,
+    }))
+}
+
+pub async fn snapshot_user_folder_metadata_in_tx(
+    tx: &mut Transaction<'_, Postgres>,
+    user_id: Uuid,
+    folder_id: Uuid,
+    action: &str,
+) -> Result<u64, sqlx::Error> {
+    let result = sqlx::query(
+        r#"
+        INSERT INTO folder_metadata_snapshots (
+            folder_id,
+            owner_id,
+            name,
+            description,
+            parent_folder_id,
+            encrypted_key,
+            is_deleted,
+            deleted_at,
+            folder_created_at,
+            action
+        )
+        SELECT
+            id,
+            owner_id,
+            name,
+            description,
+            parent_folder_id,
+            encrypted_key,
+            is_deleted,
+            deleted_at,
+            created_at,
+            $3
+        FROM folders
+        WHERE id = $1
+          AND owner_id = $2
+        "#,
+    )
+    .bind(folder_id)
+    .bind(user_id)
+    .bind(action)
+    .execute(&mut **tx)
+    .await?;
+
+    Ok(result.rows_affected())
+}
+
+async fn snapshot_user_folder_tree_metadata_in_tx(
+    tx: &mut Transaction<'_, Postgres>,
+    user_id: Uuid,
+    folder_id: Uuid,
+    action: &str,
+) -> Result<u64, sqlx::Error> {
+    let result = sqlx::query(
+        r#"
+        WITH RECURSIVE folder_tree AS (
+            SELECT id
+            FROM folders
+            WHERE id = $1
+              AND owner_id = $2
+
+            UNION ALL
+
+            SELECT child.id
+            FROM folders child
+            JOIN folder_tree parent ON child.parent_folder_id = parent.id
+            WHERE child.owner_id = $2
+        )
+        INSERT INTO folder_metadata_snapshots (
+            folder_id,
+            owner_id,
+            name,
+            description,
+            parent_folder_id,
+            encrypted_key,
+            is_deleted,
+            deleted_at,
+            folder_created_at,
+            action
+        )
+        SELECT
+            id,
+            owner_id,
+            name,
+            description,
+            parent_folder_id,
+            encrypted_key,
+            is_deleted,
+            deleted_at,
+            created_at,
+            $3
+        FROM folders
+        WHERE owner_id = $2
+          AND id IN (SELECT id FROM folder_tree)
+        "#,
+    )
+    .bind(folder_id)
+    .bind(user_id)
+    .bind(action)
+    .execute(&mut **tx)
+    .await?;
+
+    Ok(result.rows_affected())
+}
+
+async fn snapshot_user_folder_tree_files_metadata_in_tx(
+    tx: &mut Transaction<'_, Postgres>,
+    user_id: Uuid,
+    folder_id: Uuid,
+    action: &str,
+) -> Result<u64, sqlx::Error> {
+    let result = sqlx::query(
+        r#"
+        WITH RECURSIVE folder_tree AS (
+            SELECT id
+            FROM folders
+            WHERE id = $1
+              AND owner_id = $2
+
+            UNION ALL
+
+            SELECT child.id
+            FROM folders child
+            JOIN folder_tree parent ON child.parent_folder_id = parent.id
+            WHERE child.owner_id = $2
+        )
+        INSERT INTO file_metadata_snapshots (
+            file_id,
+            owner_id,
+            filename,
+            folder_id,
+            note,
+            is_deleted,
+            deleted_at,
+            file_created_at,
+            action
+        )
+        SELECT
+            id,
+            owner_id,
+            filename,
+            folder_id,
+            note,
+            is_deleted,
+            deleted_at,
+            created_at,
+            $3
+        FROM files
+        WHERE owner_id = $2
+          AND folder_id IN (SELECT id FROM folder_tree)
+        "#,
+    )
+    .bind(folder_id)
+    .bind(user_id)
+    .bind(action)
+    .execute(&mut **tx)
+    .await?;
+
+    Ok(result.rows_affected())
 }
 
 pub async fn list_deleted_folder_file_targets(

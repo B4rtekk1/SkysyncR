@@ -34,7 +34,7 @@ export type FileFilters = {
 }
 export type Item = ApiFile | SharedFile
 export type ShareableItem = Item | ApiFolder
-export type FilePreviewKind = 'image' | 'text' | 'video' | 'pdf' | 'presentation'
+export type FilePreviewKind = 'image' | 'text' | 'video' | 'pdf' | 'presentation' | 'sheet'
 export type FilePreviewState = {
     item: Item
     kind: FilePreviewKind

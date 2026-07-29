@@ -736,6 +736,8 @@ pub async fn soft_delete_user_file(
 ) -> Result<u64, sqlx::Error> {
     let mut tx = pool.begin().await?;
 
+    snapshot_user_file_metadata_in_tx(&mut tx, user_id, file_id, "delete").await?;
+
     let result = sqlx::query(
         r#"
         UPDATE files
@@ -754,7 +756,7 @@ pub async fn soft_delete_user_file(
     .await?;
 
     let Some(row) = result else {
-        tx.commit().await?;
+        tx.rollback().await?;
         return Ok(0);
     };
 
@@ -772,6 +774,8 @@ pub async fn restore_user_file(
 ) -> Result<u64, sqlx::Error> {
     let mut tx = pool.begin().await?;
 
+    snapshot_user_file_metadata_in_tx(&mut tx, user_id, file_id, "restore").await?;
+
     let target = sqlx::query(
         r#"
         SELECT size_bytes
@@ -788,7 +792,7 @@ pub async fn restore_user_file(
     .await?;
 
     let Some(target) = target else {
-        tx.commit().await?;
+        tx.rollback().await?;
         return Ok(0);
     };
 
@@ -899,7 +903,11 @@ pub async fn rename_user_file(
     file_id: Uuid,
     filename: String,
 ) -> Result<Option<FileRecord>, sqlx::Error> {
-    sqlx::query_as::<_, FileRecord>(
+    let mut tx = pool.begin().await?;
+
+    snapshot_user_file_metadata_in_tx(&mut tx, user_id, file_id, "rename").await?;
+
+    let file = sqlx::query_as::<_, FileRecord>(
         r#"
         UPDATE files
         SET filename = $1,
@@ -946,8 +954,16 @@ pub async fn rename_user_file(
     .bind(filename)
     .bind(file_id)
     .bind(user_id)
-    .fetch_optional(pool)
-    .await
+    .fetch_optional(&mut *tx)
+    .await?;
+
+    if file.is_none() {
+        tx.rollback().await?;
+        return Ok(None);
+    }
+
+    tx.commit().await?;
+    Ok(file)
 }
 
 pub async fn move_user_file(
@@ -956,7 +972,11 @@ pub async fn move_user_file(
     file_id: Uuid,
     folder_id: Option<Uuid>,
 ) -> Result<Option<FileRecord>, sqlx::Error> {
-    sqlx::query_as::<_, FileRecord>(
+    let mut tx = pool.begin().await?;
+
+    snapshot_user_file_metadata_in_tx(&mut tx, user_id, file_id, "move").await?;
+
+    let file = sqlx::query_as::<_, FileRecord>(
         r#"
         UPDATE files
         SET folder_id = $1,
@@ -994,8 +1014,68 @@ pub async fn move_user_file(
     .bind(folder_id)
     .bind(file_id)
     .bind(user_id)
-    .fetch_optional(pool)
-    .await
+    .fetch_optional(&mut *tx)
+    .await?;
+
+    if file.is_none() {
+        tx.rollback().await?;
+        return Ok(None);
+    }
+
+    tx.commit().await?;
+    Ok(file)
+}
+
+pub async fn snapshot_user_file_metadata_in_tx(
+    tx: &mut Transaction<'_, Postgres>,
+    user_id: Uuid,
+    file_id: Uuid,
+    action: &str,
+) -> Result<u64, sqlx::Error> {
+    let result = sqlx::query(
+        r#"
+        INSERT INTO file_metadata_snapshots (
+            file_id,
+            owner_id,
+            filename,
+            folder_id,
+            note,
+            is_deleted,
+            deleted_at,
+            file_created_at,
+            action
+        )
+        SELECT
+            id,
+            owner_id,
+            filename,
+            folder_id,
+            note,
+            is_deleted,
+            deleted_at,
+            created_at,
+            $3
+        FROM files
+        WHERE id = $1
+          AND (
+              owner_id = $2
+              OR EXISTS (
+                  SELECT 1
+                  FROM file_shares fs
+                  WHERE fs.file_id = files.id
+                    AND fs.recipient_user_id = $2
+                    AND fs.permission = 'write'
+              )
+          )
+        "#,
+    )
+    .bind(file_id)
+    .bind(user_id)
+    .bind(action)
+    .execute(&mut **tx)
+    .await?;
+
+    Ok(result.rows_affected())
 }
 
 pub async fn update_user_file_content(

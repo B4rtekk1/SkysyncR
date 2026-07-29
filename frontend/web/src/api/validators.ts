@@ -7,6 +7,7 @@ import type {
   FileSharePermission,
   FileVersion,
   Folder,
+  FolderPointRestoreResult,
   Group,
   GroupIncomingInvite,
   GroupInvite,
@@ -363,6 +364,17 @@ export const folder: Validator<Folder> = (value, path) => {
     deleted_at: nullableString(prop(item, 'deleted_at', path), `${path}.deleted_at`),
     file_count: number(prop(item, 'file_count', path), `${path}.file_count`),
     is_favourite: boolean(prop(item, 'is_favourite', path), `${path}.is_favourite`),
+  }
+}
+
+export const folderPointRestoreResult: Validator<FolderPointRestoreResult> = (value, path) => {
+  const item = object(value, path)
+  return {
+    restored_at: string(prop(item, 'restored_at', path), `${path}.restored_at`),
+    folder_count: number(prop(item, 'folder_count', path), `${path}.folder_count`),
+    file_count: number(prop(item, 'file_count', path), `${path}.file_count`),
+    deleted_folder_count: number(prop(item, 'deleted_folder_count', path), `${path}.deleted_folder_count`),
+    deleted_file_count: number(prop(item, 'deleted_file_count', path), `${path}.deleted_file_count`),
   }
 }
 

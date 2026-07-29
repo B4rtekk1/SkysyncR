@@ -1567,6 +1567,38 @@
         }
       }
     },
+    "/folders/{folderId}/restore-point": {
+      "post": {
+        "operationId": "restoreFolderPoint",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/FolderId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RestoreFolderPointRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Restored folder point",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FolderPointRestoreResult"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/folders/{folderId}/permanent": {
       "delete": {
         "operationId": "permanentlyDeleteFolder",
@@ -3228,6 +3260,50 @@
             "type": "string",
             "format": "uuid",
             "nullable": true
+          }
+        }
+      },
+      "RestoreFolderPointRequest": {
+        "type": "object",
+        "required": [
+          "restore_at"
+        ],
+        "properties": {
+          "restore_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "FolderPointRestoreResult": {
+        "type": "object",
+        "required": [
+          "restored_at",
+          "folder_count",
+          "file_count",
+          "deleted_folder_count",
+          "deleted_file_count"
+        ],
+        "properties": {
+          "restored_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "folder_count": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "file_count": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "deleted_folder_count": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "deleted_file_count": {
+            "type": "integer",
+            "format": "int64"
           }
         }
       },
