@@ -149,6 +149,18 @@ export function isCudaFile(filename: string, mime: string | null) {
     return ['cu', 'cuh'].includes(ext) || normalizedMime === 'text/x-cuda' || normalizedMime === 'text/x-cuda-cpp'
 }
 
+export function isCppFile(filename: string, mime: string | null) {
+    const ext = filename.split('.').pop()?.toLowerCase() ?? ''
+    const normalizedMime = mime?.toLowerCase() ?? ''
+    return (
+        ['c', 'h', 'cc', 'cpp', 'cxx', 'hpp', 'hxx'].includes(ext) ||
+        normalizedMime === 'text/x-c' ||
+        normalizedMime === 'text/x-c++' ||
+        normalizedMime === 'text/x-c++src' ||
+        normalizedMime === 'text/x-c++hdr'
+    )
+}
+
 export function isJavaScriptFile(filename: string, mime: string | null) {
     const ext = filename.split('.').pop()?.toLowerCase() ?? ''
     const normalizedMime = mime?.toLowerCase() ?? ''

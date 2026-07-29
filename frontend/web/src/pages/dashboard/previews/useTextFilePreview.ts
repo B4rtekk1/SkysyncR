@@ -1,14 +1,15 @@
 import { useState } from 'react'
-import { isCudaFile, isMarkdownFile, isPythonFile, isTypeScriptFile } from '../fileUtils'
+import { isCppFile, isCudaFile, isMarkdownFile, isPythonFile, isTypeScriptFile } from '../fileUtils'
 import type { Item } from '../types'
 
 export type TextPreviewMode = 'render' | 'plain'
-export type CodeHighlightLanguage = 'cuda' | 'python' | 'typescript'
+export type CodeHighlightLanguage = 'cpp' | 'cuda' | 'python' | 'typescript'
 
 export function useTextFilePreview(item: Item, text: string | null) {
     const [textModeState, setTextModeState] = useState<{ itemId: string; mode: TextPreviewMode } | null>(null)
     const textMode = textModeState?.itemId === item.id ? textModeState.mode : 'render'
     const canRenderMarkdown = text !== null && isMarkdownFile(item.filename, item.mime_type)
+    const canHighlightCpp = text !== null && isCppFile(item.filename, item.mime_type)
     const canHighlightCuda = text !== null && isCudaFile(item.filename, item.mime_type)
     const canHighlightPython = text !== null && isPythonFile(item.filename, item.mime_type)
     const canHighlightTypeScript = text !== null && isTypeScriptFile(item.filename, item.mime_type)
@@ -18,8 +19,10 @@ export function useTextFilePreview(item: Item, text: string | null) {
           ? 'typescript'
           : canHighlightCuda
             ? 'cuda'
-            : null
+            : canHighlightCpp
+              ? 'cpp'
+              : null
     const setTextMode = (mode: TextPreviewMode) => setTextModeState({ itemId: item.id, mode })
 
-    return { canHighlightCuda, canHighlightPython, canRenderMarkdown, highlightLanguage, setTextMode, textMode }
+    return { canHighlightCpp, canHighlightCuda, canHighlightPython, canRenderMarkdown, highlightLanguage, setTextMode, textMode }
 }

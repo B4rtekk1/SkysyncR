@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import '../../../css/dashboard/preview-text.css'
-import { highlightCudaLine, type CudaHighlightState } from '../cudaHighlight'
+import { highlightCppLine, highlightCudaLine, type CudaHighlightState } from '../cudaHighlight'
 import { COPY_ICON } from '../icons'
 import {
     applyPythonCompletion,
@@ -93,6 +93,7 @@ function renderCodeHighlight(text: string, language: CodeHighlightLanguage) {
         )
     })
 
+    let cppState: CudaHighlightState = { inBlockComment: false }
     let cudaState: CudaHighlightState = { inBlockComment: false }
 
     return lines.map((line, lineIndex) => {
@@ -113,9 +114,15 @@ function renderCodeHighlight(text: string, language: CodeHighlightLanguage) {
                 ? highlightPython(line)
                 : language === 'typescript'
                   ? highlightTypeScript(line)
-                  : (() => {
+                  : language === 'cuda'
+                    ? (() => {
                         const result = highlightCudaLine(line, cudaState)
                         cudaState = result.state
+                        return result.tokens
+                    })()
+                    : (() => {
+                        const result = highlightCppLine(line, cppState)
+                        cppState = result.state
                         return result.tokens
                     })()
         const lineNodes: ReactNode[] = tokens.map((token, tokenIndex) => (
@@ -306,7 +313,7 @@ function continueCodeIndent(text: string, selectionStart: number, selectionEnd: 
         return continuePythonIndent(text, selectionStart, selectionEnd)
     }
 
-    if (language === 'cuda') {
+    if (language === 'cuda' || language === 'cpp') {
         return continueCudaIndent(text, selectionStart, selectionEnd)
     }
 

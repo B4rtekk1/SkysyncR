@@ -3,6 +3,7 @@ import test from 'node:test'
 import {
   formatBytes,
   formatRelative,
+  isCppFile,
   isCudaFile,
   isJavaScriptFile,
   isMarkdownFile,
@@ -62,6 +63,14 @@ test('isCudaFile accepts cuda MIME types and extensions', () => {
   assert.equal(isCudaFile('kernel.txt', 'text/x-cuda'), true)
   assert.equal(isCudaFile('kernel.txt', 'text/x-cuda-cpp'), true)
   assert.equal(isCudaFile('script.py', 'text/x-python'), false)
+})
+
+test('isCppFile accepts C++ MIME types and extensions', () => {
+  assert.equal(isCppFile('main.cpp', null), true)
+  assert.equal(isCppFile('types.hpp', null), true)
+  assert.equal(isCppFile('module.cxx', 'text/plain'), true)
+  assert.equal(isCppFile('source.txt', 'text/x-c++src'), true)
+  assert.equal(isCppFile('kernel.cu', 'text/x-cuda'), false)
 })
 
 test('isJavaScriptFile accepts javascript MIME types and extensions', () => {

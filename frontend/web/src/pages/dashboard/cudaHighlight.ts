@@ -21,6 +21,8 @@ export type CudaHighlightState = {
     inBlockComment: boolean
 }
 
+export type CudaHighlightMode = 'cpp' | 'cuda'
+
 const CUDA_KEYWORDS = new Set([
     'asm',
     'auto',
@@ -32,11 +34,19 @@ const CUDA_KEYWORDS = new Set([
     'class',
     'const',
     'constexpr',
+    'consteval',
+    'constinit',
+    'const_cast',
     'continue',
+    'co_await',
+    'co_return',
+    'co_yield',
+    'decltype',
     'default',
     'delete',
     'do',
     'double',
+    'dynamic_cast',
     'else',
     'enum',
     'explicit',
@@ -44,21 +54,30 @@ const CUDA_KEYWORDS = new Set([
     'false',
     'float',
     'for',
+    'friend',
     'if',
     'inline',
     'int',
     'long',
+    'mutable',
     'namespace',
     'new',
     'noexcept',
+    'nullptr',
+    'operator',
     'private',
     'protected',
     'public',
+    'register',
+    'reinterpret_cast',
+    'requires',
     'return',
     'short',
     'signed',
     'sizeof',
     'static',
+    'static_assert',
+    'static_cast',
     'struct',
     'switch',
     'template',
@@ -77,7 +96,21 @@ const CUDA_KEYWORDS = new Set([
     'while',
 ])
 
+const CPP_BUILTINS = new Set([
+    'int8_t',
+    'int16_t',
+    'int32_t',
+    'int64_t',
+    'size_t',
+    'std',
+    'uint8_t',
+    'uint16_t',
+    'uint32_t',
+    'uint64_t',
+])
+
 const CUDA_BUILTINS = new Set([
+    ...CPP_BUILTINS,
     'atomicAdd',
     'atomicCAS',
     'blockDim',
@@ -171,7 +204,7 @@ function pushCommentTokens(tokens: CudaHighlightToken[], text: string) {
     pushToken(tokens, 'comment', text.slice(index))
 }
 
-function tokenizeCuda(source: string, initialState: CudaHighlightState) {
+function tokenizeCuda(source: string, initialState: CudaHighlightState, mode: CudaHighlightMode = 'cuda') {
     const tokens: CudaHighlightToken[] = []
     let index = 0
     let nextIdentifierType: CudaHighlightTokenType | null = null
@@ -239,14 +272,14 @@ function tokenizeCuda(source: string, initialState: CudaHighlightState) {
                 nextIdentifierType = null
             } else if (text === 'this') {
                 type = 'self'
-            } else if (CUDA_QUALIFIERS.has(text)) {
+            } else if (mode === 'cuda' && CUDA_QUALIFIERS.has(text)) {
                 type = 'decorator'
             } else if (CUDA_KEYWORDS.has(text)) {
                 type = 'keyword'
                 if (text === 'class' || text === 'struct' || text === 'enum' || text === 'typename') {
                     nextIdentifierType = 'class-name'
                 }
-            } else if (CUDA_BUILTINS.has(text)) {
+            } else if ((mode === 'cuda' ? CUDA_BUILTINS : CPP_BUILTINS).has(text)) {
                 type = 'builtin'
             } else if (/^\s*\(/.test(afterIdentifier)) {
                 type = 'function'
@@ -280,4 +313,12 @@ export function highlightCuda(source: string) {
 
 export function highlightCudaLine(source: string, state: CudaHighlightState) {
     return tokenizeCuda(source, state)
+}
+
+export function highlightCpp(source: string) {
+    return tokenizeCuda(source, { inBlockComment: false }, 'cpp').tokens
+}
+
+export function highlightCppLine(source: string, state: CudaHighlightState) {
+    return tokenizeCuda(source, state, 'cpp')
 }
