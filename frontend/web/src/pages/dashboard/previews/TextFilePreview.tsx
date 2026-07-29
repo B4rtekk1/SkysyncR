@@ -9,7 +9,14 @@ import {
 } from '../pythonCompletion'
 import { highlightPython } from '../pythonHighlight'
 import { checkPythonTypes, type PythonTypeDiagnostic } from '../pythonTypeCheck'
+import {
+    applyTypeScriptCompletion,
+    getTypeScriptKeywordCompletion,
+    type TypeScriptCompletion,
+    type TypeScriptCompletionItem,
+} from '../typescriptCompletion'
 import { highlightTypeScript } from '../typescriptHighlight'
+import { checkTypeScriptTypes, type TypeScriptTypeDiagnostic } from '../typescriptTypeCheck'
 import type { Item } from '../types'
 import type { CodeHighlightLanguage, TextPreviewMode } from './useTextFilePreview'
 
@@ -118,14 +125,26 @@ function renderCodeHighlight(text: string, language: CodeHighlightLanguage) {
     })
 }
 
-function PythonTypeDiagnostics({ diagnostics }: { diagnostics: PythonTypeDiagnostic[] }) {
+type CodeCompletion = PythonCompletion | TypeScriptCompletion
+type CodeCompletionItem = PythonCompletionItem | TypeScriptCompletionItem
+type CodeTypeDiagnostic = PythonTypeDiagnostic | TypeScriptTypeDiagnostic
+
+function CodeTypeDiagnostics({
+    diagnostics,
+    language,
+}: {
+    diagnostics: CodeTypeDiagnostic[]
+    language: CodeHighlightLanguage | null
+}) {
     if (diagnostics.length === 0) {
         return null
     }
 
+    const label = language === 'typescript' ? 'TypeScript type warnings' : 'Python type warnings'
+
     return (
         <div className="image-preview__type-diagnostics" aria-live="polite">
-            <strong>Python type warnings</strong>
+            <strong>{label}</strong>
             {diagnostics.map((diagnostic) => (
                 <p key={`${diagnostic.line}-${diagnostic.column}-${diagnostic.message}`}>
                     <span>
@@ -199,6 +218,77 @@ function continuePythonIndent(text: string, selectionStart: number, selectionEnd
     }
 }
 
+function continueTypeScriptIndent(text: string, selectionStart: number, selectionEnd: number) {
+    const lineStart = text.lastIndexOf('\n', selectionStart - 1) + 1
+    const line = text.slice(lineStart, selectionStart)
+    const baseIndent = line.match(/^[ \t]*/)?.[0] ?? ''
+    const trimmedLine = line.trimEnd()
+    const previousChar = text[selectionStart - 1]
+    const nextChar = text[selectionEnd]
+    const extraIndent = /[({[]$/.test(trimmedLine) ? '\t' : ''
+
+    if (previousChar === '{' && nextChar === '}') {
+        const innerIndent = `${baseIndent}\t`
+        const nextText = `${text.slice(0, selectionStart)}\n${innerIndent}\n${baseIndent}${text.slice(selectionEnd)}`
+        const nextCaret = selectionStart + 1 + innerIndent.length
+
+        return {
+            nextSelectionEnd: nextCaret,
+            nextSelectionStart: nextCaret,
+            nextText,
+        }
+    }
+
+    const insertion = `\n${baseIndent}${extraIndent}`
+    const nextCaret = selectionStart + insertion.length
+
+    return {
+        nextSelectionEnd: nextCaret,
+        nextSelectionStart: nextCaret,
+        nextText: `${text.slice(0, selectionStart)}${insertion}${text.slice(selectionEnd)}`,
+    }
+}
+
+function getCodeTypeDiagnostics(text: string, language: CodeHighlightLanguage | null) {
+    if (language === 'python') {
+        return checkPythonTypes(text)
+    }
+
+    if (language === 'typescript') {
+        return checkTypeScriptTypes(text)
+    }
+
+    return []
+}
+
+function getCodeKeywordCompletion(source: string, caret: number, language: CodeHighlightLanguage | null) {
+    if (language === 'python') {
+        return getPythonKeywordCompletion(source, caret)
+    }
+
+    if (language === 'typescript') {
+        return getTypeScriptKeywordCompletion(source, caret)
+    }
+
+    return null
+}
+
+function applyCodeCompletion(source: string, completion: CodeCompletion, item: CodeCompletionItem, language: CodeHighlightLanguage | null) {
+    if (language === 'python') {
+        return applyPythonCompletion(source, completion as PythonCompletion, item as PythonCompletionItem)
+    }
+
+    return applyTypeScriptCompletion(source, completion as TypeScriptCompletion, item as TypeScriptCompletionItem)
+}
+
+function continueCodeIndent(text: string, selectionStart: number, selectionEnd: number, language: CodeHighlightLanguage | null) {
+    if (language === 'python') {
+        return continuePythonIndent(text, selectionStart, selectionEnd)
+    }
+
+    return continueTypeScriptIndent(text, selectionStart, selectionEnd)
+}
+
 export function TextFilePreviewModeToggle({
     setTextMode,
     textMode,
@@ -264,7 +354,6 @@ export function TextFileCopyButton({ item, text }: { item: Item; text: string })
 }
 
 export function TextFilePreview({
-    canHighlightPython,
     canRenderMarkdown,
     highlightLanguage,
     text,
@@ -276,7 +365,7 @@ export function TextFilePreview({
     text: string
     textMode: TextPreviewMode
 }) {
-    const typeDiagnostics = canHighlightPython ? checkPythonTypes(text) : []
+    const typeDiagnostics = getCodeTypeDiagnostics(text, highlightLanguage)
 
     if (canRenderMarkdown && textMode === 'render') {
         return (
@@ -292,7 +381,7 @@ export function TextFilePreview({
                 <pre className="image-preview__text image-preview__text--highlight" tabIndex={0}>
                     {text ? renderCodeHighlight(text, highlightLanguage) : 'This file is empty.'}
                 </pre>
-                <PythonTypeDiagnostics diagnostics={typeDiagnostics} />
+                <CodeTypeDiagnostics diagnostics={typeDiagnostics} language={highlightLanguage} />
             </>
         )
     }
@@ -306,7 +395,6 @@ export function TextFilePreview({
 
 export function TextFileEditor({
     autosaveStatus,
-    canHighlightPython,
     canRenderMarkdown,
     highlightLanguage,
     error,
@@ -327,8 +415,8 @@ export function TextFileEditor({
 }) {
     const highlightRef = useRef<HTMLPreElement>(null)
     const textareaRef = useRef<HTMLTextAreaElement>(null)
-    const [completion, setCompletion] = useState<(PythonCompletion & { left: number; selected: number; top: number }) | null>(null)
-    const typeDiagnostics = canHighlightPython ? checkPythonTypes(text) : []
+    const [completion, setCompletion] = useState<(CodeCompletion & { left: number; selected: number; top: number }) | null>(null)
+    const typeDiagnostics = getCodeTypeDiagnostics(text, highlightLanguage)
     const autosaveLabel =
         autosaveStatus === 'pending'
             ? 'Autosave pending'
@@ -341,12 +429,12 @@ export function TextFileEditor({
                   : null
     const renderHighlightedText = (value: string) => (value && highlightLanguage ? renderCodeHighlight(value, highlightLanguage) : null)
     const updateCompletion = (textarea: HTMLTextAreaElement, value: string = textarea.value) => {
-        if (!canHighlightPython) {
+        if (!highlightLanguage) {
             setCompletion(null)
             return
         }
 
-        const nextCompletion = getPythonKeywordCompletion(value, textarea.selectionStart)
+        const nextCompletion = getCodeKeywordCompletion(value, textarea.selectionStart, highlightLanguage)
         if (!nextCompletion) {
             setCompletion(null)
             return
@@ -355,12 +443,12 @@ export function TextFileEditor({
         setCompletion({ ...nextCompletion, ...getCompletionPosition(textarea), selected: 0 })
     }
 
-    const insertCompletion = (item: PythonCompletionItem) => {
+    const insertCompletion = (item: CodeCompletionItem) => {
         if (!completion || !textareaRef.current) {
             return
         }
 
-        const nextText = applyPythonCompletion(text, completion, item)
+        const nextText = applyCodeCompletion(text, completion, item, highlightLanguage)
         const nextCaret = completion.start + item.label.length
         onChange(nextText)
         setCompletion(null)
@@ -382,7 +470,7 @@ export function TextFileEditor({
         })
     }
     const applyNewLine = (textarea: HTMLTextAreaElement) => {
-        const next = continuePythonIndent(text, textarea.selectionStart, textarea.selectionEnd)
+        const next = continueCodeIndent(text, textarea.selectionStart, textarea.selectionEnd, highlightLanguage)
 
         onChange(next.nextText)
         setCompletion(null)
@@ -445,7 +533,7 @@ export function TextFileEditor({
                             return
                         }
 
-                        if (canHighlightPython && e.key === 'Enter') {
+                        if (highlightLanguage && e.key === 'Enter') {
                             e.preventDefault()
                             applyNewLine(e.currentTarget)
                             return
@@ -511,7 +599,7 @@ export function TextFileEditor({
                     {autosaveLabel}
                 </p>
             )}
-            <PythonTypeDiagnostics diagnostics={typeDiagnostics} />
+            <CodeTypeDiagnostics diagnostics={typeDiagnostics} language={highlightLanguage} />
             {error && <p className="image-preview__editor-error">{error}</p>}
         </div>
     )

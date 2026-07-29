@@ -12,7 +12,12 @@ const NotFound = lazy(() => import('./pages/NotFound'))
 const PublicShare = lazy(() => import('./pages/PublicShare'))
 
 function RouteFallback() {
-    return null
+    return (
+        <div className="route-loading" role="status" aria-live="polite">
+            <span className="route-loading__spinner" />
+            <span>Loading...</span>
+        </div>
+    )
 }
 
 function LandingRoute() {

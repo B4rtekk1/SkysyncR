@@ -364,6 +364,70 @@ html[data-theme='light'] {
   color: var(--amber) !important;
 }
 
+.route-loading,
+.dashboard-loading {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 24px;
+  background: var(--panel);
+  color: var(--paper);
+}
+
+@supports (min-height: 100dvh) {
+  .route-loading,
+  .dashboard-loading {
+    min-height: 100dvh;
+  }
+}
+
+.route-loading {
+  font-family: var(--font-mono), monospace;
+  font-size: 0.82rem;
+  color: var(--mist);
+}
+
+.route-loading__spinner {
+  width: 18px;
+  height: 18px;
+  border: 2px solid rgba(var(--signal-rgb), 0.24);
+  border-top-color: var(--signal);
+  border-radius: 50%;
+  animation: route-loading-spin 0.72s linear infinite;
+}
+
+.dashboard-loading {
+  text-align: left;
+}
+
+.dashboard-loading .spinner {
+  width: 22px;
+  height: 22px;
+  flex: 0 0 auto;
+}
+
+.dashboard-loading__title {
+  margin: 0 0 4px;
+  font-family: var(--font-display), sans-serif;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--paper);
+}
+
+.dashboard-loading__body {
+  margin: 0;
+  font-size: 0.86rem;
+  color: var(--mist);
+}
+
+@keyframes route-loading-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .not-found-page {
   background:
     linear-gradient(135deg, rgba(var(--signal-rgb), 0.1), transparent 36%),

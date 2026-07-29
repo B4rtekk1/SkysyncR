@@ -109,6 +109,7 @@ function Dashboard() {
         avatarUrl,
         publicKey,
         privateKey,
+        sessionLoading,
         signOut,
         handleSettingsSave,
     } = useDashboardSession(navigate)
@@ -642,6 +643,18 @@ function Dashboard() {
         } catch (e) {
             setError(e instanceof Error ? e.message : 'Could not move the selected items.')
         }
+    }
+
+    if (sessionLoading || !currentUser || !privateKey) {
+        return (
+            <div className="dashboard-loading" role="status" aria-live="polite">
+                <span className="spinner" />
+                <div>
+                    <p className="dashboard-loading__title">Unlocking dashboard</p>
+                    <p className="dashboard-loading__body">Preparing your encrypted vault...</p>
+                </div>
+            </div>
+        )
     }
 
     return (

@@ -12,6 +12,7 @@ export function useDashboardSession(navigate: NavigateFunction) {
     const [avatarUrl, setAvatarUrl] = useState('')
     const [publicKey, setPublicKey] = useState<string | null>(null)
     const [privateKey, setPrivateKey] = useState<CryptoKey | null>(null)
+    const [sessionLoading, setSessionLoading] = useState(true)
 
     useEffect(() => {
         return onActivePrivateKeyCleared((userId) => {
@@ -46,6 +47,9 @@ export function useDashboardSession(navigate: NavigateFunction) {
                     setPrivateKey(null)
                     navigate('/login', { replace: true })
                 }
+            })
+            .finally(() => {
+                if (active) setSessionLoading(false)
             })
 
         return () => {
@@ -85,6 +89,7 @@ export function useDashboardSession(navigate: NavigateFunction) {
         avatarUrl,
         publicKey,
         privateKey,
+        sessionLoading,
         signOut,
         handleSettingsSave,
     }
