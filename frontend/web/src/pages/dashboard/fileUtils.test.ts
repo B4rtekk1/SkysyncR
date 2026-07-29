@@ -3,6 +3,7 @@ import test from 'node:test'
 import {
   formatBytes,
   formatRelative,
+  isCudaFile,
   isJavaScriptFile,
   isMarkdownFile,
   isPythonFile,
@@ -53,6 +54,14 @@ test('isTypeScriptFile accepts typescript MIME types and extensions', () => {
   assert.equal(isTypeScriptFile('module.ts', 'text/plain'), true)
   assert.equal(isTypeScriptFile('script.txt', 'text/typescript'), true)
   assert.equal(isTypeScriptFile('script.js', 'text/javascript'), false)
+})
+
+test('isCudaFile accepts cuda MIME types and extensions', () => {
+  assert.equal(isCudaFile('kernel.cu', null), true)
+  assert.equal(isCudaFile('header.cuh', null), true)
+  assert.equal(isCudaFile('kernel.txt', 'text/x-cuda'), true)
+  assert.equal(isCudaFile('kernel.txt', 'text/x-cuda-cpp'), true)
+  assert.equal(isCudaFile('script.py', 'text/x-python'), false)
 })
 
 test('isJavaScriptFile accepts javascript MIME types and extensions', () => {

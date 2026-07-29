@@ -143,6 +143,12 @@ export function isTypeScriptFile(filename: string, mime: string | null) {
     return ['ts', 'tsx'].includes(ext) || normalizedMime === 'text/typescript' || normalizedMime === 'application/typescript'
 }
 
+export function isCudaFile(filename: string, mime: string | null) {
+    const ext = filename.split('.').pop()?.toLowerCase() ?? ''
+    const normalizedMime = mime?.toLowerCase() ?? ''
+    return ['cu', 'cuh'].includes(ext) || normalizedMime === 'text/x-cuda' || normalizedMime === 'text/x-cuda-cpp'
+}
+
 export function isJavaScriptFile(filename: string, mime: string | null) {
     const ext = filename.split('.').pop()?.toLowerCase() ?? ''
     const normalizedMime = mime?.toLowerCase() ?? ''

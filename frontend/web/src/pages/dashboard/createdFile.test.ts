@@ -9,6 +9,11 @@ test('detects Python MIME type for created files', () => {
     assert.equal(mimeTypeForCreatedFile('launcher.pyw'), 'text/x-python')
 })
 
+test('detects CUDA MIME type for created files', () => {
+    assert.equal(mimeTypeForCreatedFile('kernel.cu'), 'text/x-cuda')
+    assert.equal(mimeTypeForCreatedFile('helpers.cuh'), 'text/x-cuda')
+})
+
 test('detects common text-like MIME types for created files', () => {
     assert.equal(mimeTypeForCreatedFile('README.markdown'), 'text/markdown')
     assert.equal(mimeTypeForCreatedFile('data.CSV'), 'text/csv')

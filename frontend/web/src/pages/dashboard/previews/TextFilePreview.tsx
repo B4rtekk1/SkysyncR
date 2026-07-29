@@ -1,5 +1,6 @@
 import { lazy, Suspense, useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import '../../../css/dashboard/preview-text.css'
+import { highlightCudaLine, type CudaHighlightState } from '../cudaHighlight'
 import { COPY_ICON } from '../icons'
 import {
     applyPythonCompletion,
@@ -92,6 +93,8 @@ function renderCodeHighlight(text: string, language: CodeHighlightLanguage) {
         )
     })
 
+    let cudaState: CudaHighlightState = { inBlockComment: false }
+
     return lines.map((line, lineIndex) => {
         const guideLevel = indentLevels[lineIndex] ?? 0
         const guides = Array.from({ length: guideLevel }, (_, index) => {
@@ -105,7 +108,16 @@ function renderCodeHighlight(text: string, language: CodeHighlightLanguage) {
                 />
             )
         })
-        const tokens = language === 'python' ? highlightPython(line) : highlightTypeScript(line)
+        const tokens =
+            language === 'python'
+                ? highlightPython(line)
+                : language === 'typescript'
+                  ? highlightTypeScript(line)
+                  : (() => {
+                        const result = highlightCudaLine(line, cudaState)
+                        cudaState = result.state
+                        return result.tokens
+                    })()
         const lineNodes: ReactNode[] = tokens.map((token, tokenIndex) => (
             <span className={`syntax-token syntax-token--${token.type}`} key={tokenIndex}>
                 {token.text}
@@ -278,12 +290,24 @@ function applyCodeCompletion(source: string, completion: CodeCompletion, item: C
         return applyPythonCompletion(source, completion as PythonCompletion, item as PythonCompletionItem)
     }
 
-    return applyTypeScriptCompletion(source, completion as TypeScriptCompletion, item as TypeScriptCompletionItem)
+    if (language === 'typescript') {
+        return applyTypeScriptCompletion(source, completion as TypeScriptCompletion, item as TypeScriptCompletionItem)
+    }
+
+    return source
+}
+
+function continueCudaIndent(text: string, selectionStart: number, selectionEnd: number) {
+    return continueTypeScriptIndent(text, selectionStart, selectionEnd)
 }
 
 function continueCodeIndent(text: string, selectionStart: number, selectionEnd: number, language: CodeHighlightLanguage | null) {
     if (language === 'python') {
         return continuePythonIndent(text, selectionStart, selectionEnd)
+    }
+
+    if (language === 'cuda') {
+        return continueCudaIndent(text, selectionStart, selectionEnd)
     }
 
     return continueTypeScriptIndent(text, selectionStart, selectionEnd)
