@@ -18,7 +18,13 @@ import {
 } from '../api/users'
 import { decryptPrivateKey, encryptPrivateKey } from '../crypto/keys'
 import { loadEncryptedPrivateKey, storeEncryptedPrivateKey } from '../crypto/storage'
-import { NAV_ICONS } from './dashboard/icons'
+import {
+    CLOSE_ICON,
+    DOWNLOAD_ICON,
+    GRID_VIEW_ICON,
+    LIST_VIEW_ICON,
+    NAV_ICONS,
+} from './dashboard/icons'
 import {
     NAV_LABELS,
     saveActiveView,
@@ -43,6 +49,63 @@ const themeOptions: Array<{ value: ThemePreference; label: string }> = [
     { value: 'system', label: 'System' },
     { value: 'light', label: 'Light' },
     { value: 'dark', label: 'Dark' },
+]
+
+const PROFILE_SETTINGS_ICON = (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <circle cx="12" cy="8" r="3.2" stroke="currentColor" strokeWidth="1.6" />
+        <path
+            d="M5.5 19.2c.8-3.7 3.2-5.5 6.5-5.5s5.7 1.8 6.5 5.5"
+            stroke="currentColor"
+            strokeWidth="1.6"
+            strokeLinecap="round"
+        />
+    </svg>
+)
+
+const SECURITY_SETTINGS_ICON = (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path
+            d="M12 3.8 18.5 6v5.1c0 4.2-2.5 7.6-6.5 9.1-4-1.5-6.5-4.9-6.5-9.1V6L12 3.8Z"
+            stroke="currentColor"
+            strokeWidth="1.6"
+            strokeLinejoin="round"
+        />
+        <path d="m9.2 12 1.9 1.9 3.9-4.2" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+)
+
+const VAULT_SETTINGS_ICON = (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <rect x="5" y="6.5" width="14" height="12" rx="2" stroke="currentColor" strokeWidth="1.6" />
+        <path d="M8 6.5V5.8A2.8 2.8 0 0 1 10.8 3h2.4A2.8 2.8 0 0 1 16 5.8v.7" stroke="currentColor" strokeWidth="1.6" />
+        <circle cx="12" cy="12.3" r="1.6" stroke="currentColor" strokeWidth="1.5" />
+        <path d="M12 13.9v2" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+    </svg>
+)
+
+const SESSIONS_SETTINGS_ICON = (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <rect x="4" y="5" width="11" height="8.5" rx="1.8" stroke="currentColor" strokeWidth="1.6" />
+        <rect x="14" y="10" width="6" height="9" rx="1.6" stroke="currentColor" strokeWidth="1.6" />
+        <path d="M8 17h4M10 13.5V17" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+        <path d="M16.3 16.5h1.4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+    </svg>
+)
+
+const AUDIT_SETTINGS_ICON = (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path d="M7 4.5h7.4L18 8.1v11.4H7v-15Z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
+        <path d="M14.2 4.8V8.3h3.5M9.5 12h5M9.5 15h5M9.5 18h3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+    </svg>
+)
+
+const settingsNavItems = [
+    { href: '#settings-profile', label: 'Profile', icon: PROFILE_SETTINGS_ICON },
+    { href: '#settings-security', label: 'Security', icon: SECURITY_SETTINGS_ICON },
+    { href: '#settings-vault', label: 'Vault', icon: VAULT_SETTINGS_ICON },
+    { href: '#settings-sessions', label: 'Sessions', icon: SESSIONS_SETTINGS_ICON },
+    { href: '#settings-audit', label: 'Audit log', icon: AUDIT_SETTINGS_ICON },
 ]
 
 const sessionActionLabels: Record<string, string> = {
@@ -429,24 +492,50 @@ function SettingsModalContent({ currentUser, onClose, onSave }: SettingsModalPro
                 onMouseDown={(e) => e.stopPropagation()}
             >
                 <header className="settings-topbar">
-                    <div>
+                    <div className="settings-title-group">
                         <p className="eyebrow">
                             <span className="eyebrow__dot" /> account controls
                         </p>
                         <h1 className="shell__title" id="settings-title">Settings</h1>
+                        <p className="settings-topbar__copy">Manage your vault defaults, identity, and active sessions.</p>
                     </div>
                     <div className="shell__topbar-actions">
                         {saved && <span className="settings-saved">Saved</span>}
                         <ThemeToggle className="shell__theme-toggle" />
                         <button className="settings-close" type="button" onClick={requestClose} aria-label="Close settings">
-                            x
+                            {CLOSE_ICON}
                         </button>
                     </div>
                 </header>
 
-                <section className="settings-content">
-                    <div className="settings-grid">
-                        <section className="settings-panel settings-panel--wide">
+                <section className="settings-body">
+                    <aside className="settings-rail" aria-label="Settings sections">
+                        <div className="settings-rail__profile">
+                            <div className="settings-profile__avatar settings-profile__avatar--rail">
+                                {settings.avatarUrl ? (
+                                    <img src={settings.avatarUrl} alt="" />
+                                ) : (
+                                    initials
+                                )}
+                            </div>
+                            <div>
+                                <strong>{settings.displayName || 'SkysyncR account'}</strong>
+                                <span>{currentUser?.email ?? 'Unavailable'}</span>
+                            </div>
+                        </div>
+                        <nav className="settings-rail__nav">
+                            {settingsNavItems.map((item) => (
+                                <a href={item.href} key={item.href}>
+                                    <span className="settings-rail__icon">{item.icon}</span>
+                                    <span>{item.label}</span>
+                                </a>
+                            ))}
+                        </nav>
+                    </aside>
+
+                    <section className="settings-content">
+                        <div className="settings-grid">
+                        <section className="settings-panel settings-panel--hero" id="settings-profile">
                             <div className="settings-panel__head">
                                 <div>
                                     <p className="settings-kicker">Profile</p>
@@ -494,7 +583,7 @@ function SettingsModalContent({ currentUser, onClose, onSave }: SettingsModalPro
                             </div>
                         </section>
 
-                        <section className="settings-panel settings-panel--wide">
+                        <section className="settings-panel" id="settings-password">
                             <div className="settings-panel__head">
                                 <div>
                                     <p className="settings-kicker">Password</p>
@@ -560,7 +649,7 @@ function SettingsModalContent({ currentUser, onClose, onSave }: SettingsModalPro
                             </form>
                         </section>
 
-                        <section className="settings-panel">
+                        <section className="settings-panel settings-panel--compact" id="settings-vault">
                             <div className="settings-panel__head">
                                 <div>
                                     <p className="settings-kicker">Vault</p>
@@ -582,7 +671,7 @@ function SettingsModalContent({ currentUser, onClose, onSave }: SettingsModalPro
                             </div>
                         </section>
 
-                        <section className="settings-panel">
+                        <section className="settings-panel settings-panel--compact">
                             <div className="settings-panel__head">
                                 <div>
                                     <p className="settings-kicker">Layout</p>
@@ -595,14 +684,16 @@ function SettingsModalContent({ currentUser, onClose, onSave }: SettingsModalPro
                                     type="button"
                                     onClick={() => updateSetting('layoutMode', 'grid')}
                                 >
-                                    Grid
+                                    {GRID_VIEW_ICON}
+                                    <span>Grid</span>
                                 </button>
                                 <button
                                     className={settings.layoutMode === 'list' ? 'is-active' : ''}
                                     type="button"
                                     onClick={() => updateSetting('layoutMode', 'list')}
                                 >
-                                    List
+                                    {LIST_VIEW_ICON}
+                                    <span>List</span>
                                 </button>
                             </div>
                             <label className="settings-check">
@@ -615,7 +706,7 @@ function SettingsModalContent({ currentUser, onClose, onSave }: SettingsModalPro
                             </label>
                         </section>
 
-                        <section className="settings-panel">
+                        <section className="settings-panel settings-panel--compact">
                             <div className="settings-panel__head">
                                 <div>
                                     <p className="settings-kicker">Appearance</p>
@@ -639,7 +730,7 @@ function SettingsModalContent({ currentUser, onClose, onSave }: SettingsModalPro
                             <p className="settings-muted">System follows your operating system appearance.</p>
                         </section>
 
-                        <section className="settings-panel settings-panel--wide">
+                        <section className="settings-panel settings-panel--wide" id="settings-security">
                             <div className="settings-panel__head">
                                 <div>
                                     <p className="settings-kicker">Security</p>
@@ -697,7 +788,7 @@ function SettingsModalContent({ currentUser, onClose, onSave }: SettingsModalPro
                             </div>
                         </section>
 
-                        <section className="settings-panel settings-panel--danger">
+                        <section className="settings-panel settings-panel--danger" id="settings-sessions">
                             <div className="settings-panel__head">
                                 <div>
                                     <p className="settings-kicker">Session</p>
@@ -777,7 +868,7 @@ function SettingsModalContent({ currentUser, onClose, onSave }: SettingsModalPro
                             </div>
                         </section>
 
-                        <section className="settings-panel settings-panel--wide settings-panel--operation-log">
+                        <section className="settings-panel settings-panel--wide settings-panel--operation-log" id="settings-audit">
                             <div className="settings-panel__head">
                                 <div>
                                     <p className="settings-kicker">Encrypted audit</p>
@@ -790,7 +881,8 @@ function SettingsModalContent({ currentUser, onClose, onSave }: SettingsModalPro
                                         onClick={downloadOperationLog}
                                         disabled={operationLogLoading || !operationLog?.operations.length}
                                     >
-                                        Download log
+                                        {DOWNLOAD_ICON}
+                                        <span>Download log</span>
                                     </button>
                                     <span className="settings-badge">Encrypted</span>
                                 </div>
@@ -817,17 +909,18 @@ function SettingsModalContent({ currentUser, onClose, onSave }: SettingsModalPro
                                 {operationLogError && <p className="settings-error">{operationLogError}</p>}
                             </div>
                         </section>
-                    </div>
+                        </div>
 
-                    <div className="settings-actions">
-                        {saveError && <p className="settings-error">{saveError}</p>}
-                        <button className="btn btn--outline" type="button" onClick={requestClose}>
-                            Close
-                        </button>
-                        <button className="btn btn--solid" type="button" onClick={saveSettings}>
-                            Save changes
-                        </button>
-                    </div>
+                        <div className="settings-actions">
+                            {saveError && <p className="settings-error">{saveError}</p>}
+                            <button className="btn btn--outline" type="button" onClick={requestClose}>
+                                Close
+                            </button>
+                            <button className="btn btn--solid" type="button" onClick={saveSettings}>
+                                Save changes
+                            </button>
+                        </div>
+                    </section>
                 </section>
             </section>
         </div>
