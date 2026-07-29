@@ -117,6 +117,7 @@ pub struct NewFileRecord {
     pub size_bytes: i64,
     pub encrypted_key: Vec<u8>,
     pub encryption_nonce: Vec<u8>,
+    pub content_key_fingerprint: Option<String>,
     pub checksum: String,
     pub folder_id: Option<Uuid>,
 }
@@ -147,6 +148,7 @@ pub struct UpdateFileContentTarget {
     pub checksum: Option<String>,
     pub encrypted_key: Vec<u8>,
     pub encryption_nonce: Vec<u8>,
+    pub content_key_fingerprint: Option<String>,
 }
 
 #[derive(FromRow)]

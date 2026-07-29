@@ -250,6 +250,7 @@ export async function uploadFile(params: {
     folderId?: string
     wrappedKey: ArrayBuffer
     encryptionNonce: ArrayBuffer | Uint8Array
+    contentKeyFingerprint?: string
     signal?: AbortSignal
 }): Promise<ApiFile> {
     const res = await authenticatedMultipartStream(`${API_BASE}files`, [
@@ -258,6 +259,7 @@ export async function uploadFile(params: {
         ...(params.folderId ? [textPart('folder_id', params.folderId)] : []),
         textPart('encrypted_key', arrayBufferToBase64(params.wrappedKey)),
         textPart('encryption_nonce', arrayBufferToBase64(params.encryptionNonce)),
+        ...(params.contentKeyFingerprint ? [textPart('content_key_fingerprint', params.contentKeyFingerprint)] : []),
         streamPart('file', params.encryptedFile, 'encrypted.bin', 'application/octet-stream'),
     ], 'POST', params.signal)
     if (!res.ok) throw new Error(await parseErrorMessage(res))
@@ -317,6 +319,7 @@ export async function completeResumableUpload(params: {
     folderId?: string | null
     wrappedKey: ArrayBuffer | Uint8Array | string
     encryptionNonce: ArrayBuffer | Uint8Array
+    contentKeyFingerprint?: string
     sizeBytes: number
     signal?: AbortSignal
 }): Promise<ApiFile> {
@@ -329,6 +332,7 @@ export async function completeResumableUpload(params: {
             folder_id: params.folderId ?? null,
             encrypted_key: typeof params.wrappedKey === 'string' ? params.wrappedKey : arrayBufferToBase64(params.wrappedKey),
             encryption_nonce: arrayBufferToBase64(params.encryptionNonce),
+            content_key_fingerprint: params.contentKeyFingerprint ?? null,
             size_bytes: params.sizeBytes,
         }),
     }
@@ -457,11 +461,13 @@ export async function updateFileContent(params: {
     originalFilename: string
     wrappedKey: ArrayBuffer | Uint8Array | string
     encryptionNonce: ArrayBuffer | Uint8Array
+    contentKeyFingerprint: string
     shareKeys?: Array<{ shareId: string; encryptedKey: ArrayBuffer | Uint8Array | string }>
 }): Promise<ApiFile> {
     const res = await authenticatedMultipartStream(`${API_BASE}files/${params.id}/content`, [
         textPart('encrypted_key', typeof params.wrappedKey === 'string' ? params.wrappedKey : arrayBufferToBase64(params.wrappedKey)),
         textPart('encryption_nonce', arrayBufferToBase64(params.encryptionNonce)),
+        textPart('content_key_fingerprint', params.contentKeyFingerprint),
         textPart('share_keys', JSON.stringify((params.shareKeys ?? []).map((shareKey) => ({
             share_id: shareKey.shareId,
             encrypted_key: typeof shareKey.encryptedKey === 'string'

@@ -6,6 +6,7 @@ import {
   encryptedFileFormatNonce,
   encryptFileStream,
   encryptTextEnvelope,
+  fileContentKeyFingerprint,
   generateFileKey,
   isChunkedFileNonce,
   streamToBlob,
@@ -45,4 +46,13 @@ test('chunked file decryption rejects non-stream nonce markers', async () => {
 
   assert.equal(isChunkedFileNonce(nonce), false)
   assert.throws(() => decryptFileStream(new Blob(), key, nonce))
+})
+
+test('file content key fingerprints are stable and distinguish rotated keys', async () => {
+  const key = await generateFileKey()
+  const rotatedKey = await generateFileKey()
+
+  assert.match(await fileContentKeyFingerprint(key), /^[a-f0-9]{64}$/)
+  assert.equal(await fileContentKeyFingerprint(key), await fileContentKeyFingerprint(key))
+  assert.notEqual(await fileContentKeyFingerprint(key), await fileContentKeyFingerprint(rotatedKey))
 })

@@ -340,6 +340,7 @@ export type FileUploadRequest = {
   "folder_id"?: string
   "encrypted_key": string
   "encryption_nonce": string
+  "content_key_fingerprint"?: string
   "share_keys"?: string
   "file": string
 }
@@ -347,6 +348,7 @@ export type FileUploadRequest = {
 export type FileContentUpdateRequest = {
   "encrypted_key": string
   "encryption_nonce": string
+  "content_key_fingerprint": string
   "file": string
 }
 
@@ -385,6 +387,7 @@ export type CompleteUploadRequest = {
   "folder_id"?: string | null
   "encrypted_key": string
   "encryption_nonce": string
+  "content_key_fingerprint"?: string | null
   "size_bytes": number
 }
 

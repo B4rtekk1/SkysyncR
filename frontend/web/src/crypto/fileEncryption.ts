@@ -115,6 +115,11 @@ export async function exportRawKey(key: CryptoKey): Promise<ArrayBuffer> {
     return crypto.subtle.exportKey('raw', key)
 }
 
+export async function fileContentKeyFingerprint(key: CryptoKey): Promise<string> {
+    const digest = await crypto.subtle.digest('SHA-256', await exportRawKey(key))
+    return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('')
+}
+
 export async function importRawFileKey(rawKey: ArrayBuffer | Uint8Array): Promise<CryptoKey> {
     const keyBytes = ArrayBuffer.isView(rawKey)
         ? rawKey.buffer.slice(rawKey.byteOffset, rawKey.byteOffset + rawKey.byteLength) as ArrayBuffer

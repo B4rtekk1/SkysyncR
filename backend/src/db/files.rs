@@ -16,6 +16,7 @@ pub struct UpdatedFileContent {
     pub size_bytes: i64,
     pub encrypted_key: Vec<u8>,
     pub encryption_nonce: Vec<u8>,
+    pub content_key_fingerprint: Option<String>,
     pub checksum: Option<String>,
 }
 
@@ -98,10 +99,11 @@ pub async fn create_file_record(
             size_bytes,
             encrypted_key,
             encryption_nonce,
+            content_key_fingerprint,
             checksum,
             folder_id
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
         RETURNING
             id,
             filename,
@@ -131,6 +133,7 @@ pub async fn create_file_record(
     .bind(file.size_bytes)
     .bind(file.encrypted_key)
     .bind(file.encryption_nonce)
+    .bind(file.content_key_fingerprint)
     .bind(file.checksum)
     .bind(file.folder_id)
     .fetch_one(&mut **tx)
@@ -198,7 +201,14 @@ pub async fn get_user_file_for_content_update_in_tx(
 ) -> Result<Option<UpdateFileContentTarget>, sqlx::Error> {
     sqlx::query_as::<_, UpdateFileContentTarget>(
         r#"
-        SELECT owner_id, storage_path, size_bytes, checksum, encrypted_key, encryption_nonce
+        SELECT
+            owner_id,
+            storage_path,
+            size_bytes,
+            checksum,
+            encrypted_key,
+            encryption_nonce,
+            content_key_fingerprint
         FROM files
         WHERE id = $1
           AND owner_id = $2
@@ -235,6 +245,7 @@ pub async fn create_file_version_snapshot_in_tx(
             checksum,
             encrypted_key,
             encryption_nonce,
+            content_key_fingerprint,
             created_by_user_id,
             device_label,
             action
@@ -249,7 +260,8 @@ pub async fn create_file_version_snapshot_in_tx(
             $6,
             $7,
             $8,
-            $9
+            $9,
+            $10
         FROM next_version
         RETURNING id, file_id, version_number, size_bytes, checksum, device_label, action, created_at
         "#,
@@ -260,6 +272,7 @@ pub async fn create_file_version_snapshot_in_tx(
     .bind(&target.checksum)
     .bind(&target.encrypted_key)
     .bind(&target.encryption_nonce)
+    .bind(&target.content_key_fingerprint)
     .bind(created_by_user_id)
     .bind(device_label)
     .bind(action)
@@ -286,6 +299,37 @@ pub async fn create_file_version_snapshot_in_tx(
     .await?;
 
     Ok(version)
+}
+
+pub async fn file_content_key_fingerprint_exists_in_tx(
+    tx: &mut Transaction<'_, Postgres>,
+    owner_id: Uuid,
+    file_id: Uuid,
+    content_key_fingerprint: &str,
+) -> Result<bool, sqlx::Error> {
+    sqlx::query_scalar::<_, bool>(
+        r#"
+        SELECT EXISTS (
+            SELECT 1
+            FROM files f
+            WHERE f.id = $1
+              AND f.owner_id = $2
+              AND f.content_key_fingerprint = $3
+            UNION ALL
+            SELECT 1
+            FROM file_versions fv
+            JOIN files f ON f.id = fv.file_id
+            WHERE fv.file_id = $1
+              AND f.owner_id = $2
+              AND fv.content_key_fingerprint = $3
+        )
+        "#,
+    )
+    .bind(file_id)
+    .bind(owner_id)
+    .bind(content_key_fingerprint)
+    .fetch_one(&mut **tx)
+    .await
 }
 
 pub async fn update_user_file_share_keys_in_tx(
@@ -390,7 +434,14 @@ pub async fn restore_user_file_version(
 
     let version = sqlx::query_as::<_, UpdateFileContentTarget>(
         r#"
-        SELECT f.owner_id, fv.storage_path, fv.size_bytes, fv.checksum, fv.encrypted_key, fv.encryption_nonce
+        SELECT
+            f.owner_id,
+            fv.storage_path,
+            fv.size_bytes,
+            fv.checksum,
+            fv.encrypted_key,
+            fv.encryption_nonce,
+            fv.content_key_fingerprint
         FROM file_versions fv
         JOIN files f ON f.id = fv.file_id
         WHERE fv.id = $1
@@ -427,6 +478,7 @@ pub async fn restore_user_file_version(
             size_bytes: version.size_bytes,
             encrypted_key: version.encrypted_key,
             encryption_nonce: version.encryption_nonce,
+            content_key_fingerprint: version.content_key_fingerprint,
             checksum: version.checksum,
         },
     )
@@ -1103,10 +1155,11 @@ pub async fn update_user_file_content(
             size_bytes = $2,
             encrypted_key = $3,
             encryption_nonce = $4,
-            checksum = $5,
+            content_key_fingerprint = $5,
+            checksum = $6,
             updated_at = NOW()
-        WHERE id = $6
-          AND owner_id = $7
+        WHERE id = $7
+          AND owner_id = $8
           AND is_deleted = FALSE
         RETURNING
             id,
@@ -1125,7 +1178,7 @@ pub async fn update_user_file_content(
             EXISTS (
                 SELECT 1
                 FROM favorites fav
-                WHERE fav.user_id = $7
+                WHERE fav.user_id = $8
                   AND fav.file_id = files.id
             ) AS is_favourite,
             encrypted_key,
@@ -1139,6 +1192,7 @@ pub async fn update_user_file_content(
     .bind(content.size_bytes)
     .bind(content.encrypted_key)
     .bind(content.encryption_nonce)
+    .bind(content.content_key_fingerprint)
     .bind(content.checksum)
     .bind(file_id)
     .bind(user_id)

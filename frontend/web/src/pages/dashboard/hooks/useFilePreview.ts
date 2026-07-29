@@ -5,6 +5,7 @@ import {
     decryptFileStream,
     encryptedFileFormatNonce,
     encryptFileStream,
+    fileContentKeyFingerprint,
     generateFileKey,
     isChunkedFileNonce,
     streamToBlob,
@@ -227,6 +228,7 @@ export function useFilePreview(
             originalFilename: item.filename,
             wrappedKey: wrappedOwnerKey,
             encryptionNonce: encryptedFileFormatNonce(),
+            contentKeyFingerprint: await fileContentKeyFingerprint(fileKey),
             shareKeys,
         })
 

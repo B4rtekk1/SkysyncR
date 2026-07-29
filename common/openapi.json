@@ -2374,6 +2374,58 @@
           }
         }
       },
+      "OperationLogEntry": {
+        "type": "object",
+        "required": [
+          "id",
+          "operation",
+          "resource_id",
+          "resource_type",
+          "device_label",
+          "details",
+          "created_at"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "operation": {
+            "type": "string"
+          },
+          "resource_id": {
+            "type": "string",
+            "nullable": true
+          },
+          "resource_type": {
+            "type": "string",
+            "nullable": true
+          },
+          "device_label": {
+            "type": "string",
+            "nullable": true
+          },
+          "details": {
+            "type": "object"
+          },
+          "created_at": {
+            "type": "string"
+          }
+        }
+      },
+      "OperationLogResponse": {
+        "type": "object",
+        "required": [
+          "operations"
+        ],
+        "properties": {
+          "operations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OperationLogEntry"
+            }
+          }
+        }
+      },
       "VerifyUserRequest": {
         "type": "object",
         "required": [
@@ -3205,6 +3257,10 @@
             "type": "string",
             "format": "byte"
           },
+          "content_key_fingerprint": {
+            "type": "string",
+            "description": "SHA-256 hex digest of the raw file content key, used to detect key reuse across file versions."
+          },
           "share_keys": {
             "type": "string",
             "description": "JSON array of { share_id, encrypted_key } entries containing the new content key wrapped for each current file share."
@@ -3220,6 +3276,7 @@
         "required": [
           "encrypted_key",
           "encryption_nonce",
+          "content_key_fingerprint",
           "file"
         ],
         "properties": {
@@ -3230,6 +3287,10 @@
           "encryption_nonce": {
             "type": "string",
             "format": "byte"
+          },
+          "content_key_fingerprint": {
+            "type": "string",
+            "description": "SHA-256 hex digest of the raw file content key. Must be new for this file."
           },
           "file": {
             "type": "string",
@@ -3364,6 +3425,11 @@
           "encryption_nonce": {
             "type": "string",
             "format": "byte"
+          },
+          "content_key_fingerprint": {
+            "type": "string",
+            "nullable": true,
+            "description": "SHA-256 hex digest of the raw file content key."
           },
           "size_bytes": {
             "type": "integer",

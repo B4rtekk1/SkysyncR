@@ -15,6 +15,7 @@ import {
     encryptFileChunk,
     encryptTextEnvelope,
     exportRawKey,
+    fileContentKeyFingerprint,
     generateFileKey,
     importRawFileKey,
     resumableChunkIndexForOffset,
@@ -47,6 +48,7 @@ type PersistedUploadJob = {
     storedFilename: string
     storedMimeType: string | null
     wrappedKeyBase64: string
+    contentKeyFingerprint: string
     encryptedSize: number
     transfer: UploadTransfer
 }
@@ -321,6 +323,7 @@ export function useFileUpload({
                     folderId: job.folderId,
                     wrappedKey: job.wrappedKeyBase64,
                     encryptionNonce: encryptedFileFormatNonce(),
+                    contentKeyFingerprint: job.contentKeyFingerprint,
                     sizeBytes: job.encryptedSize,
                     signal: controller.signal,
                 })
@@ -400,6 +403,7 @@ export function useFileUpload({
                 const storedFilename = await encryptTextEnvelope(file.name, key)
                 const storedMimeType = file.type ? await encryptTextEnvelope(file.type, key) : null
                 const wrappedKeyBase64 = arrayBufferToBase64(await wrapFileKeyForUser(key, publicKeyRef.current ?? ''))
+                const contentKeyFingerprint = await fileContentKeyFingerprint(key)
                 const transfer: UploadTransfer = {
                     id,
                     tempId,
@@ -423,6 +427,7 @@ export function useFileUpload({
                         storedFilename,
                         storedMimeType,
                         wrappedKeyBase64,
+                        contentKeyFingerprint,
                         encryptedSize: deterministicEncryptedFileSize(file.size),
                         transfer,
                         controller: null,

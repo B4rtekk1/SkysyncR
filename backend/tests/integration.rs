@@ -2,8 +2,10 @@ use chrono::{Duration, Utc};
 use skysyncr::crypto::jwt::{generate_access_token_capped, verify_access_token};
 use skysyncr::db::files::{
     NewFileRecord, NewFileShare, UpdatedFileContent, consume_public_file_share_for_download,
-    create_file_record, get_user_file_for_content_update_in_tx, get_user_file_for_download,
-    list_files_shared_with_user, rename_user_file, update_user_file_content, update_user_file_note,
+    create_file_record, create_file_version_snapshot_in_tx,
+    file_content_key_fingerprint_exists_in_tx, get_user_file_for_content_update_in_tx,
+    get_user_file_for_download, list_files_shared_with_user, rename_user_file,
+    update_user_file_content, update_user_file_note, update_user_file_share_keys_in_tx,
     upsert_user_file_share,
 };
 use skysyncr::db::refresh_tokens::{
@@ -511,6 +513,7 @@ async fn file_sharing_grants_recipient_access_without_self_share() {
             size_bytes: 12,
             encrypted_key: b"owner-key".to_vec(),
             encryption_nonce: b"nonce".to_vec(),
+            content_key_fingerprint: None,
             checksum: "checksum".to_string(),
             folder_id: None,
         },
@@ -581,6 +584,7 @@ async fn file_share_permissions_gate_download_access() {
             size_bytes: 12,
             encrypted_key: b"owner-key".to_vec(),
             encryption_nonce: b"nonce".to_vec(),
+            content_key_fingerprint: None,
             checksum: "checksum".to_string(),
             folder_id: None,
         },
@@ -648,6 +652,7 @@ async fn file_share_write_permission_gates_metadata_and_blocks_content_updates()
             size_bytes: 12,
             encrypted_key: b"owner-wrapped-key".to_vec(),
             encryption_nonce: b"nonce".to_vec(),
+            content_key_fingerprint: None,
             checksum: "checksum-v1".to_string(),
             folder_id: None,
         },
@@ -709,6 +714,7 @@ async fn file_share_write_permission_gates_metadata_and_blocks_content_updates()
             size_bytes: 24,
             encrypted_key: b"writer-wrapped-key".to_vec(),
             encryption_nonce: b"nonce-v2".to_vec(),
+            content_key_fingerprint: Some("b".repeat(64)),
             checksum: Some("checksum-v2".to_string()),
         },
     )
@@ -733,6 +739,128 @@ async fn file_share_write_permission_gates_metadata_and_blocks_content_updates()
 }
 
 #[tokio::test]
+async fn file_content_update_snapshots_old_keys_and_tracks_rotated_key_fingerprints() {
+    let (_guard, pool) = test_pool().await;
+    let owner_id = insert_user(&pool, "version-owner@example.test").await;
+    insert_user(&pool, "version-recipient@example.test").await;
+    let v1_fingerprint = "a".repeat(64);
+    let v2_fingerprint = "b".repeat(64);
+
+    let mut tx = pool.begin().await.unwrap();
+    let file = create_file_record(
+        &mut tx,
+        NewFileRecord {
+            owner_id,
+            filename: "versioned.txt".to_string(),
+            storage_path: "versioned-v1.txt.enc".to_string(),
+            mime_type: Some("text/plain".to_string()),
+            size_bytes: 12,
+            encrypted_key: b"owner-key-v1".to_vec(),
+            encryption_nonce: b"nonce-v1".to_vec(),
+            content_key_fingerprint: Some(v1_fingerprint.clone()),
+            checksum: "checksum-v1".to_string(),
+            folder_id: None,
+        },
+    )
+    .await
+    .unwrap();
+    tx.commit().await.unwrap();
+
+    let share = upsert_user_file_share(
+        &pool,
+        NewFileShare {
+            owner_id,
+            file_id: file.id,
+            recipient_email: "version-recipient@example.test".to_string(),
+            permission: "download".to_string(),
+            encrypted_key: b"recipient-key-v1".to_vec(),
+        },
+    )
+    .await
+    .unwrap()
+    .expect("share should be created");
+
+    let mut tx = pool.begin().await.unwrap();
+    assert!(
+        file_content_key_fingerprint_exists_in_tx(&mut tx, owner_id, file.id, &v1_fingerprint)
+            .await
+            .unwrap()
+    );
+    assert!(
+        !file_content_key_fingerprint_exists_in_tx(&mut tx, owner_id, file.id, &v2_fingerprint)
+            .await
+            .unwrap()
+    );
+
+    let target = get_user_file_for_content_update_in_tx(&mut tx, owner_id, file.id)
+        .await
+        .unwrap()
+        .expect("owner can update file content");
+    create_file_version_snapshot_in_tx(&mut tx, file.id, &target, owner_id, None, "update")
+        .await
+        .unwrap();
+    assert!(
+        update_user_file_share_keys_in_tx(
+            &mut tx,
+            owner_id,
+            file.id,
+            vec![(share.id, b"recipient-key-v2".to_vec())],
+        )
+        .await
+        .unwrap()
+    );
+    update_user_file_content(
+        &mut tx,
+        owner_id,
+        file.id,
+        UpdatedFileContent {
+            storage_path: "versioned-v2.txt.enc".to_string(),
+            size_bytes: 24,
+            encrypted_key: b"owner-key-v2".to_vec(),
+            encryption_nonce: b"nonce-v2".to_vec(),
+            content_key_fingerprint: Some(v2_fingerprint.clone()),
+            checksum: Some("checksum-v2".to_string()),
+        },
+    )
+    .await
+    .unwrap()
+    .expect("owner update should succeed");
+    tx.commit().await.unwrap();
+
+    let version_row = sqlx::query_as::<_, (Vec<u8>, Option<String>, Vec<u8>)>(
+        r#"
+        SELECT fv.encrypted_key, fv.content_key_fingerprint, fvs.encrypted_key
+        FROM file_versions fv
+        JOIN file_version_shares fvs ON fvs.file_version_id = fv.id
+        WHERE fv.file_id = $1
+        "#,
+    )
+    .bind(file.id)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(version_row.0, b"owner-key-v1");
+    assert_eq!(version_row.1.as_deref(), Some(v1_fingerprint.as_str()));
+    assert_eq!(version_row.2, b"recipient-key-v1");
+
+    let current_row = sqlx::query_as::<_, (Vec<u8>, Option<String>, Vec<u8>)>(
+        r#"
+        SELECT f.encrypted_key, f.content_key_fingerprint, fs.encrypted_key
+        FROM files f
+        JOIN file_shares fs ON fs.file_id = f.id
+        WHERE f.id = $1
+        "#,
+    )
+    .bind(file.id)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(current_row.0, b"owner-key-v2");
+    assert_eq!(current_row.1.as_deref(), Some(v2_fingerprint.as_str()));
+    assert_eq!(current_row.2, b"recipient-key-v2");
+}
+
+#[tokio::test]
 async fn public_file_share_download_consumes_limit_atomically() {
     let (_guard, pool) = test_pool().await;
     let owner_id = insert_user(&pool, "public-owner@example.test").await;
@@ -749,6 +877,7 @@ async fn public_file_share_download_consumes_limit_atomically() {
             size_bytes: 42,
             encrypted_key: b"owner-key".to_vec(),
             encryption_nonce: b"nonce".to_vec(),
+            content_key_fingerprint: None,
             checksum: "checksum".to_string(),
             folder_id: None,
         },
