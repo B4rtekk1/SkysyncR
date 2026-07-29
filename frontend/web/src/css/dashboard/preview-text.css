@@ -30,6 +30,24 @@
     min-height: 1.55em;
 }
 
+.syntax-line--numbered {
+    display: grid;
+    grid-template-columns: 4.5ch minmax(0, 1fr);
+    gap: 14px;
+}
+
+.syntax-line__number {
+    color: #858585;
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+    user-select: none;
+}
+
+.syntax-line__code {
+    position: relative;
+    min-width: 0;
+}
+
 .syntax-indent-guide {
     --indent-guide-level: 0;
     position: absolute;

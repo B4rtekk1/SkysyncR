@@ -81,7 +81,7 @@ function getCompletionPosition(textarea: HTMLTextAreaElement) {
     return { left, top }
 }
 
-function renderCodeHighlight(text: string, language: CodeHighlightLanguage) {
+function renderCodeHighlight(text: string, language: CodeHighlightLanguage, showLineNumbers = false) {
     const lines = text.split('\n')
     const indentLevels = lines.map((line) => {
         const indentText = line.match(/^[\t ]*/)?.[0] ?? ''
@@ -131,14 +131,35 @@ function renderCodeHighlight(text: string, language: CodeHighlightLanguage) {
             </span>
         ))
 
+        const code = (
+            <>
+                {guides}
+                {lineNodes.length > 0 ? lineNodes : ' '}
+            </>
+        )
+
+        if (!showLineNumbers) {
+            return (
+                <span
+                    className="syntax-line"
+                    key={lineIndex}
+                    style={{ '--indent-level': guideLevel.toString() } as CSSProperties}
+                >
+                    {code}
+                </span>
+            )
+        }
+
         return (
             <span
-                className="syntax-line"
+                className="syntax-line syntax-line--numbered"
                 key={lineIndex}
                 style={{ '--indent-level': guideLevel.toString() } as CSSProperties}
             >
-                {guides}
-                {lineNodes.length > 0 ? lineNodes : ' '}
+                <span className="syntax-line__number" aria-hidden="true">
+                    {lineIndex + 1}
+                </span>
+                <span className="syntax-line__code">{code}</span>
             </span>
         )
     })
@@ -410,7 +431,7 @@ export function TextFilePreview({
         return (
             <>
                 <pre className="image-preview__text image-preview__text--highlight" tabIndex={0}>
-                    {text ? renderCodeHighlight(text, highlightLanguage) : 'This file is empty.'}
+                    {text ? renderCodeHighlight(text, highlightLanguage, true) : 'This file is empty.'}
                 </pre>
                 <CodeTypeDiagnostics diagnostics={typeDiagnostics} language={highlightLanguage} />
             </>

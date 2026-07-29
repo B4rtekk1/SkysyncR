@@ -16,9 +16,9 @@ type ParsedSheet = {
 }
 
 type ParseState =
-    | { status: 'loading' }
-    | { status: 'ready'; sheets: ParsedSheet[] }
-    | { status: 'error'; message: string }
+    | { status: 'loading'; url: string }
+    | { status: 'ready'; sheets: ParsedSheet[]; url: string }
+    | { status: 'error'; message: string; url: string }
 
 function formatDate(iso: string) {
     return new Date(iso).toLocaleString(undefined, {
@@ -79,9 +79,13 @@ export function SheetPreview({
     onDownload: (item: Item) => void
 }) {
     const extension = getExtension(item.filename)
-    const [parseState, setParseState] = useState<ParseState>({ status: 'loading' })
+    const [parseState, setParseState] = useState<ParseState>({ status: 'loading', url })
     const [activeSheetName, setActiveSheetName] = useState<string | null>(null)
-    const sheets = parseState.status === 'ready' ? parseState.sheets : []
+    const parseStatus = parseState.url === url ? parseState.status : 'loading'
+    const sheets = useMemo(
+        () => (parseState.status === 'ready' && parseState.url === url ? parseState.sheets : []),
+        [parseState, url],
+    )
     const activeSheet = useMemo(
         () => sheets.find((sheet) => sheet.name === activeSheetName) ?? sheets[0] ?? null,
         [activeSheetName, sheets],
@@ -89,13 +93,11 @@ export function SheetPreview({
 
     useEffect(() => {
         let active = true
-        setParseState({ status: 'loading' })
-        setActiveSheetName(null)
 
         parseWorkbook(url)
             .then((parsedSheets) => {
                 if (!active) return
-                setParseState({ status: 'ready', sheets: parsedSheets })
+                setParseState({ status: 'ready', sheets: parsedSheets, url })
                 setActiveSheetName(parsedSheets[0]?.name ?? null)
             })
             .catch((error: unknown) => {
@@ -103,6 +105,7 @@ export function SheetPreview({
                 setParseState({
                     status: 'error',
                     message: error instanceof Error ? error.message : 'Could not read this spreadsheet.',
+                    url,
                 })
             })
 
@@ -114,14 +117,14 @@ export function SheetPreview({
     return (
         <div className="sheet-preview">
             <div className="sheet-preview__viewer">
-                {parseState.status === 'loading' && (
+                {parseStatus === 'loading' && (
                     <div className="image-preview__loading">
                         <span className="spinner" />
                         Reading spreadsheet...
                     </div>
                 )}
 
-                {parseState.status === 'error' && (
+                {parseState.url === url && parseState.status === 'error' && (
                     <div className="sheet-preview__fallback">
                         <strong>Preview unavailable</strong>
                         <p>{parseState.message}</p>
@@ -131,7 +134,7 @@ export function SheetPreview({
                     </div>
                 )}
 
-                {parseState.status === 'ready' && !activeSheet && (
+                {parseStatus === 'ready' && !activeSheet && (
                     <div className="sheet-preview__fallback">
                         <strong>Empty spreadsheet</strong>
                         <p>No sheets were found in this {extension} file.</p>
