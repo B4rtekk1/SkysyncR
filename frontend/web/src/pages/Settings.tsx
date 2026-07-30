@@ -45,7 +45,7 @@ import { useModalA11y } from '../hooks/useModalA11y'
 const SETTINGS_ANIMATION_MS = 220
 const MAX_AVATAR_BYTES = 2 * 1024 * 1024
 
-const viewOptions: ViewKey[] = ['all', 'favourites', 'shared', 'groups', 'calendar', 'trash']
+const viewOptions: ViewKey[] = ['all', 'favourites', 'shared', 'groups', 'calendar', 'security', 'trash']
 const themeOptions: Array<{ value: ThemePreference; label: string }> = [
     { value: 'system', label: 'System' },
     { value: 'light', label: 'Light' },

@@ -8,6 +8,7 @@ import { DashboardToolbar } from './DashboardToolbar'
 import { EmptyPane } from './EmptyPane'
 import { FolderBreadcrumbs } from './FolderBreadcrumbs'
 import { GroupsPanel } from './GroupsPanel'
+import { SecurityCenterPanel } from './SecurityCenterPanel'
 import { TransferQueuePanel } from './TransferQueuePanel'
 import type { TransferHistoryEntry } from './TransferQueuePanel'
 import type { FileCardDropPosition } from '../hooks/useManualCardOrdering'
@@ -164,6 +165,9 @@ type DashboardContentProps = {
     onBulkPermanentDelete: () => void | Promise<void>
     onBulkDownload: () => void | Promise<void>
     onBulkMove: (targetFolderId: string | null) => void | Promise<void>
+    onBlockFileLink: (file: ApiFile) => Promise<void>
+    onBlockFolderLink: (folder: ApiFolder) => Promise<void>
+    onSignOutCurrentSession: () => Promise<void>
 }
 
 function titleForView(view: ViewKey) {
@@ -173,6 +177,7 @@ function titleForView(view: ViewKey) {
         shared: 'Shared with me',
         groups: 'Groups',
         calendar: 'Calendar',
+        security: 'Security center',
         trash: 'Trash',
     }
     return titles[view]
@@ -318,6 +323,9 @@ export function DashboardContent({
     onBulkPermanentDelete,
     onBulkDownload,
     onBulkMove,
+    onBlockFileLink,
+    onBlockFolderLink,
+    onSignOutCurrentSession,
 }: DashboardContentProps) {
     const parentFolder = folderTrail.length > 1 ? folderTrail[folderTrail.length - 2] : null
     const parentMoveTargetId = parentFolder?.id ?? '__root__'
@@ -344,6 +352,7 @@ export function DashboardContent({
     const resultLabel = totalCount === 1 ? 'item' : 'items'
     const subtitle =
         view === 'groups' || view === 'calendar'
+        || view === 'security'
             ? null
             : loading
               ? 'Loading vault contents'
@@ -385,47 +394,49 @@ export function DashboardContent({
                     {subtitle && <p className="shell__subtitle">{subtitle}</p>}
                 </div>
 
-                <DashboardToolbar
-                    view={view}
-                    sortMenuRef={sortMenuRef}
-                    filterMenuRef={filterMenuRef}
-                    sortMenuOpen={sortMenuOpen}
-                    sortMenuClosing={sortMenuClosing}
-                    filterMenuOpen={filterMenuOpen}
-                    filterMenuClosing={filterMenuClosing}
-                    sortKey={sortKey}
-                    layoutMode={layoutMode}
-                    layoutSwitchTarget={layoutSwitchTarget}
-                    filterSummary={filterSummary}
-                    query={query}
-                    fileFilters={fileFilters}
-                    tags={tags}
-                    hasActiveFilter={hasActiveFilter}
-                    sizeSliderMax={sizeSliderMax}
-                    sizeSliderMinValue={sizeSliderMinValue}
-                    sizeSliderMaxValue={sizeSliderMaxValue}
-                    sizeSliderMinPct={sizeSliderMinPct}
-                    sizeSliderMaxPct={sizeSliderMaxPct}
-                    onToggleSortMenu={onToggleSortMenu}
-                    onCloseSortMenu={onCloseSortMenu}
-                    onSortKeyChange={onSortKeyChange}
-                    onToggleFilterMenu={onToggleFilterMenu}
-                    onCloseFilterMenu={onCloseFilterMenu}
-                    onQueryChange={onQueryChange}
-                    onClearFileTypes={onClearFileTypes}
-                    onToggleFileType={onToggleFileType}
-                    onVisibilityChange={onVisibilityChange}
-                    onTagChange={onTagChange}
-                    onSizeInputChange={onSizeInputChange}
-                    onSizeSliderChange={onSizeSliderChange}
-                    onExcludedExtensionsChange={onExcludedExtensionsChange}
-                    onModifiedDateChange={onModifiedDateChange}
-                    onClearFilters={onClearFilters}
-                    onLayoutModeChange={onLayoutModeChange}
-                    onOpenFileCreate={onOpenFileCreate}
-                    onOpenFolderCreate={onOpenFolderCreate}
-                    onUploadChange={onUploadChange}
-                />
+                {view !== 'security' && (
+                    <DashboardToolbar
+                        view={view}
+                        sortMenuRef={sortMenuRef}
+                        filterMenuRef={filterMenuRef}
+                        sortMenuOpen={sortMenuOpen}
+                        sortMenuClosing={sortMenuClosing}
+                        filterMenuOpen={filterMenuOpen}
+                        filterMenuClosing={filterMenuClosing}
+                        sortKey={sortKey}
+                        layoutMode={layoutMode}
+                        layoutSwitchTarget={layoutSwitchTarget}
+                        filterSummary={filterSummary}
+                        query={query}
+                        fileFilters={fileFilters}
+                        tags={tags}
+                        hasActiveFilter={hasActiveFilter}
+                        sizeSliderMax={sizeSliderMax}
+                        sizeSliderMinValue={sizeSliderMinValue}
+                        sizeSliderMaxValue={sizeSliderMaxValue}
+                        sizeSliderMinPct={sizeSliderMinPct}
+                        sizeSliderMaxPct={sizeSliderMaxPct}
+                        onToggleSortMenu={onToggleSortMenu}
+                        onCloseSortMenu={onCloseSortMenu}
+                        onSortKeyChange={onSortKeyChange}
+                        onToggleFilterMenu={onToggleFilterMenu}
+                        onCloseFilterMenu={onCloseFilterMenu}
+                        onQueryChange={onQueryChange}
+                        onClearFileTypes={onClearFileTypes}
+                        onToggleFileType={onToggleFileType}
+                        onVisibilityChange={onVisibilityChange}
+                        onTagChange={onTagChange}
+                        onSizeInputChange={onSizeInputChange}
+                        onSizeSliderChange={onSizeSliderChange}
+                        onExcludedExtensionsChange={onExcludedExtensionsChange}
+                        onModifiedDateChange={onModifiedDateChange}
+                        onClearFilters={onClearFilters}
+                        onLayoutModeChange={onLayoutModeChange}
+                        onOpenFileCreate={onOpenFileCreate}
+                        onOpenFolderCreate={onOpenFolderCreate}
+                        onUploadChange={onUploadChange}
+                    />
+                )}
             </div>
 
             {view === 'all' && folderTrail.length > 0 && (
@@ -568,6 +579,16 @@ export function DashboardContent({
                     files={storageItems}
                     onPreview={onPreview}
                     onDownload={(item) => void onDownload(item)}
+                />
+            )}
+
+            {view === 'security' && (
+                <SecurityCenterPanel
+                    files={storageItems}
+                    folders={visibleFolders}
+                    onBlockFileLink={onBlockFileLink}
+                    onBlockFolderLink={onBlockFolderLink}
+                    onSignOutCurrentSession={onSignOutCurrentSession}
                 />
             )}
 

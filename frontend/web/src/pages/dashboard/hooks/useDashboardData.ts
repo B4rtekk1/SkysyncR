@@ -108,7 +108,7 @@ export function useDashboardData({ view, activeFolderId, privateKey }: UseDashbo
                 setError(null)
                 setItems([])
                 setFolders([])
-                if (view === 'groups' || view === 'calendar') {
+                if (view === 'groups' || view === 'calendar' || view === 'security') {
                     return
                 }
 

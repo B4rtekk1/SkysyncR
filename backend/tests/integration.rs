@@ -442,7 +442,7 @@ async fn refresh_token_rotation_revokes_old_token_and_accepts_new_token() {
         user_agent: Some("test-agent"),
         ip_address: Some("127.0.0.1"),
     };
-    let session_expires_at = create_refresh_token(&pool, user_id, old_token, metadata)
+    let (session_id, session_expires_at) = create_refresh_token(&pool, user_id, old_token, metadata)
         .await
         .unwrap();
 
@@ -455,7 +455,7 @@ async fn refresh_token_rotation_revokes_old_token_and_accepts_new_token() {
         &pool,
         stored.id,
         user_id,
-        stored.session_id,
+        session_id,
         new_token,
         session_expires_at,
         metadata,

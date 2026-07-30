@@ -9,7 +9,7 @@ import { useNavigate } from '../router'
 import '../App.css'
 import '../css/dashboard.css'
 import type { Item, ShareableItem, ViewKey } from './dashboard/types'
-import { moveFile, moveFolder, permanentlyDeleteFile, type ApiFolder } from '../api/files'
+import { moveFile, moveFolder, permanentlyDeleteFile, shareFile, shareFolder, type ApiFile, type ApiFolder } from '../api/files'
 import { addFileTag, createTag, removeFileTag, type Tag } from '../api/tags'
 import { DashboardContent } from './dashboard/components/DashboardContent'
 import { DashboardModals } from './dashboard/components/DashboardModals'
@@ -662,6 +662,37 @@ function Dashboard() {
         }
     }
 
+    async function blockPublicFileLink(file: ApiFile) {
+        const previousItems = items
+        const previousStorageItems = storageItems
+        const nextFile = { ...file, is_public: false, share_token: null }
+
+        setItems((current) => current.map((item) => (item.id === file.id ? { ...item, is_public: false, share_token: null } : item)))
+        setStorageItems((current) => current.map((item) => (item.id === file.id ? nextFile : item)))
+
+        try {
+            const updated = await shareFile(file.id, false)
+            handleFileUpdated(updated)
+        } catch (e) {
+            setItems(previousItems)
+            setStorageItems(previousStorageItems)
+            throw e
+        }
+    }
+
+    async function blockPublicFolderLink(folder: ApiFolder) {
+        const previousFolders = folders
+        setFolders((current) => current.map((item) => (item.id === folder.id ? { ...item, is_public: false, share_token: null } : item)))
+
+        try {
+            const updated = await shareFolder(folder.id, false)
+            setFolders((current) => current.map((item) => (item.id === updated.id ? { ...updated, name: item.name, description: item.description } : item)))
+        } catch (e) {
+            setFolders(previousFolders)
+            throw e
+        }
+    }
+
     if (sessionLoading || !currentUser || !privateKey) {
         return (
             <div className="dashboard-loading" role="status" aria-live="polite">
@@ -869,6 +900,9 @@ function Dashboard() {
                     onBulkPermanentDelete={bulkPermanentDelete}
                     onBulkDownload={bulkDownload}
                     onBulkMove={bulkMove}
+                    onBlockFileLink={blockPublicFileLink}
+                    onBlockFolderLink={blockPublicFolderLink}
+                    onSignOutCurrentSession={signOut}
                 />
             </div>
             <DashboardModals

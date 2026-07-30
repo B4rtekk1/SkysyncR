@@ -227,7 +227,7 @@ export function applySavedOrder<T extends Item>(data: T[], view: ViewKey): T[] {
 
 export const NAV_ORDER_STORAGE_KEY = 'nav_order'
 export const ACTIVE_VIEW_STORAGE_KEY = 'active_view'
-export const DEFAULT_NAV_ORDER: ViewKey[] = ['all', 'favourites', 'shared', 'groups', 'calendar', 'trash']
+export const DEFAULT_NAV_ORDER: ViewKey[] = ['all', 'favourites', 'shared', 'groups', 'calendar', 'security', 'trash']
 export const SIDEBAR_WIDTH_STORAGE_KEY = 'sidebar_width'
 export const SIDEBAR_HIDDEN_STORAGE_KEY = 'sidebar_hidden'
 export const MIN_SIDEBAR_WIDTH = 72
@@ -300,6 +300,7 @@ export const NAV_LABELS: Record<ViewKey, string> = {
     shared: 'Shared with me',
     groups: 'Groups',
     calendar: 'Calendar',
+    security: 'Security center',
     trash: 'Trash',
 }
 

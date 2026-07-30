@@ -15,7 +15,7 @@ export type SettingsState = {
 
 const SETTINGS_STORAGE_KEY = 'settings_preferences'
 const AVATAR_STORAGE_KEY = 'avatar_url'
-const VIEW_KEYS: ViewKey[] = ['all', 'favourites', 'shared', 'groups', 'calendar', 'trash']
+const VIEW_KEYS: ViewKey[] = ['all', 'favourites', 'shared', 'groups', 'calendar', 'security', 'trash']
 
 export const DEFAULT_SETTINGS: SettingsState = {
     displayName: '',

@@ -6,6 +6,8 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-skysyncr}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-skysyncr_dev_password}
       POSTGRES_DB: ${POSTGRES_DB:-skysyncr}
+    ports:
+      - "5433:5432"
     volumes:
       - db_data:/var/lib/postgresql/data
     healthcheck:
