@@ -366,6 +366,8 @@ export function DashboardContent({
     const totalCount = visibleFolders.length + visibleItems.length
     const hasSearchOrFilter = Boolean(query || hasActiveFilter)
     const resultLabel = totalCount === 1 ? 'item' : 'items'
+    const bulkActionsAvailable = view === 'all' || view === 'favourites' || view === 'trash'
+    const bulkActionsVisible = bulkActionsAvailable && selectedCount > 0
     const subtitle =
         view === 'groups' || view === 'calendar'
         || view === 'security'
@@ -409,6 +411,10 @@ export function DashboardContent({
             window.removeEventListener('keydown', closeOnEscape)
         }
     }, [moveTargetMenuOpen])
+
+    useEffect(() => {
+        if (!bulkActionsVisible) setMoveTargetMenuOpen(false)
+    }, [bulkActionsVisible])
 
     useEffect(() => {
         if (!selectAllRef.current) return
@@ -514,115 +520,125 @@ export function DashboardContent({
                 onResumeAll={onResumeAllTransfers}
             />
 
-            {selectedCount > 0 && (view === 'all' || view === 'favourites' || view === 'trash') && (
-                <div className="bulk-actions" role="region" aria-label="Bulk file actions">
-                    <label className="bulk-actions__select-all">
-                        <input
-                            ref={selectAllRef}
-                            type="checkbox"
-                            checked={allVisibleSelected}
-                            onChange={onToggleAllVisibleSelected}
-                        />
-                        <span>{selectedCount} selected</span>
-                    </label>
-                    <div className="bulk-actions__buttons">
-                        {view !== 'trash' && (
-                            <>
-                                <div className="sort-dropdown bulk-actions__target-dropdown" ref={moveTargetMenuRef}>
-                                    <button
-                                        className={`sort-dropdown__trigger ${moveTargetMenuOpen ? 'is-open' : ''}`}
-                                        type="button"
-                                        onClick={() => setMoveTargetMenuOpen((open) => !open)}
-                                        aria-haspopup="listbox"
-                                        aria-expanded={moveTargetMenuOpen}
-                                        aria-label="Move destination"
-                                        title="Move destination"
-                                    >
-                                        <span className="sort-dropdown__icon" aria-hidden="true">
-                                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none">
+            {bulkActionsAvailable && (
+                <div className={`bulk-actions-slot ${bulkActionsVisible ? 'is-visible' : ''}`}>
+                    <div
+                        className={`bulk-actions ${bulkActionsVisible ? 'is-visible' : ''}`}
+                        role="region"
+                        aria-label="Bulk file actions"
+                        aria-hidden={!bulkActionsVisible}
+                    >
+                        <label className="bulk-actions__select-all">
+                            <input
+                                ref={selectAllRef}
+                                type="checkbox"
+                                checked={allVisibleSelected}
+                                onChange={onToggleAllVisibleSelected}
+                                disabled={!bulkActionsVisible}
+                            />
+                            <span>{selectedCount} selected</span>
+                        </label>
+                        <div className="bulk-actions__buttons">
+                            {view !== 'trash' && (
+                                <>
+                                    <div className="sort-dropdown bulk-actions__target-dropdown" ref={moveTargetMenuRef}>
+                                        <button
+                                            className={`sort-dropdown__trigger ${moveTargetMenuOpen ? 'is-open' : ''}`}
+                                            type="button"
+                                            onClick={() => setMoveTargetMenuOpen((open) => !open)}
+                                            disabled={!bulkActionsVisible}
+                                            aria-haspopup="listbox"
+                                            aria-expanded={moveTargetMenuOpen}
+                                            aria-label="Move destination"
+                                            title="Move destination"
+                                        >
+                                            <span className="sort-dropdown__icon" aria-hidden="true">
+                                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none">
+                                                    <path
+                                                        d="M4 6.5h6l2 2H20v9H4v-11Z"
+                                                        stroke="currentColor"
+                                                        strokeWidth="1.8"
+                                                        strokeLinecap="round"
+                                                        strokeLinejoin="round"
+                                                    />
+                                                </svg>
+                                            </span>
+                                            <span className="sort-dropdown__text">
+                                                <span className="sort-dropdown__label">Move to</span>
+                                                <span className="sort-dropdown__value">{activeMoveTarget?.label}</span>
+                                            </span>
+                                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                                                 <path
-                                                    d="M4 6.5h6l2 2H20v9H4v-11Z"
+                                                    d="m7 10 5 5 5-5"
                                                     stroke="currentColor"
                                                     strokeWidth="1.8"
                                                     strokeLinecap="round"
                                                     strokeLinejoin="round"
                                                 />
                                             </svg>
-                                        </span>
-                                        <span className="sort-dropdown__text">
-                                            <span className="sort-dropdown__label">Move to</span>
-                                            <span className="sort-dropdown__value">{activeMoveTarget?.label}</span>
-                                        </span>
-                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                                            <path
-                                                d="m7 10 5 5 5-5"
-                                                stroke="currentColor"
-                                                strokeWidth="1.8"
-                                                strokeLinecap="round"
-                                                strokeLinejoin="round"
-                                            />
-                                        </svg>
-                                    </button>
+                                        </button>
 
-                                    {moveTargetMenuOpen && (
-                                        <div className="sort-dropdown__menu sort-dropdown__menu--animated is-opening" role="listbox" aria-label="Move destination">
-                                            {moveTargetOptions.map((target) => (
-                                                <button
-                                                    key={target.id}
-                                                    className={`sort-dropdown__option ${activeMoveTargetId === target.id ? 'is-selected' : ''}`}
-                                                    type="button"
-                                                    role="option"
-                                                    aria-selected={activeMoveTargetId === target.id}
-                                                    onClick={() => {
-                                                        setMoveTargetId(target.id)
-                                                        setMoveTargetMenuOpen(false)
-                                                    }}
-                                                >
-                                                    <span>{target.label}</span>
-                                                    {activeMoveTargetId === target.id && (
-                                                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                                                            <path
-                                                                d="M5 12.5 9.3 17 19 7"
-                                                                stroke="currentColor"
-                                                                strokeWidth="1.9"
-                                                                strokeLinecap="round"
-                                                                strokeLinejoin="round"
-                                                            />
-                                                        </svg>
-                                                    )}
-                                                </button>
-                                            ))}
-                                        </div>
-                                    )}
-                                </div>
-                                <button
-                                    className="btn btn--outline"
-                                    type="button"
-                                    onClick={() => void onBulkMove(activeMoveTargetId === '__root__' ? null : activeMoveTargetId)}
-                                >
-                                    Move
-                                </button>
-                                <button className="btn btn--outline" type="button" onClick={() => void onBulkDownload()}>
-                                    Download
-                                </button>
-                                <button className="btn btn--outline" type="button" onClick={() => void onBulkDelete()}>
-                                    Move to trash
-                                </button>
-                            </>
-                        )}
-                        {view === 'trash' && (
-                            <>
-                                <button className="btn btn--outline" type="button" onClick={() => void onBulkRestore()}>
-                                    Restore
-                                </button>
-                                <button className="btn btn--outline" type="button" onClick={() => void onBulkPermanentDelete()}>
-                                    Delete forever
-                                </button>
-                            </>
-                        )}
-                        <button className="btn btn--ghost" type="button" onClick={onClearSelection}>
-                            Clear
-                        </button>
+                                        {bulkActionsVisible && moveTargetMenuOpen && (
+                                            <div className="sort-dropdown__menu sort-dropdown__menu--animated is-opening" role="listbox" aria-label="Move destination">
+                                                {moveTargetOptions.map((target) => (
+                                                    <button
+                                                        key={target.id}
+                                                        className={`sort-dropdown__option ${activeMoveTargetId === target.id ? 'is-selected' : ''}`}
+                                                        type="button"
+                                                        role="option"
+                                                        aria-selected={activeMoveTargetId === target.id}
+                                                        onClick={() => {
+                                                            setMoveTargetId(target.id)
+                                                            setMoveTargetMenuOpen(false)
+                                                        }}
+                                                    >
+                                                        <span>{target.label}</span>
+                                                        {activeMoveTargetId === target.id && (
+                                                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                                                                <path
+                                                                    d="M5 12.5 9.3 17 19 7"
+                                                                    stroke="currentColor"
+                                                                    strokeWidth="1.9"
+                                                                    strokeLinecap="round"
+                                                                    strokeLinejoin="round"
+                                                                />
+                                                            </svg>
+                                                        )}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+                                    <button
+                                        className="btn btn--outline"
+                                        type="button"
+                                        onClick={() => void onBulkMove(activeMoveTargetId === '__root__' ? null : activeMoveTargetId)}
+                                        disabled={!bulkActionsVisible}
+                                    >
+                                        Move
+                                    </button>
+                                    <button className="btn btn--outline" type="button" onClick={() => void onBulkDownload()} disabled={!bulkActionsVisible}>
+                                        Download
+                                    </button>
+                                    <button className="btn btn--outline" type="button" onClick={() => void onBulkDelete()} disabled={!bulkActionsVisible}>
+                                        Move to trash
+                                    </button>
+                                </>
+                            )}
+                            {view === 'trash' && (
+                                <>
+                                    <button className="btn btn--outline" type="button" onClick={() => void onBulkRestore()} disabled={!bulkActionsVisible}>
+                                        Restore
+                                    </button>
+                                    <button className="btn btn--outline" type="button" onClick={() => void onBulkPermanentDelete()} disabled={!bulkActionsVisible}>
+                                        Delete forever
+                                    </button>
+                                </>
+                            )}
+                            <button className="btn btn--ghost" type="button" onClick={onClearSelection} disabled={!bulkActionsVisible}>
+                                Clear
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}

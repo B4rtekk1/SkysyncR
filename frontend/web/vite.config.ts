@@ -63,6 +63,9 @@ export default defineConfig(({ mode }) => {
     },
     server: {
       host: '0.0.0.0',
+      allowedHosts: [
+        'effectively-sorted-affiliation-individual.trycloudflare.com',
+      ],
       port: 5173,
       strictPort: true,
       headers: {

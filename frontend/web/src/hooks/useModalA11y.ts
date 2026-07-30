@@ -1,4 +1,4 @@
-import { useEffect, type RefObject } from 'react'
+import { useEffect, useRef, type RefObject } from 'react'
 
 const FOCUSABLE_SELECTOR = [
     'a[href]',
@@ -76,6 +76,12 @@ function hideBackgroundFromAssistiveTech(modalElement: HTMLElement) {
 }
 
 export function useModalA11y({ dialogRef, onClose, enabled = true }: ModalA11yOptions) {
+    const onCloseRef = useRef(onClose)
+
+    useEffect(() => {
+        onCloseRef.current = onClose
+    }, [onClose])
+
     useEffect(() => {
         if (!enabled) return
 
@@ -103,7 +109,7 @@ export function useModalA11y({ dialogRef, onClose, enabled = true }: ModalA11yOp
         function onKeyDown(event: KeyboardEvent) {
             if (event.key === 'Escape') {
                 event.preventDefault()
-                onClose()
+                onCloseRef.current()
                 return
             }
 
@@ -139,5 +145,5 @@ export function useModalA11y({ dialogRef, onClose, enabled = true }: ModalA11yOp
                 previouslyFocused.focus()
             }
         }
-    }, [dialogRef, enabled, onClose])
+    }, [dialogRef, enabled])
 }

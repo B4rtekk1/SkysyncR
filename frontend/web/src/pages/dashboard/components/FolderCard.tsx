@@ -50,6 +50,7 @@ export function FolderCard({
     const renameInputRef = useRef<HTMLInputElement>(null)
     const cardRef = useRef<HTMLElement>(null)
     const infoPositionFrameRef = useRef<number | null>(null)
+    const hasAction = Boolean(onRename || onShare || onDownload || !isRenaming)
 
     const updateInfoPosition = useCallback(() => {
         const card = cardRef.current
@@ -169,6 +170,8 @@ export function FolderCard({
         <article
             ref={cardRef}
             className={`file-card folder-card file-card--can-preview ${onToggleFavourite ? 'file-card--has-favourite' : ''} ${
+                hasAction ? 'file-card--has-action' : ''
+            } ${
                 selected ? 'is-selected' : ''
             } ${isFileDropTarget ? 'is-folder-drop-target' : ''}`}
             style={{ '--file-index': index } as CSSProperties}
@@ -241,17 +244,14 @@ export function FolderCard({
                 </button>
             )}
             <div className="file-card__top">
-                <span className="file-card__badge folder-card__badge">
-                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                        <path
-                            d="M3.5 7.5a2 2 0 0 1 2-2h4.4l2 2H18.5a2 2 0 0 1 2 2v7.5a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2Z"
-                            stroke="currentColor"
-                            strokeWidth="1.5"
-                            strokeLinejoin="round"
-                        />
-                    </svg>
-                    Folder
-                </span>
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <path
+                        d="M3.5 7.5a2 2 0 0 1 2-2h4.4l2 2H18.5a2 2 0 0 1 2 2v7.5a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2Z"
+                        stroke="var(--file-accent)"
+                        strokeWidth="1.5"
+                        strokeLinejoin="round"
+                    />
+                </svg>
             </div>
             <div className="file-card__name-slot">
                 {isRenaming ? (
@@ -287,7 +287,7 @@ export function FolderCard({
             <p className="file-card__meta">
                 {fileCountLabel} · Updated {formatRelative(folder.updated_at)}
             </p>
-            {(onRename || onShare || onDownload || !isRenaming) && (
+            {hasAction && (
                 <div className="file-card__actions">
                     {isRenaming && (
                         <>

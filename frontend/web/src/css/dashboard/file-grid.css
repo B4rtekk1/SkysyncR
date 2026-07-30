@@ -111,16 +111,54 @@
     color: var(--mist);
 }
 
+.bulk-actions-slot {
+    display: grid;
+    grid-template-rows: 0fr;
+    z-index: 35;
+    margin-bottom: 0;
+    overflow: hidden;
+    transition:
+        grid-template-rows 0.32s cubic-bezier(0.16, 1, 0.3, 1),
+        margin-bottom 0.32s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.bulk-actions-slot.is-visible {
+    grid-template-rows: 1fr;
+    margin-bottom: 14px;
+}
+
 .bulk-actions {
+    min-height: 0;
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 12px;
-    margin: 0 0 14px;
+    margin: 0;
     padding: 10px 12px;
     border: 1px solid rgba(var(--signal-rgb), 0.22);
     border-radius: 8px;
     background: color-mix(in srgb, var(--panel) 88%, var(--signal) 12%);
+    box-shadow: 0 18px 44px rgba(0, 0, 0, 0.22);
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(-8px) scale(0.985);
+    transform-origin: top center;
+    visibility: hidden;
+    transition:
+        opacity 0.22s ease,
+        transform 0.28s cubic-bezier(0.16, 1, 0.3, 1),
+        visibility 0s linear 0.28s;
+}
+
+.bulk-actions.is-visible {
+    opacity: 1;
+    pointer-events: auto;
+    transform: translateY(0) scale(1);
+    visibility: visible;
+    transition:
+        opacity 0.18s ease,
+        transform 0.34s cubic-bezier(0.16, 1, 0.3, 1),
+        visibility 0s;
 }
 
 .bulk-actions__select-all {
@@ -673,6 +711,8 @@
 
 /* folder-cards.css */
 .folder-card {
+    --file-accent: var(--amber);
+    --file-accent-rgb: 255, 176, 76;
     cursor: pointer;
 }
 
@@ -697,10 +737,6 @@
     font-size: 0.68rem;
     font-weight: 700;
     pointer-events: none;
-}
-
-.folder-card__badge {
-    color: var(--amber);
 }
 
 .folder-card .file-card__top {
@@ -1185,16 +1221,45 @@ html[data-theme='light'] .file-card--can-preview:hover {
 }
 
 .file-grid--list .folder-card {
-    grid-template-columns: minmax(190px, 1fr) auto;
+    min-height: 78px;
+    grid-template-columns: minmax(54px, auto) minmax(180px, 1fr) auto auto;
+    gap: 14px;
 }
 
 .file-grid--list .folder-card .file-card__top {
-    grid-column: 2;
+    grid-column: 1;
+    grid-row: 1 / span 2;
+    padding: 0 0 0 28px;
 }
 
 .file-grid--list .folder-card .file-card__name-slot,
 .file-grid--list .folder-card .file-card__meta {
-    grid-column: 1;
+    grid-column: 2;
+    padding-left: 0;
+}
+
+.file-grid--list .folder-card .file-card__name-slot {
+    grid-row: 1;
+    align-self: end;
+    margin: 0 0 2px;
+}
+
+.file-grid--list .folder-card .file-card__meta {
+    grid-row: 2;
+    align-self: start;
+}
+
+.file-grid--list .folder-card .file-card__fav {
+    grid-column: 3;
+}
+
+.file-grid--list .folder-card .file-card__actions {
+    grid-column: 4;
+}
+
+.file-grid--list .folder-card.file-card--has-action:not(.file-card--has-favourite) .file-card__actions {
+    grid-column: 3 / span 2;
+    justify-self: end;
 }
 
 .file-grid--list .file-card:not(.folder-card) {
@@ -1352,6 +1417,50 @@ html[data-theme='light'] .file-card--can-preview:hover {
     .file-grid--list .file-card:not(.folder-card) .file-card__actions {
         grid-column: 3;
     }
+
+    .file-grid--list .folder-card {
+        grid-template-columns: minmax(0, 1fr) auto auto;
+        gap: 8px;
+    }
+
+    .file-grid--list .folder-card .file-card__top {
+        grid-column: 1;
+        grid-row: 1;
+        min-height: 38px;
+        padding-left: 28px;
+    }
+
+    .file-grid--list .folder-card .file-card__name-slot,
+    .file-grid--list .folder-card .file-card__meta {
+        grid-column: 1;
+        padding-left: 28px;
+    }
+
+    .file-grid--list .folder-card .file-card__name-slot {
+        grid-row: 2;
+    }
+
+    .file-grid--list .folder-card .file-card__meta {
+        grid-row: 3;
+    }
+
+    .file-grid--list .folder-card .file-card__fav,
+    .file-grid--list .folder-card .file-card__actions {
+        grid-row: 1 / span 3;
+    }
+
+    .file-grid--list .folder-card .file-card__fav {
+        grid-column: 2;
+    }
+
+    .file-grid--list .folder-card .file-card__actions {
+        grid-column: 3;
+    }
+
+    .file-grid--list .folder-card.file-card--has-action:not(.file-card--has-favourite) .file-card__actions {
+        grid-column: 2 / span 2;
+        justify-self: end;
+    }
 }
 
 @media (max-width: 420px) {
@@ -1392,6 +1501,7 @@ html[data-theme='light'] .file-card--can-preview:hover {
     .bulk-actions {
         align-items: stretch;
         flex-direction: column;
+        max-width: calc(100vw - 32px);
     }
 
     .bulk-actions__buttons {
