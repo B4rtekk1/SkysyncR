@@ -1,10 +1,6 @@
 const VERSION = 6
 const SIZE = 17 + VERSION * 4
 const DATA_CODEWORDS = 136
-// Version 6 at error-correction level L has two blocks of 68 data codewords
-// and 18 correction codewords per block.  QR blocks must be corrected and
-// interleaved independently; treating all 136 bytes as one block produces an
-// image which looks like a QR code but cannot be read reliably.
 const BLOCK_COUNT = 2
 const DATA_CODEWORDS_PER_BLOCK = DATA_CODEWORDS / BLOCK_COUNT
 const EC_CODEWORDS_PER_BLOCK = 18

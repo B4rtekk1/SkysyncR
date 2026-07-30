@@ -194,7 +194,6 @@ export async function storeActivePrivateKey(
   resetIdleTimeout({ persist: false })
 
   const persistSession = persistActivePrivateKeySession(activePrivateKeySession).catch(() => {
-    // The in-memory session still works if persistence is unavailable.
   })
 
   if (options.persist === 'background') {
@@ -233,6 +232,5 @@ export async function clearActivePrivateKeys(): Promise<void> {
   clearIdleTimeout()
   notifyActivePrivateKeyCleared(clearedUserId)
   await clearPersistedActivePrivateKeys().catch(() => {
-    // Do not let IndexedDB cleanup failures keep a key alive in memory.
   })
 }

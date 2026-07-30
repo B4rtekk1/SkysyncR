@@ -1,15 +1,26 @@
 import {lazy, Suspense, useEffect} from 'react'
 import {Routes, Route, useNavigate} from './router'
+import {
+    loadDashboardPage,
+    loadForgotPasswordPage,
+    loadLandingPage,
+    loadLoginPage,
+    loadNotFoundPage,
+    loadPublicSharePage,
+    loadRegisterPage,
+    loadResetPasswordPage,
+    loadVerifyEmailPage,
+} from './routePreloads'
 
-const Landing = lazy(() => import('./pages/Landing'))
-const Login = lazy(() => import('./pages/Login'))
-const Register = lazy(() => import('./pages/Register'))
-const ForgotPassword = lazy(() => import('./pages/ForgotPassword'))
-const ResetPassword = lazy(() => import('./pages/ResetPassword'))
-const VerifyEmail = lazy(() => import('./pages/VerifyUser'))
-const Dashboard = lazy(() => import('./pages/Dashboard'))
-const NotFound = lazy(() => import('./pages/NotFound'))
-const PublicShare = lazy(() => import('./pages/PublicShare'))
+const Landing = lazy(loadLandingPage)
+const Login = lazy(loadLoginPage)
+const Register = lazy(loadRegisterPage)
+const ForgotPassword = lazy(loadForgotPasswordPage)
+const ResetPassword = lazy(loadResetPasswordPage)
+const VerifyEmail = lazy(loadVerifyEmailPage)
+const Dashboard = lazy(loadDashboardPage)
+const NotFound = lazy(loadNotFoundPage)
+const PublicShare = lazy(loadPublicSharePage)
 
 function RouteFallback() {
     return (

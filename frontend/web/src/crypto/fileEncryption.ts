@@ -160,9 +160,6 @@ export async function unwrapFileKeyForUser(
         base64ToBuffer(encryptedKeyBase64) as BufferSource,
     )
 
-    // A key unwrapped with the user's private key must be exportable: it is
-    // subsequently re-wrapped for other recipients and embedded in encrypted
-    // public-share links. Public links still import their key as non-exportable.
     return importRawFileKey(rawKey, true)
 }
 

@@ -5,9 +5,24 @@ import TransferLog from '../components/TransferLog'
 import ThemeToggle from '../components/ThemeToggle'
 import { resendVerificationEmail } from '../api/users'
 import { loadPendingVerificationEmail, savePendingVerificationEmail } from '../api/verificationReminder'
+import { loadLoginPage } from '../routePreloads'
 
 interface LandingLocationState {
   verificationPromptEmail?: string
+}
+
+function scheduleLoginPreload() {
+  const requestIdleCallback = window.requestIdleCallback
+  if (requestIdleCallback) {
+    requestIdleCallback(() => {
+      void loadLoginPage()
+    })
+    return
+  }
+
+  setTimeout(() => {
+    void loadLoginPage()
+  }, 300)
 }
 
 function Landing() {
@@ -27,6 +42,7 @@ function Landing() {
     const t = setTimeout(() => setLoaded(true), 40)
     const onScroll = () => setNavSolid(window.scrollY > 8)
     window.addEventListener('scroll', onScroll)
+    scheduleLoginPreload()
     return () => {
       clearTimeout(t)
       window.removeEventListener('scroll', onScroll)
@@ -83,7 +99,14 @@ function Landing() {
             </Link>
             <div className="nav__actions">
               <ThemeToggle className="nav__theme-toggle" />
-              <Link to="/login" className="btn btn--ghost">Sign in</Link>
+              <Link
+                to="/login"
+                className="btn btn--ghost"
+                onFocus={() => void loadLoginPage()}
+                onPointerEnter={() => void loadLoginPage()}
+              >
+                Sign in
+              </Link>
               <Link to="/register" className="btn btn--solid">Create account</Link>
             </div>
           </div>
@@ -107,7 +130,14 @@ function Landing() {
               <Link to="/register" className="btn btn--solid btn--lg">
                 Create a free account
               </Link>
-              <Link to="/login" className="btn btn--outline btn--lg">Sign in</Link>
+              <Link
+                to="/login"
+                className="btn btn--outline btn--lg"
+                onFocus={() => void loadLoginPage()}
+                onPointerEnter={() => void loadLoginPage()}
+              >
+                Sign in
+              </Link>
             </div>
             <p className="trust-line">
               No card required · your private key stays with you
@@ -178,6 +208,8 @@ function Landing() {
                 <button
                     type="button"
                     className="btn btn--outline btn--lg register-popup__action"
+                    onPointerEnter={() => void loadLoginPage()}
+                    onFocus={() => void loadLoginPage()}
                     onClick={() => navigate('/login')}
                 >
                   Continue to sign in
