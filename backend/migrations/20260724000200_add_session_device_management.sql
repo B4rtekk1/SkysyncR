@@ -7,16 +7,18 @@ ALTER TABLE refresh_tokens ADD COLUMN IF NOT EXISTS last_used_at timestamptz NOT
 DO $$
 BEGIN
     IF to_regclass('migration_backups.refresh_tokens_device_metadata_20260717000400') IS NOT NULL THEN
-        UPDATE refresh_tokens rt
-        SET user_agent = COALESCE(rt.user_agent, backup.user_agent),
-            ip_address = COALESCE(rt.ip_address, backup.ip_address),
-            device_label = COALESCE(
-                rt.device_label,
-                NULLIF(backup.device_id, ''),
-                NULLIF(backup.user_agent, '')
-            )
-        FROM migration_backups.refresh_tokens_device_metadata_20260717000400 backup
-        WHERE rt.id = backup.id;
+        EXECUTE $restore_backup$
+            UPDATE refresh_tokens rt
+            SET user_agent = COALESCE(rt.user_agent, backup.user_agent),
+                ip_address = COALESCE(rt.ip_address, backup.ip_address),
+                device_label = COALESCE(
+                    rt.device_label,
+                    NULLIF(backup.device_id, ''),
+                    NULLIF(backup.user_agent, '')
+                )
+            FROM migration_backups.refresh_tokens_device_metadata_20260717000400 backup
+            WHERE rt.id = backup.id
+        $restore_backup$;
     END IF;
 END $$;
 
