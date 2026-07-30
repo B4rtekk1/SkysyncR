@@ -1,7 +1,13 @@
 const VERSION = 6
 const SIZE = 17 + VERSION * 4
 const DATA_CODEWORDS = 136
-const EC_CODEWORDS = 36
+// Version 6 at error-correction level L has two blocks of 68 data codewords
+// and 18 correction codewords per block.  QR blocks must be corrected and
+// interleaved independently; treating all 136 bytes as one block produces an
+// image which looks like a QR code but cannot be read reliably.
+const BLOCK_COUNT = 2
+const DATA_CODEWORDS_PER_BLOCK = DATA_CODEWORDS / BLOCK_COUNT
+const EC_CODEWORDS_PER_BLOCK = 18
 
 type Matrix = Array<Array<boolean | null>>
 
@@ -48,13 +54,13 @@ function reedSolomonGenerator(degree: number) {
 }
 
 function reedSolomonRemainder(data: number[]) {
-    const generator = reedSolomonGenerator(EC_CODEWORDS)
-    const result = new Array(EC_CODEWORDS).fill(0)
+    const generator = reedSolomonGenerator(EC_CODEWORDS_PER_BLOCK)
+    const result = new Array(EC_CODEWORDS_PER_BLOCK).fill(0)
 
     for (const byte of data) {
         const factor = byte ^ result.shift()!
         result.push(0)
-        for (let i = 0; i < EC_CODEWORDS; i += 1) {
+        for (let i = 0; i < EC_CODEWORDS_PER_BLOCK; i += 1) {
             result[i] = (result[i] ?? 0) ^ gfMul(generator[i] ?? 0, factor)
         }
     }
@@ -91,7 +97,20 @@ function encodeData(value: string) {
         data.push(pad)
     }
 
-    return [...data, ...reedSolomonRemainder(data)]
+    const blocks = Array.from({ length: BLOCK_COUNT }, (_, index) =>
+        data.slice(index * DATA_CODEWORDS_PER_BLOCK, (index + 1) * DATA_CODEWORDS_PER_BLOCK),
+    )
+    const correctionBlocks = blocks.map(reedSolomonRemainder)
+    const codewords: number[] = []
+
+    for (let i = 0; i < DATA_CODEWORDS_PER_BLOCK; i += 1) {
+        for (const block of blocks) codewords.push(block[i] ?? 0)
+    }
+    for (let i = 0; i < EC_CODEWORDS_PER_BLOCK; i += 1) {
+        for (const block of correctionBlocks) codewords.push(block[i] ?? 0)
+    }
+
+    return codewords
 }
 
 function createMatrix(): Matrix {

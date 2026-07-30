@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { generateFileKey, unwrapFileKeyForUser, wrapFileKeyForUser } from './fileEncryption.ts'
+import { exportRawKey, generateFileKey, unwrapFileKeyForUser, wrapFileKeyForUser } from './fileEncryption.ts'
 import { decryptPrivateKey, encryptPrivateKey, exportPublicKey, generateKeyPair, generateRecoveryKey } from './keys.ts'
 
 test('private keys decrypt only with the original password', async () => {
@@ -70,6 +70,8 @@ test('file keys can be wrapped for a user public key and unwrapped with the priv
 
   const wrapped = await wrapFileKeyForUser(fileKey, publicKey)
   const unwrapped = await unwrapFileKeyForUser(btoa(String.fromCharCode(...new Uint8Array(wrapped))), keyPair.privateKey)
+
+  assert.deepEqual(new Uint8Array(await exportRawKey(unwrapped)), new Uint8Array(await exportRawKey(fileKey)))
 
   const sample = new TextEncoder().encode('encrypted sample')
   const nonce = crypto.getRandomValues(new Uint8Array(12))

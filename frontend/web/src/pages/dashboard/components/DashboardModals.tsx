@@ -158,6 +158,7 @@ export function DashboardModals({
     onSetFolderSharing,
 }: DashboardModalsProps) {
     const [publicShareUrl, setPublicShareUrl] = useState<string | null>(null)
+    const [publicShareUrlError, setPublicShareUrlError] = useState<string | null>(null)
 
     useEffect(() => {
         let active = true
@@ -165,11 +166,13 @@ export function DashboardModals({
         async function buildShareUrl() {
             if (!shareItem?.is_public || !shareItem.share_token) {
                 setPublicShareUrl(null)
+                setPublicShareUrlError(null)
                 return
             }
 
             if (!privateKey) {
                 setPublicShareUrl(null)
+                setPublicShareUrlError('Unlock your private key to create the secure share link.')
                 return
             }
 
@@ -177,6 +180,7 @@ export function DashboardModals({
                 if (!('filename' in shareItem)) {
                     const keyring = await collectFolderShareKeyring(shareItem, privateKey)
                     if (active) {
+                        setPublicShareUrlError(null)
                         setPublicShareUrl(
                             `${window.location.origin}/share/folders/${shareItem.share_token}#keys=${encodeFolderShareKeyring(keyring)}`,
                         )
@@ -187,12 +191,16 @@ export function DashboardModals({
                 const fileKey = await unwrapFileKeyForUser(shareItem.encrypted_key, privateKey)
                 const rawKey = await exportRawKey(fileKey)
                 if (active) {
+                    setPublicShareUrlError(null)
                     setPublicShareUrl(
                         `${window.location.origin}/share/${shareItem.share_token}#key=${arrayBufferToBase64Url(rawKey)}`,
                     )
                 }
             } catch {
-                if (active) setPublicShareUrl(null)
+                if (active) {
+                    setPublicShareUrl(null)
+                    setPublicShareUrlError('Could not create the secure share link. Please try again.')
+                }
             }
         }
 
@@ -271,6 +279,7 @@ export function DashboardModals({
                         item={shareItem}
                         itemKind={'filename' in shareItem ? 'file' : 'folder'}
                         shareUrl={publicShareUrl}
+                        shareUrlError={publicShareUrlError}
                         loading={shareLoading}
                         privateKey={privateKey}
                         groups={groups}

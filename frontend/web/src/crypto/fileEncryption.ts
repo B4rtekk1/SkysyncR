@@ -120,7 +120,7 @@ export async function fileContentKeyFingerprint(key: CryptoKey): Promise<string>
     return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('')
 }
 
-export async function importRawFileKey(rawKey: ArrayBuffer | Uint8Array): Promise<CryptoKey> {
+export async function importRawFileKey(rawKey: ArrayBuffer | Uint8Array, extractable = false): Promise<CryptoKey> {
     const keyBytes = ArrayBuffer.isView(rawKey)
         ? rawKey.buffer.slice(rawKey.byteOffset, rawKey.byteOffset + rawKey.byteLength) as ArrayBuffer
         : rawKey
@@ -129,7 +129,7 @@ export async function importRawFileKey(rawKey: ArrayBuffer | Uint8Array): Promis
         'raw',
         keyBytes,
         { name: 'AES-GCM', length: 256 },
-        false,
+        extractable,
         ['encrypt', 'decrypt'],
     )
 }
@@ -160,7 +160,10 @@ export async function unwrapFileKeyForUser(
         base64ToBuffer(encryptedKeyBase64) as BufferSource,
     )
 
-    return importRawFileKey(rawKey)
+    // A key unwrapped with the user's private key must be exportable: it is
+    // subsequently re-wrapped for other recipients and embedded in encrypted
+    // public-share links. Public links still import their key as non-exportable.
+    return importRawFileKey(rawKey, true)
 }
 
 export async function decryptFile(

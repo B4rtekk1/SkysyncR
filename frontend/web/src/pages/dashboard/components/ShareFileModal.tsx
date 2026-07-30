@@ -24,6 +24,7 @@ type ShareFileModalProps = {
     item: ShareableItem
     itemKind: 'file' | 'folder'
     shareUrl: string | null
+    shareUrlError: string | null
     loading: boolean
     privateKey: CryptoKey | null
     groups: Group[]
@@ -64,6 +65,7 @@ export function ShareFileModal({
     item,
     itemKind,
     shareUrl,
+    shareUrlError,
     loading,
     privateKey,
     groups,
@@ -114,7 +116,7 @@ export function ShareFileModal({
         (item.is_public || loading
             ? !privateKey
                 ? `Unlock your private key to create a secure ${itemKind} link`
-                : 'Generating link...'
+                : shareUrlError ?? 'Generating link...'
             : 'Link is inactive')
     const shareStartsAt = parseDatetimeLocalValue(shareStartsAtDraft)
     const shareExpiresAt = parseDatetimeLocalValue(shareExpiresAtDraft)
@@ -545,6 +547,8 @@ export function ShareFileModal({
                                 </svg>
                             ) : shareUrl ? (
                                 <span className="share-modal__qr-empty">Link is too long for QR</span>
+                            ) : shareUrlError ? (
+                                <span className="share-modal__qr-empty">{shareUrlError}</span>
                             ) : item.is_public || loading ? (
                                 <span className="spinner" />
                             ) : (
