@@ -34,6 +34,10 @@ html[data-theme='light'] {
     transition: background 0.2s ease, grid-template-columns 0.18s ease;
 }
 
+.is-resizing-sidebar .shell {
+    transition: background 0.2s ease;
+}
+
 @supports (height: 100dvh) {
     .shell {
         height: 100dvh;

@@ -151,6 +151,10 @@
     content: none;
 }
 
+.is-resizing-sidebar .shell__nav-indicator {
+    transition: none;
+}
+
 .shell__nav-indicator.is-pulling::before {
     animation: none;
 }

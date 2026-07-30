@@ -2,6 +2,8 @@
 .shell__storage {
     padding: 12px 10px;
     border-top: 1px solid var(--line);
+    min-width: 0;
+    overflow: hidden;
 }
 
 .shell__storage-row {
@@ -20,6 +22,17 @@
     align-items: center;
     min-width: 0;
     gap: 5px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.shell__storage-row > span:last-child {
+    min-width: 0;
+    overflow: hidden;
+    text-align: right;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .shell__storage-info {
@@ -99,16 +112,24 @@
 }
 
 .shell__storage-summary strong {
+    min-width: 0;
+    overflow: hidden;
     color: var(--paper);
     font-size: 0.82rem;
     font-weight: 600;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .shell__storage-status {
+    min-width: 0;
+    overflow: hidden;
     font-family: var(--font-mono), monospace;
     font-size: 0.64rem;
     color: var(--mist);
     text-align: right;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .shell__storage-status--warning {
@@ -227,6 +248,19 @@
     margin: 0;
     color: var(--mist);
     font-size: 0.72rem;
+}
+
+@media (min-width: 901px) {
+    .shell.is-sidebar-storage-compact .shell__storage {
+        padding-inline: 8px;
+    }
+
+    .shell.is-sidebar-storage-compact .shell__storage-row,
+    .shell.is-sidebar-storage-compact .shell__storage-summary,
+    .shell.is-sidebar-storage-compact .shell__storage-breakdown,
+    .shell.is-sidebar-storage-compact .shell__storage-empty {
+        display: none;
+    }
 }
 
 /* shell-topbar.css */

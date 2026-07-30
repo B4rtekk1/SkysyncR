@@ -1,8 +1,9 @@
-import { useEffect, useState, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from 'react'
+import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from 'react'
 import {
     COMPACT_SIDEBAR_WIDTH,
     SIDEBAR_HIDDEN_STORAGE_KEY,
     SIDEBAR_WIDTH_STORAGE_KEY,
+    STORAGE_COMPACT_SIDEBAR_WIDTH,
     clampSidebarWidth,
     loadSidebarHidden,
     loadSidebarWidth,
@@ -11,15 +12,51 @@ import {
 export function useSidebarState() {
     const [sidebarWidth, setSidebarWidth] = useState(() => loadSidebarWidth())
     const [sidebarHidden, setSidebarHidden] = useState(() => loadSidebarHidden())
+    const resizeFrameRef = useRef<number | null>(null)
+    const pendingSidebarWidthRef = useRef(sidebarWidth)
     const sidebarCompact = !sidebarHidden && sidebarWidth <= COMPACT_SIDEBAR_WIDTH
+    const sidebarStorageCompact = !sidebarHidden && sidebarWidth <= STORAGE_COMPACT_SIDEBAR_WIDTH
 
     useEffect(() => {
+        const timeout = window.setTimeout(() => {
+            try {
+                localStorage.setItem(SIDEBAR_WIDTH_STORAGE_KEY, String(sidebarWidth))
+            } catch {
+                // ignore storage failures (e.g. private browsing)
+            }
+        }, 120)
+
+        return () => window.clearTimeout(timeout)
+    }, [sidebarWidth])
+
+    useEffect(() => {
+        return () => {
+            if (resizeFrameRef.current !== null) {
+                cancelAnimationFrame(resizeFrameRef.current)
+            }
+            document.body.classList.remove('is-resizing-sidebar')
+        }
+    }, [])
+
+    function commitSidebarWidth(width: number) {
+        pendingSidebarWidthRef.current = clampSidebarWidth(width)
+        if (resizeFrameRef.current !== null) return
+
+        resizeFrameRef.current = requestAnimationFrame(() => {
+            resizeFrameRef.current = null
+            setSidebarWidth((current) => (
+                current === pendingSidebarWidthRef.current ? current : pendingSidebarWidthRef.current
+            ))
+        })
+    }
+
+    function persistSidebarWidth(width: number) {
         try {
-            localStorage.setItem(SIDEBAR_WIDTH_STORAGE_KEY, String(sidebarWidth))
+            localStorage.setItem(SIDEBAR_WIDTH_STORAGE_KEY, String(width))
         } catch {
             // ignore storage failures (e.g. private browsing)
         }
-    }, [sidebarWidth])
+    }
 
     useEffect(() => {
         try {
@@ -31,11 +68,13 @@ export function useSidebarState() {
 
     function startSidebarResize(e: ReactPointerEvent<HTMLButtonElement>) {
         e.preventDefault()
+        const handle = e.currentTarget
         setSidebarHidden(false)
-        e.currentTarget.setPointerCapture(e.pointerId)
+        handle.setPointerCapture(e.pointerId)
+        commitSidebarWidth(e.clientX)
 
         function onMove(event: PointerEvent) {
-            setSidebarWidth(clampSidebarWidth(event.clientX))
+            commitSidebarWidth(event.clientX)
         }
 
         function onUp(event: PointerEvent) {
@@ -43,8 +82,10 @@ export function useSidebarState() {
             window.removeEventListener('pointerup', onUp)
             window.removeEventListener('pointercancel', onUp)
             document.body.classList.remove('is-resizing-sidebar')
-            if (e.currentTarget.hasPointerCapture(event.pointerId)) {
-                e.currentTarget.releasePointerCapture(event.pointerId)
+            setSidebarWidth(pendingSidebarWidthRef.current)
+            persistSidebarWidth(pendingSidebarWidthRef.current)
+            if (handle.hasPointerCapture(event.pointerId)) {
+                handle.releasePointerCapture(event.pointerId)
             }
         }
 
@@ -68,6 +109,7 @@ export function useSidebarState() {
         sidebarWidth,
         sidebarHidden,
         sidebarCompact,
+        sidebarStorageCompact,
         setSidebarHidden,
         startSidebarResize,
         resizeSidebarWithKeyboard,

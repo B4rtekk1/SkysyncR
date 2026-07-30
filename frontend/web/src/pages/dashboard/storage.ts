@@ -240,6 +240,7 @@ export const MIN_SIDEBAR_WIDTH = 72
 export const MAX_SIDEBAR_WIDTH = 340
 export const DEFAULT_SIDEBAR_WIDTH = 240
 export const COMPACT_SIDEBAR_WIDTH = 128
+export const STORAGE_COMPACT_SIDEBAR_WIDTH = 190
 
 export function clampSidebarWidth(width: number) {
     return Math.min(MAX_SIDEBAR_WIDTH, Math.max(MIN_SIDEBAR_WIDTH, Math.round(width)))

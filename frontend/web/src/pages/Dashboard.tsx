@@ -71,6 +71,7 @@ function Dashboard() {
         sidebarWidth,
         sidebarHidden,
         sidebarCompact,
+        sidebarStorageCompact,
         setSidebarHidden,
         startSidebarResize,
         resizeSidebarWithKeyboard,
@@ -712,7 +713,7 @@ function Dashboard() {
 
     return (
         <div
-            className={`shell ${sidebarHidden ? 'is-sidebar-hidden' : ''} ${sidebarCompact ? 'is-sidebar-compact' : ''}`}
+            className={`shell ${sidebarHidden ? 'is-sidebar-hidden' : ''} ${sidebarCompact ? 'is-sidebar-compact' : ''} ${sidebarStorageCompact ? 'is-sidebar-storage-compact' : ''}`}
             style={{ '--sidebar-width': sidebarHidden ? '0px' : `${sidebarWidth}px` } as React.CSSProperties}
         >
             <DashboardSidebar
