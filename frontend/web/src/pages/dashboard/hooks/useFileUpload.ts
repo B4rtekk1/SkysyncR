@@ -71,6 +71,7 @@ type UseFileUploadOptions = {
 const DB_NAME = 'skysyncr-transfer-queue'
 const DB_VERSION = 1
 const STORE_NAME = 'uploads'
+const COMPLETED_UPLOAD_TRANSFER_RETENTION_MS = 5000
 
 function createAbortError() {
     return new DOMException('Transfer paused', 'AbortError')
@@ -196,6 +197,18 @@ export function useFileUpload({
     useEffect(() => {
         refreshQuotaRef.current = refreshQuota
     }, [refreshQuota])
+
+    useEffect(() => {
+        if (transfers.length === 0 || transfers.some((transfer) => transfer.status !== 'completed')) {
+            return
+        }
+
+        const timeoutId = window.setTimeout(() => {
+            setTransfers((prev) => prev.filter((transfer) => transfer.status !== 'completed'))
+        }, COMPLETED_UPLOAD_TRANSFER_RETENTION_MS)
+
+        return () => window.clearTimeout(timeoutId)
+    }, [transfers])
 
     const updateTransfer = useCallback((id: string, patch: Partial<UploadTransfer>) => {
         const updatedAt = Date.now()
