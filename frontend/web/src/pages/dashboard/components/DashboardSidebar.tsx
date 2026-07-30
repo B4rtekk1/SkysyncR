@@ -80,7 +80,14 @@ export function DashboardSidebar({
 }: DashboardSidebarProps) {
     return (
         <aside className="shell__sidebar" aria-hidden={sidebarHidden}>
-            <Link to="/dashboard" className="shell__logo">
+            <Link
+                to="/dashboard"
+                className="shell__logo"
+                onClick={(event) => {
+                    event.preventDefault()
+                    window.location.reload()
+                }}
+            >
                 <span className="shell__sidebar-label">SkysyncR</span>
             </Link>
 

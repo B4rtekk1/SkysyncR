@@ -71,7 +71,14 @@ function Landing() {
       <div className="page">
         <nav className={`nav ${navSolid ? 'nav--solid' : ''}`}>
           <div className="nav__inner">
-            <Link to="/" className="nav__logo">
+            <Link
+              to="/"
+              className="nav__logo"
+              onClick={(event) => {
+                event.preventDefault()
+                window.location.reload()
+              }}
+            >
               SkysyncR
             </Link>
             <div className="nav__actions">

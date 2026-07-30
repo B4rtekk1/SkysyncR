@@ -7,7 +7,14 @@ function NotFound() {
     <div className="page not-found-page">
       <nav className="nav nav--solid">
         <div className="nav__inner">
-          <Link to="/" className="nav__logo">
+          <Link
+            to="/"
+            className="nav__logo"
+            onClick={(event) => {
+              event.preventDefault()
+              window.location.reload()
+            }}
+          >
             SkysyncR
           </Link>
           <div className="nav__actions">
