@@ -65,13 +65,18 @@ html[data-theme='light'] {
   display: flex;
   align-items: center;
   justify-content: center;
+  flex: 0 0 34px;
   width: 34px;
+  min-width: 34px;
   height: 34px;
+  padding: 0;
   border: 1px solid var(--line);
   border-radius: 50%;
+  box-sizing: border-box;
   background: transparent;
   color: var(--mist);
   cursor: pointer;
+  line-height: 1;
   transition: border-color 0.15s ease, color 0.15s ease, transform 0.15s ease;
 }
 
@@ -83,11 +88,18 @@ html[data-theme='light'] {
 
 
 .btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   border: 1px solid transparent;
   border-radius: 8px;
   padding: 9px 18px;
   font-size: 0.88rem;
   font-weight: 500;
+  line-height: 1.2;
+  text-align: center;
+  text-decoration: none;
+  white-space: nowrap;
   cursor: pointer;
   transition: transform 0.15s ease, background 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
 }
@@ -511,6 +523,14 @@ html[data-theme='light'] {
 }
 
 @media (max-width: 480px) {
+  .nav__actions {
+    gap: 6px;
+  }
+
+  .nav__actions .btn {
+    padding-inline: 12px;
+  }
+
   .h1 {
     font-size: 1.8rem;
   }

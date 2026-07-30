@@ -48,23 +48,24 @@ export function ImagePreviewModal({
     const [editError, setEditError] = useState<string | null>(null)
     const [hasConflict, setHasConflict] = useState(false)
     const [autosaveStatus, setAutosaveStatus] = useState<AutosaveStatus>('idle')
+    const [appliedStartEditingKey, setAppliedStartEditingKey] = useState<string | null>(null)
     const saveInFlightRef = useRef(false)
     const autosaveTimerRef = useRef<number | null>(null)
     const canEditText = preview.text !== null && !('permissions' in preview.item)
     const hasTextChanges = editDraft !== (preview.text ?? '')
     const isImageLoaded = preview.url ? loadedPreviewImageUrls.has(preview.url) || loadedImageUrl === preview.url : false
+    const startEditingKey = preview.startEditing
+        ? `${preview.item.updated_at}:${preview.item.filename}:${preview.text ?? ''}`
+        : null
 
-    useEffect(() => {
-        if (!preview.startEditing) {
-            return
-        }
-
+    if (startEditingKey && appliedStartEditingKey !== startEditingKey) {
+        setAppliedStartEditingKey(startEditingKey)
         setEditDraft(preview.text ?? '')
         setEditError(null)
         setHasConflict(false)
         setAutosaveStatus('idle')
         setIsEditingText(true)
-    }, [preview.item.updated_at, preview.startEditing, preview.text])
+    }
 
     const markImageLoaded = useCallback((url: string | null) => {
         if (!url) return

@@ -1264,14 +1264,23 @@ html[data-theme='light'] .file-card--can-preview:hover {
 
 .file-grid--list .file-card:not(.folder-card) {
     min-height: 78px;
-    grid-template-columns: minmax(150px, auto) minmax(180px, 1fr) minmax(120px, auto) auto auto;
+    grid-template-columns: minmax(54px, auto) minmax(180px, 1fr) minmax(120px, auto) auto auto;
     gap: 14px;
 }
 
 .file-grid--list .file-card:not(.folder-card) .file-card__top {
+    position: relative;
     grid-column: 1;
     grid-row: 1 / span 2;
     padding: 0 0 0 28px;
+}
+
+.file-grid--list .file-card:not(.folder-card) .file-card__badge {
+    position: absolute;
+    left: 56px;
+    top: 50%;
+    max-width: 110px;
+    transform: translateY(-50%);
 }
 
 .file-grid--list .file-card:not(.folder-card) .file-card__name-slot {
@@ -1310,7 +1319,7 @@ html[data-theme='light'] .file-card--can-preview:hover {
 
 @media (max-width: 980px) {
     .file-grid--list .file-card:not(.folder-card) {
-        grid-template-columns: minmax(140px, auto) minmax(170px, 1fr) auto auto;
+        grid-template-columns: minmax(54px, auto) minmax(170px, 1fr) auto auto;
     }
 
     .file-grid--list .file-card:not(.folder-card) .file-card__signals {

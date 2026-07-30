@@ -392,6 +392,10 @@ export function DashboardContent({
         </>
     )
 
+    if (!bulkActionsVisible && moveTargetMenuOpen) {
+        setMoveTargetMenuOpen(false)
+    }
+
     useEffect(() => {
         if (!moveTargetMenuOpen) return
 
@@ -411,10 +415,6 @@ export function DashboardContent({
             window.removeEventListener('keydown', closeOnEscape)
         }
     }, [moveTargetMenuOpen])
-
-    useEffect(() => {
-        if (!bulkActionsVisible) setMoveTargetMenuOpen(false)
-    }, [bulkActionsVisible])
 
     useEffect(() => {
         if (!selectAllRef.current) return
