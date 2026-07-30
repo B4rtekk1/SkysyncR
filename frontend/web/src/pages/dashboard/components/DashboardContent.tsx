@@ -1,4 +1,4 @@
-import { useMemo, useState, type ChangeEvent, type DragEvent, type RefObject } from 'react'
+import { useEffect, useMemo, useRef, useState, type ChangeEvent, type DragEvent, type RefObject } from 'react'
 import type { CurrentUserResponse } from '../../../api/users'
 import type { ApiFile, ApiFolder } from '../../../api/files'
 import type { FileTag, Tag } from '../../../api/tags'
@@ -342,6 +342,9 @@ export function DashboardContent({
     const parentFolder = folderTrail.length > 1 ? folderTrail[folderTrail.length - 2] : null
     const parentMoveTargetId = parentFolder?.id ?? '__root__'
     const [moveTargetId, setMoveTargetId] = useState(parentMoveTargetId)
+    const [moveTargetMenuOpen, setMoveTargetMenuOpen] = useState(false)
+    const moveTargetMenuRef = useRef<HTMLDivElement>(null)
+    const selectAllRef = useRef<HTMLInputElement>(null)
     const moveTargetOptions = useMemo(() => {
         const options = [{ id: '__root__', label: folderTrail.length === 1 ? 'Parent folder (All files)' : 'Root folder' }]
         if (parentFolder) {
@@ -357,6 +360,7 @@ export function DashboardContent({
     const activeMoveTargetId = moveTargetOptions.some((option) => option.id === moveTargetId)
         ? moveTargetId
         : parentMoveTargetId
+    const activeMoveTarget = moveTargetOptions.find((option) => option.id === activeMoveTargetId) ?? moveTargetOptions[0]
     const isEmpty = visibleItems.length === 0 && renderedItems.length === 0 && visibleFolders.length === 0
     const shownCount = visibleFolders.length + renderedItems.length
     const totalCount = visibleFolders.length + visibleItems.length
@@ -385,6 +389,31 @@ export function DashboardContent({
             )}
         </>
     )
+
+    useEffect(() => {
+        if (!moveTargetMenuOpen) return
+
+        function closeOnOutsideClick(event: MouseEvent) {
+            if (moveTargetMenuRef.current?.contains(event.target as Node)) return
+            setMoveTargetMenuOpen(false)
+        }
+
+        function closeOnEscape(event: KeyboardEvent) {
+            if (event.key === 'Escape') setMoveTargetMenuOpen(false)
+        }
+
+        document.addEventListener('mousedown', closeOnOutsideClick)
+        window.addEventListener('keydown', closeOnEscape)
+        return () => {
+            document.removeEventListener('mousedown', closeOnOutsideClick)
+            window.removeEventListener('keydown', closeOnEscape)
+        }
+    }, [moveTargetMenuOpen])
+
+    useEffect(() => {
+        if (!selectAllRef.current) return
+        selectAllRef.current.indeterminate = selectedCount > 0 && !allVisibleSelected
+    }, [allVisibleSelected, selectedCount])
 
     return (
         <div
@@ -488,24 +517,84 @@ export function DashboardContent({
             {selectedCount > 0 && (view === 'all' || view === 'favourites' || view === 'trash') && (
                 <div className="bulk-actions" role="region" aria-label="Bulk file actions">
                     <label className="bulk-actions__select-all">
-                        <input type="checkbox" checked={allVisibleSelected} onChange={onToggleAllVisibleSelected} />
+                        <input
+                            ref={selectAllRef}
+                            type="checkbox"
+                            checked={allVisibleSelected}
+                            onChange={onToggleAllVisibleSelected}
+                        />
                         <span>{selectedCount} selected</span>
                     </label>
                     <div className="bulk-actions__buttons">
                         {view !== 'trash' && (
                             <>
-                                <select
-                                    className="bulk-actions__target"
-                                    value={activeMoveTargetId}
-                                    onChange={(event) => setMoveTargetId(event.target.value)}
-                                    aria-label="Move destination"
-                                >
-                                    {moveTargetOptions.map((target) => (
-                                        <option key={target.id} value={target.id}>
-                                            {target.label}
-                                        </option>
-                                    ))}
-                                </select>
+                                <div className="sort-dropdown bulk-actions__target-dropdown" ref={moveTargetMenuRef}>
+                                    <button
+                                        className={`sort-dropdown__trigger ${moveTargetMenuOpen ? 'is-open' : ''}`}
+                                        type="button"
+                                        onClick={() => setMoveTargetMenuOpen((open) => !open)}
+                                        aria-haspopup="listbox"
+                                        aria-expanded={moveTargetMenuOpen}
+                                        aria-label="Move destination"
+                                        title="Move destination"
+                                    >
+                                        <span className="sort-dropdown__icon" aria-hidden="true">
+                                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none">
+                                                <path
+                                                    d="M4 6.5h6l2 2H20v9H4v-11Z"
+                                                    stroke="currentColor"
+                                                    strokeWidth="1.8"
+                                                    strokeLinecap="round"
+                                                    strokeLinejoin="round"
+                                                />
+                                            </svg>
+                                        </span>
+                                        <span className="sort-dropdown__text">
+                                            <span className="sort-dropdown__label">Move to</span>
+                                            <span className="sort-dropdown__value">{activeMoveTarget?.label}</span>
+                                        </span>
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                                            <path
+                                                d="m7 10 5 5 5-5"
+                                                stroke="currentColor"
+                                                strokeWidth="1.8"
+                                                strokeLinecap="round"
+                                                strokeLinejoin="round"
+                                            />
+                                        </svg>
+                                    </button>
+
+                                    {moveTargetMenuOpen && (
+                                        <div className="sort-dropdown__menu sort-dropdown__menu--animated is-opening" role="listbox" aria-label="Move destination">
+                                            {moveTargetOptions.map((target) => (
+                                                <button
+                                                    key={target.id}
+                                                    className={`sort-dropdown__option ${activeMoveTargetId === target.id ? 'is-selected' : ''}`}
+                                                    type="button"
+                                                    role="option"
+                                                    aria-selected={activeMoveTargetId === target.id}
+                                                    onClick={() => {
+                                                        setMoveTargetId(target.id)
+                                                        setMoveTargetMenuOpen(false)
+                                                    }}
+                                                >
+                                                    <span>{target.label}</span>
+                                                    {activeMoveTargetId === target.id && (
+                                                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                                                            <path
+                                                                d="M5 12.5 9.3 17 19 7"
+                                                                stroke="currentColor"
+                                                                strokeWidth="1.9"
+                                                                strokeLinecap="round"
+                                                                strokeLinejoin="round"
+                                                            />
+                                                        </svg>
+                                                    )}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
                                 <button
                                     className="btn btn--outline"
                                     type="button"

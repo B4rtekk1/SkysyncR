@@ -334,7 +334,10 @@ export function FileCard({
             onDragEnd={() => onDragEndCard?.()}
         >
             {onToggleSelected && !pending && !isRenaming && (
-                <label className="file-card__select" onClick={(event) => event.stopPropagation()}>
+                <label
+                    className={`file-card__select ${selected ? 'is-selected' : ''}`}
+                    onClick={(event) => event.stopPropagation()}
+                >
                     <input
                         type="checkbox"
                         checked={Boolean(selected)}

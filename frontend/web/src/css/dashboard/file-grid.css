@@ -145,16 +145,20 @@
     gap: 8px;
 }
 
-.bulk-actions__target {
-    min-width: 148px;
+.bulk-actions__target-dropdown {
+    min-width: 190px;
+}
+
+.bulk-actions__target-dropdown .sort-dropdown__trigger {
+    width: 100%;
     height: 34px;
-    border: 1px solid var(--line);
-    border-radius: 8px;
-    background: var(--panel-2);
-    color: var(--paper);
-    padding: 0 10px;
-    font: inherit;
-    font-size: 0.78rem;
+}
+
+.bulk-actions__target-dropdown .sort-dropdown__menu {
+    right: 0;
+    left: auto;
+    min-width: 100%;
+    max-width: min(320px, 80vw);
 }
 
 /* files.css */
@@ -281,6 +285,10 @@
 }
 
 .file-card__select span {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     width: 19px;
     height: 19px;
     border: 1px solid color-mix(in srgb, var(--line) 84%, var(--paper) 16%);
@@ -290,10 +298,28 @@
     transition: border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
 }
 
-.file-card__select input:checked + span {
+.file-card__select span::after {
+    content: '';
+    width: 8px;
+    height: 4px;
+    border-bottom: 2px solid var(--panel);
+    border-left: 2px solid var(--panel);
+    opacity: 0;
+    transform: translateY(-1px) rotate(-45deg) scale(0.8);
+    transition: opacity 0.12s ease, transform 0.12s ease;
+}
+
+.file-card__select input:checked + span,
+.file-card__select.is-selected span {
     border-color: var(--signal);
     background: var(--signal);
-    box-shadow: inset 0 0 0 4px var(--panel);
+    box-shadow: 0 0 0 2px rgba(var(--signal-rgb), 0.16);
+}
+
+.file-card__select input:checked + span::after,
+.file-card__select.is-selected span::after {
+    opacity: 1;
+    transform: translateY(-1px) rotate(-45deg) scale(1);
 }
 
 .file-card__select:focus-within span {
@@ -965,6 +991,13 @@
     background: color-mix(in srgb, var(--panel) 70%, var(--panel-2));
 }
 
+.file-grid:not(.file-grid--list) .file-card__select input:checked + span,
+.file-grid:not(.file-grid--list) .file-card__select.is-selected span {
+    border-color: var(--signal);
+    background: var(--signal);
+    box-shadow: 0 0 0 2px rgba(var(--signal-rgb), 0.18);
+}
+
 .file-grid:not(.file-grid--list) .file-card__handle {
     display: none;
 }
@@ -1365,7 +1398,7 @@ html[data-theme='light'] .file-card--can-preview:hover {
         justify-content: flex-start;
     }
 
-    .bulk-actions__target {
+    .bulk-actions__target-dropdown {
         flex: 1 1 100%;
     }
 
