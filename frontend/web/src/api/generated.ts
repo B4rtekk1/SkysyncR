@@ -148,6 +148,8 @@ export type File = {
   "share_expires_at": string | null
   "share_download_limit": number | null
   "share_download_count": number
+  "share_password_enabled": boolean
+  "share_recipient_email": string | null
   "is_favourite": boolean
   "encrypted_key": string
   "encryption_nonce": string
@@ -292,6 +294,13 @@ export type ShareFileRequest = {
   "is_public": boolean
   "expires_in_seconds"?: number | null
   "download_limit"?: number | null
+  "password"?: string | null
+  "recipient_email"?: string | null
+}
+
+export type PublicFileDownloadRequest = {
+  "password"?: string | null
+  "recipient_email"?: string | null
 }
 
 export type UpdateFileNoteRequest = {

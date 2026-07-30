@@ -28,7 +28,12 @@ type ShareFileModalProps = {
     privateKey: CryptoKey | null
     groups: Group[]
     onClose: () => void
-    onEnableShare: (expiresInSeconds?: number | null, downloadLimit?: number | null) => Promise<void>
+    onEnableShare: (
+        expiresInSeconds?: number | null,
+        downloadLimit?: number | null,
+        password?: string | null,
+        recipientEmail?: string | null,
+    ) => Promise<void>
     onDisableShare: () => Promise<void>
 }
 
@@ -58,6 +63,10 @@ export function ShareFileModal({
     const [downloadLimitDraft, setDownloadLimitDraft] = useState(() =>
         'filename' in item && item.share_download_limit ? String(item.share_download_limit) : '',
     )
+    const [sharePasswordDraft, setSharePasswordDraft] = useState('')
+    const [shareRecipientEmailDraft, setShareRecipientEmailDraft] = useState(() =>
+        'filename' in item ? item.share_recipient_email ?? '' : '',
+    )
     const [copied, setCopied] = useState(false)
     const [error, setError] = useState<string | null>(null)
     const [peopleLoading, setPeopleLoading] = useState(false)
@@ -69,6 +78,7 @@ export function ShareFileModal({
     const dialogRef = useRef<HTMLElement>(null)
     const qr = useMemo(() => (shareUrl ? createQrPath(shareUrl) : null), [shareUrl])
     const isFileShare = 'filename' in item
+    const fileItem = isFileShare ? item : null
     const title = isFileShare ? item.filename : item.name
     const linkInputValue =
         shareUrl ??
@@ -89,6 +99,10 @@ export function ShareFileModal({
         itemKind === 'file' &&
         downloadLimitDraft.trim() !== '' &&
         (downloadLimit === null || !Number.isInteger(downloadLimit) || downloadLimit < 1 || downloadLimit > 1000000)
+    const sharePassword = sharePasswordDraft.trim()
+    const shareRecipientEmail = shareRecipientEmailDraft.trim().toLowerCase()
+    const hasInvalidSharePassword = itemKind === 'file' && sharePassword !== '' && (sharePassword.length < 8 || sharePassword.length > 128)
+    const hasInvalidShareRecipientEmail = itemKind === 'file' && shareRecipientEmail !== '' && !EMAIL_PATTERN.test(shareRecipientEmail)
     const downloadLimitLabel =
         isFileShare
             ? downloadLimit
@@ -376,6 +390,34 @@ export function ShareFileModal({
                                     />
                                     <span>{downloadLimitLabel}</span>
                                 </div>
+                                <div className="share-modal__expiry">
+                                    <span>Link password</span>
+                                    <input
+                                        className="share-modal__text-input"
+                                        type="password"
+                                        minLength={8}
+                                        maxLength={128}
+                                        value={sharePasswordDraft}
+                                        onChange={(event) => setSharePasswordDraft(event.target.value)}
+                                        placeholder={fileItem?.share_password_enabled ? 'Password set' : 'No password'}
+                                        disabled={loading}
+                                        aria-label="Share link password"
+                                    />
+                                    <span>{sharePassword ? 'Will require password' : fileItem?.share_password_enabled ? 'Leave empty to remove' : 'Optional'}</span>
+                                </div>
+                                <div className="share-modal__expiry">
+                                    <span>Recipient email</span>
+                                    <input
+                                        className="share-modal__text-input"
+                                        type="email"
+                                        value={shareRecipientEmailDraft}
+                                        onChange={(event) => setShareRecipientEmailDraft(event.target.value)}
+                                        placeholder="No email confirmation"
+                                        disabled={loading}
+                                        aria-label="Public link recipient email"
+                                    />
+                                    <span>{shareRecipientEmail ? 'Must match before download' : 'Optional'}</span>
+                                </div>
                             </>
                         )}
                         <div className="share-modal__link-row">
@@ -395,8 +437,15 @@ export function ShareFileModal({
                             <button
                                 className="btn btn--outline"
                                 type="button"
-                                onClick={() => void onEnableShare(itemKind === 'file' ? shareDuration : undefined, itemKind === 'file' ? downloadLimit : undefined)}
-                                disabled={loading || hasInvalidDownloadLimit}
+                                onClick={() =>
+                                    void onEnableShare(
+                                        itemKind === 'file' ? shareDuration : undefined,
+                                        itemKind === 'file' ? downloadLimit : undefined,
+                                        itemKind === 'file' ? sharePasswordDraft : undefined,
+                                        itemKind === 'file' ? shareRecipientEmail : undefined,
+                                    )
+                                }
+                                disabled={loading || hasInvalidDownloadLimit || hasInvalidSharePassword || hasInvalidShareRecipientEmail}
                             >
                                 {item.is_public ? 'Update link' : 'Create link'}
                             </button>

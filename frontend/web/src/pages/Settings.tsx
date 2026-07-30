@@ -4,6 +4,7 @@ import '../css/Settings.css'
 import ThemeToggle from '../components/ThemeToggle'
 import { useTheme, type ThemePreference } from '../hooks/UseTheme'
 import { logout, logoutAllSessions } from '../api/auth'
+import { getDeviceLabel, setDeviceLabel } from '../api/http'
 import {
     ApiRequestError,
     changePassword,
@@ -195,6 +196,7 @@ function SettingsModalContent({ currentUser, onClose, onSave }: SettingsModalPro
     const [sessionsLoading, setSessionsLoading] = useState(false)
     const [sessionsError, setSessionsError] = useState<string | null>(null)
     const [revokingSessionId, setRevokingSessionId] = useState<string | null>(null)
+    const [currentDeviceLabel, setCurrentDeviceLabel] = useState(() => getDeviceLabel())
     const [operationLog, setOperationLog] = useState<OperationLogResponse | null>(null)
     const [operationLogLoading, setOperationLogLoading] = useState(false)
     const [operationLogError, setOperationLogError] = useState<string | null>(null)
@@ -295,6 +297,12 @@ function SettingsModalContent({ currentUser, onClose, onSave }: SettingsModalPro
         const parsed = Number.parseInt(value, 10)
         const nextValue = Number.isFinite(parsed) ? Math.min(365, Math.max(1, parsed)) : DEFAULT_SETTINGS.trashRetentionDays
         updateSetting('trashRetentionDays', nextValue)
+    }
+
+    function saveCurrentDeviceLabel() {
+        setCurrentDeviceLabel(setDeviceLabel(currentDeviceLabel))
+        void loadSessions()
+        void loadOperationLog()
     }
 
     function showPasswordChangeError(err: unknown) {
@@ -795,6 +803,22 @@ function SettingsModalContent({ currentUser, onClose, onSave }: SettingsModalPro
                                     <h2>Devices and sessions</h2>
                                 </div>
                             </div>
+                            <label className="settings-field">
+                                <span>This device name</span>
+                                <input
+                                    type="text"
+                                    maxLength={80}
+                                    value={currentDeviceLabel}
+                                    onChange={(e) => setCurrentDeviceLabel(e.target.value)}
+                                    onBlur={saveCurrentDeviceLabel}
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter') {
+                                            e.currentTarget.blur()
+                                        }
+                                    }}
+                                    placeholder="Laptop służbowy"
+                                />
+                            </label>
                             <div className="settings-session-list">
                                 {sessionsLoading && <p className="settings-muted">Loading signed-in devices...</p>}
                                 {!sessionsLoading && sessionsData?.sessions.length === 0 && (

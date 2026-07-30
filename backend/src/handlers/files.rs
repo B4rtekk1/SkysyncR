@@ -3,12 +3,13 @@ use axum::{
     body::{Body, Bytes},
     extract::{Extension, Multipart, Path, Query, State},
     http::{
-        HeaderMap, HeaderValue, StatusCode,
+        HeaderMap, HeaderName, HeaderValue, StatusCode,
         header::{CONTENT_DISPOSITION, CONTENT_TYPE, USER_AGENT},
     },
     response::{IntoResponse, Response},
 };
 use base64::{Engine as _, engine::general_purpose};
+use bcrypt::{DEFAULT_COST, hash};
 use chrono::{Duration, Utc};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -38,6 +39,8 @@ use crate::services::trash::permanently_delete_user_file;
 use crate::state::AppState;
 use crate::utils::errors::{ApiError, internal_error};
 
+const DEVICE_LABEL_HEADER: &str = "x-skysyncr-device-label";
+
 #[derive(Deserialize)]
 pub struct ListFilesQuery {
     pub folder_id: Option<String>,
@@ -61,6 +64,14 @@ pub struct ShareFileRequest {
     pub is_public: bool,
     pub expires_in_seconds: Option<i64>,
     pub download_limit: Option<i32>,
+    pub password: Option<String>,
+    pub recipient_email: Option<String>,
+}
+
+#[derive(Deserialize)]
+pub struct PublicFileDownloadRequest {
+    pub password: Option<String>,
+    pub recipient_email: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -881,6 +892,26 @@ pub async fn share_file(
     } else {
         None
     };
+    let update_share_password = payload.password.is_some();
+    let share_password_hash = if payload.is_public {
+        validate_share_password(payload.password.as_deref())?
+            .map(|password| hash(password, DEFAULT_COST))
+            .transpose()
+            .map_err(|e| internal_error("hash share password", e))?
+    } else {
+        None
+    };
+    let share_recipient_email = if payload.is_public {
+        payload
+            .recipient_email
+            .as_deref()
+            .map(str::trim)
+            .filter(|email| !email.is_empty())
+            .map(normalize_share_email)
+            .transpose()?
+    } else {
+        None
+    };
     let file = update_user_file_share(
         &state.db_pool,
         auth.user_id,
@@ -889,6 +920,9 @@ pub async fn share_file(
         share_token,
         share_expires_at,
         share_download_limit,
+        update_share_password,
+        share_password_hash,
+        share_recipient_email,
     )
     .await
     .map_err(|e| internal_error("share file", e))?
@@ -997,6 +1031,22 @@ fn validate_share_download_limit(limit: i32) -> Result<i32, ApiError> {
     }
 
     Ok(limit)
+}
+
+fn validate_share_password(value: Option<&str>) -> Result<Option<&str>, ApiError> {
+    const MIN_SHARE_PASSWORD_LEN: usize = 8;
+    const MAX_SHARE_PASSWORD_LEN: usize = 128;
+
+    let Some(password) = value.map(str::trim).filter(|password| !password.is_empty()) else {
+        return Ok(None);
+    };
+    if !(MIN_SHARE_PASSWORD_LEN..=MAX_SHARE_PASSWORD_LEN).contains(&password.len()) {
+        return Err(ApiError::BadRequest(
+            "Share password must be between 8 and 128 characters".into(),
+        ));
+    }
+
+    Ok(Some(password))
 }
 
 fn validate_share_token(value: &str) -> Result<String, ApiError> {
@@ -1183,12 +1233,32 @@ pub async fn download_public_file(
     State(state): State<AppState>,
     Extension(request_id): Extension<RequestId>,
     Path(share_token): Path<String>,
+    payload: Option<Json<PublicFileDownloadRequest>>,
 ) -> Result<Response, ApiError> {
     let share_token = validate_share_token(&share_token)?;
-    let file = consume_public_file_share_for_download(&state.db_pool, &share_token)
-        .await
-        .map_err(|e| internal_error("get public download file", e))?
-        .ok_or_else(|| ApiError::BadRequest("This share link is invalid or has expired".into()))?;
+    let password = payload
+        .as_ref()
+        .and_then(|Json(payload)| payload.password.as_deref());
+    let recipient_email = payload
+        .as_ref()
+        .and_then(|Json(payload)| payload.recipient_email.as_deref())
+        .map(str::trim)
+        .filter(|email| !email.is_empty())
+        .map(normalize_share_email)
+        .transpose()?;
+    let file = consume_public_file_share_for_download(
+        &state.db_pool,
+        &share_token,
+        password,
+        recipient_email.as_deref(),
+    )
+    .await
+    .map_err(|e| internal_error("get public download file", e))?
+    .ok_or_else(|| {
+        ApiError::BadRequest(
+            "This share link is invalid, expired, or requires valid access details".into(),
+        )
+    })?;
 
     let download = fs::File::open(&file.storage_path)
         .await
@@ -1620,7 +1690,8 @@ fn sanitize_download_filename(filename: &str) -> String {
 
 fn device_label_from_headers(headers: &HeaderMap) -> Option<String> {
     headers
-        .get(USER_AGENT)
+        .get(HeaderName::from_static(DEVICE_LABEL_HEADER))
+        .or_else(|| headers.get(USER_AGENT))
         .and_then(|value| value.to_str().ok())
         .map(str::trim)
         .filter(|value| !value.is_empty())

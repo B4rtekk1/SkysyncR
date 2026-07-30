@@ -1,5 +1,5 @@
 use chrono::{DateTime, Utc};
-use sqlx::{PgPool, Postgres, QueryBuilder, Row, Transaction};
+use sqlx::{FromRow, PgPool, Postgres, QueryBuilder, Row, Transaction};
 use uuid::Uuid;
 
 use super::audit_logs::{NewAuditLog, insert_user_audit_log};
@@ -10,6 +10,19 @@ pub use super::file_records::{
     UpdateFileContentTarget,
 };
 use super::storage::try_apply_storage_delta;
+
+#[derive(FromRow)]
+struct PublicFileShareDownloadRow {
+    id: Uuid,
+    filename: String,
+    mime_type: Option<String>,
+    storage_path: String,
+    size_bytes: i64,
+    checksum: Option<String>,
+    encryption_nonce: Vec<u8>,
+    share_password_hash: Option<String>,
+    share_recipient_email: Option<String>,
+}
 
 pub struct UpdatedFileContent {
     pub storage_path: String,
@@ -44,6 +57,8 @@ pub async fn list_user_files(
             share_expires_at,
             share_download_limit,
             share_download_count,
+            (share_password_hash IS NOT NULL) AS share_password_enabled,
+            share_recipient_email,
             EXISTS (
                 SELECT 1
                 FROM favorites fav
@@ -118,6 +133,8 @@ pub async fn create_file_record(
             share_expires_at,
             share_download_limit,
             share_download_count,
+            FALSE AS share_password_enabled,
+            NULL::text AS share_recipient_email,
             FALSE AS is_favourite,
             encrypted_key,
             encryption_nonce,
@@ -172,12 +189,23 @@ pub async fn get_user_file_for_download(
 pub async fn consume_public_file_share_for_download(
     pool: &PgPool,
     share_token: &str,
+    password: Option<&str>,
+    recipient_email: Option<&str>,
 ) -> Result<Option<DownloadFileRecord>, sqlx::Error> {
-    sqlx::query_as::<_, DownloadFileRecord>(
+    let mut tx = pool.begin().await?;
+    let row = sqlx::query_as::<_, PublicFileShareDownloadRow>(
         r#"
-        UPDATE files
-        SET share_download_count = share_download_count + 1,
-            updated_at = NOW()
+        SELECT
+            id,
+            filename,
+            mime_type,
+            storage_path,
+            size_bytes,
+            checksum,
+            encryption_nonce,
+            share_password_hash,
+            share_recipient_email
+        FROM files
         WHERE share_token = $1
           AND is_public = TRUE
           AND is_deleted = FALSE
@@ -186,12 +214,61 @@ pub async fn consume_public_file_share_for_download(
               share_download_limit IS NULL
               OR share_download_count < share_download_limit
           )
-        RETURNING filename, mime_type, storage_path, size_bytes, checksum, encryption_nonce
+        FOR UPDATE
         "#,
     )
     .bind(share_token)
-    .fetch_optional(pool)
-    .await
+    .fetch_optional(&mut *tx)
+    .await?;
+
+    let Some(row) = row else {
+        tx.commit().await?;
+        return Ok(None);
+    };
+
+    if let Some(expected_email) = row.share_recipient_email.as_deref() {
+        let Some(provided_email) = recipient_email else {
+            tx.rollback().await?;
+            return Ok(None);
+        };
+        if provided_email.trim().to_lowercase() != expected_email {
+            tx.rollback().await?;
+            return Ok(None);
+        }
+    }
+
+    if let Some(password_hash) = row.share_password_hash.as_deref() {
+        let Some(provided_password) = password else {
+            tx.rollback().await?;
+            return Ok(None);
+        };
+        if !bcrypt::verify(provided_password, password_hash).unwrap_or(false) {
+            tx.rollback().await?;
+            return Ok(None);
+        }
+    }
+
+    sqlx::query(
+        r#"
+        UPDATE files
+        SET share_download_count = share_download_count + 1,
+            updated_at = NOW()
+        WHERE id = $1
+        "#,
+    )
+    .bind(row.id)
+    .execute(&mut *tx)
+    .await?;
+    tx.commit().await?;
+
+    Ok(Some(DownloadFileRecord {
+        filename: row.filename,
+        mime_type: row.mime_type,
+        storage_path: row.storage_path,
+        size_bytes: row.size_bytes,
+        checksum: row.checksum,
+        encryption_nonce: row.encryption_nonce,
+    }))
 }
 
 pub async fn get_user_file_for_content_update_in_tx(
@@ -601,6 +678,8 @@ pub async fn list_files_shared_with_user(
             f.share_expires_at,
             f.share_download_limit,
             f.share_download_count,
+            (f.share_password_hash IS NOT NULL) AS share_password_enabled,
+            f.share_recipient_email,
             EXISTS (
                 SELECT 1
                 FROM favorites fav
@@ -645,6 +724,8 @@ pub async fn list_files_shared_with_user(
                 share_expires_at: row.share_expires_at,
                 share_download_limit: row.share_download_limit,
                 share_download_count: row.share_download_count,
+                share_password_enabled: row.share_password_enabled,
+                share_recipient_email: row.share_recipient_email,
                 is_favourite: row.is_favourite,
                 encrypted_key: row.encrypted_key,
                 encryption_nonce: row.encryption_nonce,
@@ -1002,6 +1083,8 @@ pub async fn rename_user_file(
             share_expires_at,
             share_download_limit,
             share_download_count,
+            (share_password_hash IS NOT NULL) AS share_password_enabled,
+            share_recipient_email,
             EXISTS (
                 SELECT 1
                 FROM favorites fav
@@ -1062,6 +1145,8 @@ pub async fn move_user_file(
             share_expires_at,
             share_download_limit,
             share_download_count,
+            (share_password_hash IS NOT NULL) AS share_password_enabled,
+            share_recipient_email,
             EXISTS (
                 SELECT 1
                 FROM favorites fav
@@ -1175,6 +1260,8 @@ pub async fn update_user_file_content(
             share_expires_at,
             share_download_limit,
             share_download_count,
+            (share_password_hash IS NOT NULL) AS share_password_enabled,
+            share_recipient_email,
             EXISTS (
                 SELECT 1
                 FROM favorites fav
@@ -1208,6 +1295,9 @@ pub async fn update_user_file_share(
     share_token: Option<String>,
     share_expires_at: Option<DateTime<Utc>>,
     share_download_limit: Option<i32>,
+    update_share_password: bool,
+    share_password_hash: Option<String>,
+    share_recipient_email: Option<String>,
 ) -> Result<Option<FileRecord>, sqlx::Error> {
     sqlx::query_as::<_, FileRecord>(
         r#"
@@ -1216,10 +1306,16 @@ pub async fn update_user_file_share(
             share_token = $2,
             share_expires_at = $3,
             share_download_limit = $4,
+            share_password_hash = CASE
+                WHEN $1 = FALSE THEN NULL
+                WHEN $5 = TRUE THEN $6
+                ELSE share_password_hash
+            END,
+            share_recipient_email = $7,
             share_download_count = 0,
             updated_at = NOW()
-        WHERE id = $5
-          AND owner_id = $6
+        WHERE id = $8
+          AND owner_id = $9
           AND is_deleted = FALSE
         RETURNING
             id,
@@ -1235,10 +1331,12 @@ pub async fn update_user_file_share(
             share_expires_at,
             share_download_limit,
             share_download_count,
+            (share_password_hash IS NOT NULL) AS share_password_enabled,
+            share_recipient_email,
             EXISTS (
                 SELECT 1
                 FROM favorites fav
-                WHERE fav.user_id = $6
+                WHERE fav.user_id = $9
                   AND fav.file_id = files.id
             ) AS is_favourite,
             encrypted_key,
@@ -1252,6 +1350,9 @@ pub async fn update_user_file_share(
     .bind(share_token)
     .bind(share_expires_at)
     .bind(share_download_limit)
+    .bind(update_share_password)
+    .bind(share_password_hash)
+    .bind(share_recipient_email)
     .bind(file_id)
     .bind(user_id)
     .fetch_optional(pool)
@@ -1295,6 +1396,8 @@ pub async fn update_user_file_note(
             share_expires_at,
             share_download_limit,
             share_download_count,
+            (share_password_hash IS NOT NULL) AS share_password_enabled,
+            share_recipient_email,
             EXISTS (
                 SELECT 1
                 FROM favorites fav

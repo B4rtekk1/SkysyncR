@@ -477,6 +477,23 @@ html[data-theme='light'] {
   gap: 12px;
 }
 
+.public-share__access-form {
+  display: grid;
+  width: min(100%, 420px);
+  gap: 10px;
+  margin: 0 0 22px;
+}
+
+.public-share__access-form input {
+  height: 44px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel-2);
+  color: var(--paper);
+  padding: 0 12px;
+  font: inherit;
+}
+
 @keyframes register-popup-in {
   from {
     opacity: 0;

@@ -82,6 +82,8 @@ CREATE TABLE IF NOT EXISTS files
     share_expires_at     timestamptz,
     share_download_limit INT,
     share_download_count INT         NOT NULL DEFAULT 0,
+    share_password_hash  TEXT,
+    share_recipient_email TEXT,
     created_at           timestamptz NOT NULL DEFAULT NOW(),
     updated_at           timestamptz NOT NULL DEFAULT NOW(),
     deleted_at           timestamptz

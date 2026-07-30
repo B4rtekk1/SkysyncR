@@ -35,7 +35,10 @@ pub fn files_routes(
                 .delete(cancel_resumable_upload),
         )
         .route("/files/shared-with-me", get(list_shared_files_with_me))
-        .route("/share/{token}/download", get(download_public_file))
+        .route(
+            "/share/{token}/download",
+            get(download_public_file).post(download_public_file),
+        )
         .route("/files/{id}/download", get(download_file))
         .route("/files/{id}/content", put(update_file_content))
         .route("/files/{id}/versions", get(list_file_versions))

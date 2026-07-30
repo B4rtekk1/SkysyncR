@@ -198,6 +198,12 @@
     font-size: 0.84rem;
 }
 
+.share-modal__number-input,
+.share-modal__text-input {
+    width: 100%;
+    padding: 0 10px;
+}
+
 .share-modal input,
 .share-modal select {
     flex: 1;

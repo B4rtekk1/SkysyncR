@@ -87,6 +87,7 @@ fn cors_layer() -> CorsLayer {
             header::CONTENT_TYPE,
             HeaderName::from_static("upload-offset"),
             HeaderName::from_static("x-skysyncr-device-id"),
+            HeaderName::from_static("x-skysyncr-device-label"),
         ])
         .expose_headers([
             header::CONTENT_TYPE,

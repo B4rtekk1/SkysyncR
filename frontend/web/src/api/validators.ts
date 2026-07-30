@@ -260,6 +260,8 @@ export const file: Validator<File> = (value, path) => {
     share_expires_at: nullableString(prop(item, 'share_expires_at', path), `${path}.share_expires_at`),
     share_download_limit: nullableNumber(prop(item, 'share_download_limit', path), `${path}.share_download_limit`),
     share_download_count: number(prop(item, 'share_download_count', path), `${path}.share_download_count`),
+    share_password_enabled: boolean(prop(item, 'share_password_enabled', path), `${path}.share_password_enabled`),
+    share_recipient_email: nullableString(prop(item, 'share_recipient_email', path), `${path}.share_recipient_email`),
     is_favourite: boolean(prop(item, 'is_favourite', path), `${path}.is_favourite`),
     encrypted_key: string(prop(item, 'encrypted_key', path), `${path}.encrypted_key`),
     encryption_nonce: string(prop(item, 'encryption_nonce', path), `${path}.encryption_nonce`),

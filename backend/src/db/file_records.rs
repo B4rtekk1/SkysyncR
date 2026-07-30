@@ -26,6 +26,8 @@ pub struct FileRecord {
     pub share_expires_at: Option<DateTime<Utc>>,
     pub share_download_limit: Option<i32>,
     pub share_download_count: i32,
+    pub share_password_enabled: bool,
+    pub share_recipient_email: Option<String>,
     pub is_favourite: bool,
     #[serde(serialize_with = "serialize_bytes_base64")]
     pub encrypted_key: Vec<u8>,
@@ -98,6 +100,8 @@ pub(super) struct SharedFileRow {
     pub share_expires_at: Option<DateTime<Utc>>,
     pub share_download_limit: Option<i32>,
     pub share_download_count: i32,
+    pub share_password_enabled: bool,
+    pub share_recipient_email: Option<String>,
     pub is_favourite: bool,
     pub encrypted_key: Vec<u8>,
     pub encryption_nonce: Vec<u8>,

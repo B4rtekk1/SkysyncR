@@ -12,7 +12,7 @@ pub async fn create_refresh_token(
     user_id: Uuid,
     raw_token: &str,
     metadata: RefreshTokenMetadata<'_>,
-) -> Result<DateTime<Utc>, sqlx::Error> {
+) -> Result<(Uuid, DateTime<Utc>), sqlx::Error> {
     let token_hash = hash_refresh_token(raw_token);
     let session_id = Uuid::new_v4();
     let session_expires_at = refresh_session_expires_at();
@@ -49,7 +49,7 @@ pub async fn create_refresh_token(
 
     insert_refresh_token_activity(pool, user_id, session_id, "login", metadata).await?;
 
-    Ok(session_expires_at)
+    Ok((session_id, session_expires_at))
 }
 
 #[derive(Clone, Copy)]
@@ -241,6 +241,33 @@ pub async fn revoke_user_device_refresh_tokens(
     )
     .bind(user_id)
     .bind(device_id)
+    .execute(pool)
+    .await?;
+
+    Ok(())
+}
+
+pub async fn update_active_device_label(
+    pool: &PgPool,
+    user_id: Uuid,
+    device_id: &str,
+    device_label: &str,
+) -> Result<(), sqlx::Error> {
+    sqlx::query(
+        r#"
+        UPDATE refresh_tokens
+        SET device_label = $3,
+            last_used_at = NOW()
+        WHERE user_id = $1
+          AND device_id = $2
+          AND revoked = FALSE
+          AND expires_at > NOW()
+          AND session_expires_at > NOW()
+        "#,
+    )
+    .bind(user_id)
+    .bind(device_id)
+    .bind(device_label)
     .execute(pool)
     .await?;
 

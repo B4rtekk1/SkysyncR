@@ -96,6 +96,8 @@ function pendingFile(file: File, tempId: string, folderId: string | null): ApiFi
         share_expires_at: null,
         share_download_limit: null,
         share_download_count: 0,
+        share_password_enabled: false,
+        share_recipient_email: null,
         is_favourite: false,
         encrypted_key: '',
         encryption_nonce: '',

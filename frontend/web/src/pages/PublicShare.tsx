@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import { Link, useParams } from '../router'
 import '../App.css'
 import ThemeToggle from '../components/ThemeToggle'
@@ -9,6 +9,7 @@ import {
   verifyBlobChecksum,
   type ApiFile,
   type ApiFolder,
+  type PublicFileAccessDetails,
 } from '../api/files'
 import {
   base64UrlToBuffer,
@@ -84,6 +85,10 @@ function PublicShare() {
   const isFolderShare = window.location.pathname.includes('/share/folders/')
   const [status, setStatus] = useState<ShareStatus>('loading')
   const [message, setMessage] = useState('Preparing download...')
+  const [passwordDraft, setPasswordDraft] = useState('')
+  const [recipientEmailDraft, setRecipientEmailDraft] = useState('')
+  const [accessDetails, setAccessDetails] = useState<PublicFileAccessDetails | null>(null)
+  const [downloadAttempt, setDownloadAttempt] = useState(0)
 
   useEffect(() => {
     let active = true
@@ -94,7 +99,7 @@ function PublicShare() {
         throw new Error('This secure share link is missing its decryption key.')
       }
 
-      const file = await downloadPublicFile(shareToken)
+      const file = await downloadPublicFile(shareToken, accessDetails ?? {})
       await verifyBlobChecksum(file.blob, file.checksum)
       if (!file.encryptionNonce) {
         throw new Error('This secure share link is missing encryption metadata.')
@@ -217,7 +222,18 @@ function PublicShare() {
     return () => {
       active = false
     }
-  }, [isFolderShare, token])
+  }, [accessDetails, downloadAttempt, isFolderShare, token])
+
+  function submitAccessDetails(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    setStatus('loading')
+    setMessage('Checking access details...')
+    setAccessDetails({
+      password: passwordDraft,
+      recipientEmail: recipientEmailDraft.trim().toLowerCase(),
+    })
+    setDownloadAttempt((attempt) => attempt + 1)
+  }
 
   return (
     <div className="page not-found-page">
@@ -240,6 +256,27 @@ function PublicShare() {
           {isFolderShare ? 'Shared folder' : 'Shared file'}
         </h1>
         <p className="not-found__copy">{message}</p>
+        {status === 'error' && !isFolderShare && (
+          <form className="auth__form public-share__access-form" onSubmit={submitAccessDetails}>
+            <input
+              value={recipientEmailDraft}
+              onChange={(event) => setRecipientEmailDraft(event.target.value)}
+              type="email"
+              placeholder="Recipient email"
+              aria-label="Recipient email"
+            />
+            <input
+              value={passwordDraft}
+              onChange={(event) => setPasswordDraft(event.target.value)}
+              type="password"
+              placeholder="Link password"
+              aria-label="Link password"
+            />
+            <button className="btn btn--solid btn--lg" type="submit">
+              Download
+            </button>
+          </form>
+        )}
         <div className="not-found__actions">
           {status === 'error' ? (
             <Link to="/" className="btn btn--solid btn--lg">

@@ -902,16 +902,110 @@ async fn public_file_share_download_consumes_limit_atomically() {
     .await
     .unwrap();
 
-    let download = consume_public_file_share_for_download(&pool, &share_token)
+    let download = consume_public_file_share_for_download(&pool, &share_token, None, None)
         .await
         .unwrap()
         .expect("first public download should be allowed");
     assert_eq!(download.filename, "public.txt");
 
-    let blocked = consume_public_file_share_for_download(&pool, &share_token)
+    let blocked = consume_public_file_share_for_download(&pool, &share_token, None, None)
         .await
         .unwrap();
     assert!(blocked.is_none());
+
+    let count =
+        sqlx::query_scalar::<_, i32>("SELECT share_download_count FROM files WHERE id = $1")
+            .bind(file.id)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(count, 1);
+}
+
+#[tokio::test]
+async fn public_file_share_requires_password_and_recipient_email_when_configured() {
+    let (_guard, pool) = test_pool().await;
+    let owner_id = insert_user(&pool, "protected-public-owner@example.test").await;
+    let share_token = Uuid::new_v4().to_string();
+
+    let mut tx = pool.begin().await.unwrap();
+    let file = create_file_record(
+        &mut tx,
+        NewFileRecord {
+            owner_id,
+            filename: "protected.txt".to_string(),
+            storage_path: "protected.txt.enc".to_string(),
+            mime_type: Some("text/plain".to_string()),
+            size_bytes: 42,
+            encrypted_key: b"owner-key".to_vec(),
+            encryption_nonce: b"nonce".to_vec(),
+            content_key_fingerprint: None,
+            checksum: "checksum".to_string(),
+            folder_id: None,
+        },
+    )
+    .await
+    .unwrap();
+    tx.commit().await.unwrap();
+
+    let password_hash = bcrypt::hash("correct horse", bcrypt::DEFAULT_COST).unwrap();
+    sqlx::query(
+        r#"
+        UPDATE files
+        SET is_public = TRUE,
+            share_token = $2,
+            share_password_hash = $3,
+            share_recipient_email = 'recipient@example.test',
+            share_download_count = 0
+        WHERE id = $1
+        "#,
+    )
+    .bind(file.id)
+    .bind(&share_token)
+    .bind(password_hash)
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    assert!(
+        consume_public_file_share_for_download(&pool, &share_token, None, None)
+            .await
+            .unwrap()
+            .is_none()
+    );
+    assert!(
+        consume_public_file_share_for_download(
+            &pool,
+            &share_token,
+            Some("wrong password"),
+            Some("recipient@example.test"),
+        )
+        .await
+        .unwrap()
+        .is_none()
+    );
+    assert!(
+        consume_public_file_share_for_download(
+            &pool,
+            &share_token,
+            Some("correct horse"),
+            Some("other@example.test"),
+        )
+        .await
+        .unwrap()
+        .is_none()
+    );
+
+    let download = consume_public_file_share_for_download(
+        &pool,
+        &share_token,
+        Some("correct horse"),
+        Some("Recipient@Example.Test"),
+    )
+    .await
+    .unwrap()
+    .expect("matching public access details should allow download");
+    assert_eq!(download.filename, "protected.txt");
 
     let count =
         sqlx::query_scalar::<_, i32>("SELECT share_download_count FROM files WHERE id = $1")

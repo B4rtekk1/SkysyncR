@@ -390,6 +390,8 @@ pub async fn list_public_folder_tree_files(
             files.share_expires_at,
             files.share_download_limit,
             files.share_download_count,
+            (files.share_password_hash IS NOT NULL) AS share_password_enabled,
+            files.share_recipient_email,
             FALSE AS is_favourite,
             files.encrypted_key,
             files.encryption_nonce,
