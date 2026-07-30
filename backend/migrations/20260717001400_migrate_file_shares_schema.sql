@@ -23,7 +23,7 @@ BEGIN
           AND table_name = 'file_shares'
           AND column_name = 'owner_id'
     ) THEN
-        ALTER TABLE file_shares RENAME COLUMN shared_by_user_id TO owner_id;
+        EXECUTE 'ALTER TABLE file_shares RENAME COLUMN shared_by_user_id TO owner_id';
     END IF;
 
     IF EXISTS (
@@ -37,7 +37,7 @@ BEGIN
           AND table_name = 'file_shares'
           AND column_name = 'recipient_user_id'
     ) THEN
-        ALTER TABLE file_shares RENAME COLUMN shared_with_user_id TO recipient_user_id;
+        EXECUTE 'ALTER TABLE file_shares RENAME COLUMN shared_with_user_id TO recipient_user_id';
     END IF;
 END $$;
 
