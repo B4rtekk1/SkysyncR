@@ -15,6 +15,10 @@ type PersistedActivePrivateKeySession = ActivePrivateKeySession & {
   expiresAt: number
 }
 
+type StoreActivePrivateKeyOptions = {
+  persist?: 'await' | 'background'
+}
+
 let activePrivateKeySession: ActivePrivateKeySession | null = null
 let idleTimeoutId: number | null = null
 let lifecycleListenersInstalled = false
@@ -49,11 +53,13 @@ function notifyActivePrivateKeyCleared(userId: string | null) {
   )
 }
 
-function resetIdleTimeout() {
+function resetIdleTimeout({ persist = true }: { persist?: boolean } = {}) {
   clearIdleTimeout()
   if (!activePrivateKeySession || typeof window === 'undefined') return
 
-  void persistActivePrivateKeySession(activePrivateKeySession)
+  if (persist) {
+    void persistActivePrivateKeySession(activePrivateKeySession)
+  }
 
   idleTimeoutId = window.setTimeout(() => {
     void clearActivePrivateKeys()
@@ -177,6 +183,7 @@ export async function loadEncryptedPrivateKey(
 export async function storeActivePrivateKey(
   userId: string,
   privateKey: CryptoKey,
+  options: StoreActivePrivateKeyOptions = {},
 ): Promise<void> {
   if (privateKey.extractable) {
     throw new Error('Active private keys must be imported as non-extractable.')
@@ -184,10 +191,18 @@ export async function storeActivePrivateKey(
 
   activePrivateKeySession = { userId, privateKey }
   installLifecycleListeners()
-  resetIdleTimeout()
-  await persistActivePrivateKeySession(activePrivateKeySession).catch(() => {
+  resetIdleTimeout({ persist: false })
+
+  const persistSession = persistActivePrivateKeySession(activePrivateKeySession).catch(() => {
     // The in-memory session still works if persistence is unavailable.
   })
+
+  if (options.persist === 'background') {
+    void persistSession
+    return
+  }
+
+  await persistSession
 }
 
 export async function loadActivePrivateKey(

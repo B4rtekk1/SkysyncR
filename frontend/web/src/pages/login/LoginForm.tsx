@@ -201,7 +201,7 @@ function LoginForm() {
         return
       }
 
-      await storeActivePrivateKey(user.id, privateKey)
+      await storeActivePrivateKey(user.id, privateKey, { persist: 'background' })
       setUnlockedVaultSession({ user, privateKey })
 
       clearPendingVerificationEmail()
