@@ -81,7 +81,6 @@ export function DashboardSidebar({
     return (
         <aside className="shell__sidebar" aria-hidden={sidebarHidden}>
             <Link to="/dashboard" className="shell__logo">
-                <span className="nav__logo-mark" aria-hidden="true" />
                 <span className="shell__sidebar-label">SkysyncR</span>
             </Link>
 

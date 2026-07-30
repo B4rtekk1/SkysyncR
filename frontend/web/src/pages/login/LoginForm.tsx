@@ -248,7 +248,7 @@ function LoginForm() {
   return (
       <div className="auth__form-card">
         <p className="eyebrow">
-          <span className="eyebrow__dot" /> unlock your vault
+          unlock your vault
         </p>
         <h1 className="auth__title">Sign in</h1>
         <p className="auth__subtitle">

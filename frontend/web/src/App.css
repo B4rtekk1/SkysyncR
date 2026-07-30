@@ -55,14 +55,6 @@ html[data-theme='light'] {
   color: var(--paper);
 }
 
-.nav__logo-mark {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: var(--signal);
-  box-shadow: 0 0 12px 2px var(--signal-dim);
-}
-
 .nav__actions {
   display: flex;
   align-items: center;
@@ -172,19 +164,6 @@ html[data-theme='light'] {
   color: var(--signal);
   margin: 0 0 18px;
   text-transform: lowercase;
-}
-
-.eyebrow__dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--signal);
-  animation: pulse 1.8s ease-in-out infinite;
-}
-
-@keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.35; }
 }
 
 .h1 {

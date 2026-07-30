@@ -37,7 +37,7 @@ function ForgotPassword() {
           <section className="auth__form-wrap">
             <div className="auth__form-card">
               <p className="eyebrow">
-                <span className="eyebrow__dot" /> account recovery
+                account recovery
               </p>
               <h1 className="auth__title">Reset password</h1>
               <p className="auth__subtitle">

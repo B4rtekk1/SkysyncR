@@ -76,7 +76,7 @@ export function DashboardTopbar({
 
             <div className="shell__topbar-actions">
                 <span className="shell__sync">
-                    <span className="eyebrow__dot" /> synced &middot; encrypted
+                    synced &middot; encrypted
                 </span>
 
                 <ThemeToggle className="shell__theme-toggle" />

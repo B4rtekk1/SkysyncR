@@ -240,7 +240,6 @@ function PublicShare() {
       <nav className="nav nav--solid">
         <div className="nav__inner">
           <Link to="/" className="nav__logo">
-            <span className="nav__logo-mark" aria-hidden="true" />
             SkysyncR
           </Link>
           <div className="nav__actions">

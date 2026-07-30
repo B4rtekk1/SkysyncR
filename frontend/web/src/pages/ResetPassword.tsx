@@ -98,7 +98,7 @@ function ResetPassword() {
           <section className="auth__form-wrap">
             <div className="auth__form-card">
               <p className="eyebrow">
-                <span className="eyebrow__dot" /> local key recovery
+                local key recovery
               </p>
               <h1 className="auth__title">Set a new password</h1>
               <p className="auth__subtitle">

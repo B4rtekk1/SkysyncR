@@ -211,7 +211,7 @@ function RegisterForm() {
     return (
         <div className="auth__form-card">
           <p className="eyebrow">
-            <span className="eyebrow__dot" /> recovery key
+            recovery key
           </p>
           <h1 className="auth__title">Save your recovery key</h1>
           <p className="auth__subtitle">
@@ -271,7 +271,7 @@ function RegisterForm() {
   return (
       <div className="auth__form-card">
         <p className="eyebrow">
-          <span className="eyebrow__dot" /> your keys, your device
+          your keys, your device
         </p>
         <h1 className="auth__title">Create your account</h1>
         <p className="auth__subtitle">

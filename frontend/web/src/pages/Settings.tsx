@@ -502,7 +502,7 @@ function SettingsModalContent({ currentUser, onClose, onSave }: SettingsModalPro
                 <header className="settings-topbar">
                     <div className="settings-title-group">
                         <p className="eyebrow">
-                            <span className="eyebrow__dot" /> account controls
+                            account controls
                         </p>
                         <h1 className="shell__title" id="settings-title">Settings</h1>
                         <p className="settings-topbar__copy">Manage your vault defaults, identity, and active sessions.</p>

@@ -72,7 +72,6 @@ function Landing() {
         <nav className={`nav ${navSolid ? 'nav--solid' : ''}`}>
           <div className="nav__inner">
             <Link to="/" className="nav__logo">
-              <span className="nav__logo-mark" aria-hidden="true" />
               SkysyncR
             </Link>
             <div className="nav__actions">
@@ -86,7 +85,7 @@ function Landing() {
         <main id="top" className="hero">
           <div className={`hero__copy ${loaded ? 'is-in' : ''}`}>
             <p className="eyebrow">
-              <span className="eyebrow__dot" /> end-to-end encrypted
+              end-to-end encrypted
             </p>
             <h1 className="h1">
               <span className="h1__line">Your files are locked</span>

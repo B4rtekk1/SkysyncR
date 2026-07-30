@@ -25,14 +25,6 @@
   color: var(--paper);
 }
 
-.auth-nav__logo-mark {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: var(--signal);
-  box-shadow: 0 0 12px 2px var(--signal-dim);
-}
-
 .auth-nav__back {
   font-size: 0.85rem;
   color: var(--mist);

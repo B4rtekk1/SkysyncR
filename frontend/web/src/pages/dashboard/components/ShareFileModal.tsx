@@ -389,7 +389,7 @@ export function ShareFileModal({
                 <header className="share-modal__head">
                     <div className="share-modal__title">
                         <p className="eyebrow">
-                            <span className="eyebrow__dot" /> share {itemKind}
+                            share {itemKind}
                         </p>
                         <h2 id="share-title">{title}</h2>
                     </div>
