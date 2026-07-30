@@ -21,7 +21,16 @@ import {
   isEncryptedTextEnvelope,
   streamToBlob,
 } from '../crypto/fileEncryption'
-import { createZip, safeZipName, uniqueZipPath } from './dashboard/zip'
+import {
+  FALLBACK_ZIP_DOWNLOAD_LIMIT_BYTES,
+  LARGE_ZIP_CONFIRM_BYTES,
+  estimateZipDownload,
+  formatBytes,
+  safeZipName,
+  saveZipFile,
+  uniqueZipPath,
+  type ZipStreamEntry,
+} from './dashboard/zip'
 
 type ShareStatus = 'loading' | 'ready' | 'error'
 
@@ -49,6 +58,14 @@ type PublicFolderKeyring = {
 }
 
 type DecryptedFolder = ApiFolder & { name: string }
+
+type PublicFolderDownloadEntry = {
+  path: string
+  file: ApiFile
+  rawKey: string
+  size: number
+  modifiedAt: Date
+}
 
 function folderKeyringFromLocationHash(): PublicFolderKeyring | null {
   const hash = window.location.hash.startsWith('#') ? window.location.hash.slice(1) : window.location.hash
@@ -141,29 +158,32 @@ function PublicShare() {
         return decryptMaybeEncryptedMetadata(folder.name, await importKey(rawKey))
       }
 
-      async function fileEntry(file: ApiFile, pathPrefix: string, usedPaths: Set<string>) {
+      async function fileEntry(file: ApiFile, pathPrefix: string, usedPaths: Set<string>): Promise<PublicFolderDownloadEntry> {
         const rawKey = shareKeys.files[file.id]
         if (!rawKey) throw new Error('This secure folder link is missing a file key.')
         const fileKey = await importKey(rawKey)
-        const downloaded = await downloadPublicFolderFile(shareToken, file.id, accessDetails ?? {})
+        const filename = await decryptMaybeEncryptedMetadata(file.filename, fileKey)
+        return {
+          path: uniqueZipPath(`${pathPrefix}/${safeZipName(filename, 'file')}`, usedPaths),
+          file,
+          rawKey,
+          size: Math.max(0, file.size_bytes),
+          modifiedAt: new Date(file.updated_at),
+        }
+      }
+
+      async function openFileEntry(entry: PublicFolderDownloadEntry): Promise<Blob> {
+        const fileKey = await importKey(entry.rawKey)
+        const downloaded = await downloadPublicFolderFile(shareToken, entry.file.id, accessDetails ?? {})
         await verifyBlobChecksum(downloaded.blob, downloaded.checksum)
         if (!downloaded.encryptionNonce) {
           throw new Error('This secure folder link is missing encryption metadata.')
         }
 
-        const [filename, mimeType] = await Promise.all([
-          decryptMaybeEncryptedMetadata(file.filename, fileKey),
-          downloaded.mimeType ? decryptMaybeEncryptedMetadata(downloaded.mimeType, fileKey) : Promise.resolve(null),
-        ])
-        const decryptedBlob = isChunkedFileNonce(downloaded.encryptionNonce)
+        const mimeType = downloaded.mimeType ? await decryptMaybeEncryptedMetadata(downloaded.mimeType, fileKey) : null
+        return isChunkedFileNonce(downloaded.encryptionNonce)
           ? await streamToBlob(decryptFileStream(downloaded.blob, fileKey, downloaded.encryptionNonce), mimeType)
           : await decryptFile(downloaded.blob, fileKey, downloaded.encryptionNonce, mimeType)
-
-        return {
-          path: uniqueZipPath(`${pathPrefix}/${safeZipName(filename, 'file')}`, usedPaths),
-          blob: decryptedBlob,
-          modifiedAt: new Date(file.updated_at),
-        }
       }
 
       const decryptedFolders = new Map<string, DecryptedFolder>()
@@ -183,10 +203,33 @@ function PublicShare() {
       }
 
       const usedPaths = new Set<string>()
-      const entries = await Promise.all(
-        manifest.files.map((file) => fileEntry(file, folderPath(file.folder_id), usedPaths)),
-      )
-      saveBlob(await createZip(entries), `${safeZipName(rootFolder.name, 'folder')}.zip`)
+      const entries: PublicFolderDownloadEntry[] = []
+      for (const file of manifest.files) {
+        entries.push(await fileEntry(file, folderPath(file.folder_id), usedPaths))
+      }
+
+      const estimate = estimateZipDownload(entries, false)
+      if (estimate.totalBytes > FALLBACK_ZIP_DOWNLOAD_LIMIT_BYTES) {
+        throw new Error(
+          `Folder is too large to download safely in this browser path. Estimated ZIP size is ${formatBytes(estimate.totalBytes)} across ${estimate.fileCount} files; limit is ${formatBytes(FALLBACK_ZIP_DOWNLOAD_LIMIT_BYTES)}.`,
+        )
+      }
+      if (estimate.totalBytes >= LARGE_ZIP_CONFIRM_BYTES) {
+        const confirmed = window.confirm(
+          `This shared folder contains ${estimate.fileCount} files and may create a ${formatBytes(estimate.totalBytes)} ZIP.\n\n` +
+          `Estimated peak browser memory: ${formatBytes(estimate.peakMemoryBytes)}.\n\n` +
+          'Continue?',
+        )
+        if (!confirmed) return
+      }
+
+      const zipEntries: ZipStreamEntry[] = entries.map((entry) => ({
+        path: entry.path,
+        size: entry.size,
+        modifiedAt: entry.modifiedAt,
+        open: () => openFileEntry(entry),
+      }))
+      await saveZipFile(`${safeZipName(rootFolder.name, 'folder')}.zip`, zipEntries, null)
     }
 
     async function download() {
