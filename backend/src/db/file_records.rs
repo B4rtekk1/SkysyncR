@@ -162,5 +162,7 @@ pub struct UpdateFileContentTarget {
 #[derive(FromRow)]
 pub struct FilePurgeTarget {
     pub id: Uuid,
+    pub owner_id: Uuid,
     pub storage_path: String,
+    pub size_bytes: i64,
 }

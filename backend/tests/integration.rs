@@ -4,9 +4,9 @@ use skysyncr::db::files::{
     NewFileRecord, NewFileShare, UpdatedFileContent, consume_public_file_share_for_download,
     create_file_record, create_file_version_snapshot_in_tx,
     file_content_key_fingerprint_exists_in_tx, get_user_file_for_content_update_in_tx,
-    get_user_file_for_download, list_files_shared_with_user, rename_user_file,
-    update_user_file_content, update_user_file_note, update_user_file_share_keys_in_tx,
-    upsert_user_file_share,
+    get_user_file_for_download, hard_delete_file_record, list_files_shared_with_user,
+    rename_user_file, soft_delete_user_file, update_user_file_content, update_user_file_note,
+    update_user_file_share_keys_in_tx, upsert_user_file_share,
 };
 use skysyncr::db::refresh_tokens::{
     RefreshTokenAuth, authenticate_refresh_token, create_refresh_token, rotate_refresh_token,
@@ -379,6 +379,63 @@ async fn storage_quota_rejects_overflow_and_negative_usage() {
 
     let quota = get_storage_quota(&pool, user_id).await.unwrap();
     assert_eq!(quota.used_bytes, 60);
+    assert_eq!(quota.total_bytes, 100);
+}
+
+#[tokio::test]
+async fn storage_quota_counts_deleted_files_until_permanent_delete() {
+    let (_guard, pool) = test_pool().await;
+    let user_id = insert_user(&pool, "trash-quota@example.test").await;
+
+    sqlx::query(
+        r#"
+        INSERT INTO storage_quotas (user_id, max_bytes, used_bytes)
+        VALUES ($1, 100, 0)
+        ON CONFLICT (user_id)
+        DO UPDATE SET max_bytes = 100, used_bytes = 0
+        "#,
+    )
+    .bind(user_id)
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let mut tx = pool.begin().await.unwrap();
+    assert!(try_apply_storage_delta(&mut tx, user_id, 40).await.unwrap());
+    let file = create_file_record(
+        &mut tx,
+        NewFileRecord {
+            owner_id: user_id,
+            filename: "trashed.txt".to_string(),
+            storage_path: "trashed.txt.enc".to_string(),
+            mime_type: Some("text/plain".to_string()),
+            size_bytes: 40,
+            encrypted_key: vec![1, 2, 3],
+            encryption_nonce: vec![4, 5, 6],
+            content_key_fingerprint: Some("trash-quota-fingerprint".to_string()),
+            checksum: "trash-quota-checksum".to_string(),
+            folder_id: None,
+        },
+    )
+    .await
+    .unwrap();
+    tx.commit().await.unwrap();
+
+    assert_eq!(
+        soft_delete_user_file(&pool, user_id, file.id)
+            .await
+            .unwrap(),
+        1
+    );
+
+    let quota = get_storage_quota(&pool, user_id).await.unwrap();
+    assert_eq!(quota.used_bytes, 40);
+    assert_eq!(quota.total_bytes, 100);
+
+    assert_eq!(hard_delete_file_record(&pool, file.id).await.unwrap(), 1);
+
+    let quota = get_storage_quota(&pool, user_id).await.unwrap();
+    assert_eq!(quota.used_bytes, 0);
     assert_eq!(quota.total_bytes, 100);
 }
 

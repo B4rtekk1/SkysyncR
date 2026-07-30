@@ -95,7 +95,7 @@ pub async fn reconcile_all_storage_quotas(pool: &PgPool) -> Result<u64, sqlx::Er
             updated_at = NOW()
         FROM (
             SELECT sq_inner.user_id,
-                   COALESCE(SUM(f.size_bytes) FILTER (WHERE f.is_deleted = FALSE), 0)::bigint AS used_bytes
+                   COALESCE(SUM(f.size_bytes), 0)::bigint AS used_bytes
             FROM storage_quotas sq_inner
             LEFT JOIN files f ON f.owner_id = sq_inner.user_id
             GROUP BY sq_inner.user_id

@@ -9,7 +9,6 @@ pub use super::file_records::{
     FileVersionRecord, NewFileRecord, NewFileShare, ShareRecipientRecord, SharedFileRecord,
     UpdateFileContentTarget,
 };
-use super::storage::try_apply_storage_delta;
 
 #[derive(FromRow)]
 struct PublicFileShareDownloadRow {
@@ -914,13 +913,10 @@ pub async fn soft_delete_user_file(
     .fetch_optional(&mut *tx)
     .await?;
 
-    let Some(row) = result else {
+    if result.is_none() {
         tx.rollback().await?;
         return Ok(0);
-    };
-
-    let size_bytes: i64 = row.try_get("size_bytes")?;
-    try_apply_storage_delta(&mut tx, user_id, -size_bytes).await?;
+    }
     tx.commit().await?;
 
     Ok(1)
@@ -935,29 +931,24 @@ pub async fn restore_user_file(
 
     snapshot_user_file_metadata_in_tx(&mut tx, user_id, file_id, "restore").await?;
 
-    let target = sqlx::query(
+    let target = sqlx::query_scalar::<_, bool>(
         r#"
-        SELECT size_bytes
-        FROM files
-        WHERE id = $1
-          AND owner_id = $2
-          AND is_deleted = TRUE
-        FOR UPDATE
+        SELECT EXISTS (
+            SELECT 1
+            FROM files
+            WHERE id = $1
+              AND owner_id = $2
+              AND is_deleted = TRUE
+        )
         "#,
     )
     .bind(file_id)
     .bind(user_id)
-    .fetch_optional(&mut *tx)
+    .fetch_one(&mut *tx)
     .await?;
 
-    let Some(target) = target else {
+    if !target {
         tx.rollback().await?;
-        return Ok(0);
-    };
-
-    let size_bytes: i64 = target.try_get("size_bytes")?;
-    if !try_apply_storage_delta(&mut tx, user_id, size_bytes).await? {
-        tx.commit().await?;
         return Ok(0);
     }
 
@@ -989,7 +980,7 @@ pub async fn get_user_file_for_permanent_delete(
 ) -> Result<Option<FilePurgeTarget>, sqlx::Error> {
     sqlx::query_as::<_, FilePurgeTarget>(
         r#"
-        SELECT id, storage_path
+        SELECT id, owner_id, storage_path, size_bytes
         FROM files
         WHERE id = $1
           AND owner_id = $2
@@ -1009,7 +1000,7 @@ pub async fn list_expired_deleted_files(
 ) -> Result<Vec<FilePurgeTarget>, sqlx::Error> {
     sqlx::query_as::<_, FilePurgeTarget>(
         r#"
-        SELECT f.id, f.storage_path
+        SELECT f.id, f.owner_id, f.storage_path, f.size_bytes
         FROM files f
         JOIN users u ON u.id = f.owner_id
         WHERE f.is_deleted = TRUE
@@ -1042,18 +1033,42 @@ pub async fn list_file_version_storage_paths(
 }
 
 pub async fn hard_delete_file_record(pool: &PgPool, file_id: Uuid) -> Result<u64, sqlx::Error> {
+    let mut tx = pool.begin().await?;
+
     let result = sqlx::query(
         r#"
         DELETE FROM files
         WHERE id = $1
           AND is_deleted = TRUE
+        RETURNING owner_id, size_bytes
         "#,
     )
     .bind(file_id)
-    .execute(pool)
+    .fetch_optional(&mut *tx)
     .await?;
 
-    Ok(result.rows_affected())
+    let Some(row) = result else {
+        tx.rollback().await?;
+        return Ok(0);
+    };
+
+    let owner_id: Uuid = row.try_get("owner_id")?;
+    let size_bytes: i64 = row.try_get("size_bytes")?;
+    sqlx::query(
+        r#"
+        UPDATE storage_quotas
+        SET used_bytes = GREATEST(used_bytes - $2, 0),
+            updated_at = NOW()
+        WHERE user_id = $1
+        "#,
+    )
+    .bind(owner_id)
+    .bind(size_bytes)
+    .execute(&mut *tx)
+    .await?;
+
+    tx.commit().await?;
+    Ok(1)
 }
 
 pub async fn rename_user_file(

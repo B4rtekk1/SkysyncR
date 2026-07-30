@@ -8,6 +8,7 @@ import { Link } from '../../../router'
 import type { StorageQuota } from '../../../api/files'
 import {
     DRAG_HANDLE_ICON,
+    INFO_ICON,
     NAV_ICONS,
     SETTINGS_ICON,
     SIDEBAR_HIDE_ICON,
@@ -182,7 +183,19 @@ export function DashboardSidebar({
 
             <div className="shell__storage">
                 <div className="shell__storage-row">
-                    <span>Storage</span>
+                    <span className="shell__storage-label">
+                        Storage
+                        <span
+                            className="shell__storage-info"
+                            aria-label="Files in trash also count toward storage usage."
+                            tabIndex={0}
+                        >
+                            {INFO_ICON}
+                            <span className="shell__storage-tooltip" role="tooltip">
+                                Files in trash also count toward storage usage.
+                            </span>
+                        </span>
+                    </span>
                     <span>{quota ? `${formatBytes(quota.used_bytes)} / ${formatBytes(quota.total_bytes)}` : '-'}</span>
                 </div>
                 <div className="shell__storage-summary">

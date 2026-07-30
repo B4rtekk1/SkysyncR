@@ -42,7 +42,6 @@ type SecurityCenterPanelProps = {
 }
 
 const riskyOperations = new Set([
-    'file.delete',
     'file.share',
     'file.update',
     'file.version.restore',
@@ -116,17 +115,23 @@ function toPublicLinks(files: ApiFile[], folders: ApiFolder[]): PublicLinkItem[]
     return [...publicFiles, ...publicFolders].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
 }
 
-function recentSuspiciousOperations(operations: OperationLogEntry[]): OperationLogEntry[] {
+function recentSuspiciousOperations(operations: OperationLogEntry[], files: ApiFile[]): OperationLogEntry[] {
     const now = Date.now()
     const recentDeletes = operations.filter((entry) => entry.operation === 'file.delete' && now - new Date(entry.created_at).getTime() < 30 * 60 * 1000)
     const recentUpdates = operations.filter((entry) => entry.operation === 'file.update' && now - new Date(entry.created_at).getTime() < 30 * 60 * 1000)
     const massActivityIds = new Set<string>()
+    const favouriteFileIds = new Set(files.filter((file) => file.is_favourite).map((file) => file.id))
 
     if (recentDeletes.length >= 5) recentDeletes.forEach((entry) => massActivityIds.add(entry.id))
     if (recentUpdates.length >= 10) recentUpdates.forEach((entry) => massActivityIds.add(entry.id))
 
     return operations
-        .filter((entry) => riskyOperations.has(entry.operation) || massActivityIds.has(entry.id))
+        .filter(
+            (entry) =>
+                riskyOperations.has(entry.operation) ||
+                massActivityIds.has(entry.id) ||
+                (entry.operation === 'file.delete' && entry.resource_id !== null && favouriteFileIds.has(entry.resource_id)),
+        )
         .slice(0, 10)
 }
 
@@ -145,7 +150,7 @@ export function SecurityCenterPanel({
     const [revokingSessionId, setRevokingSessionId] = useState<string | null>(null)
 
     const publicLinks = useMemo(() => toPublicLinks(files, folders), [files, folders])
-    const suspiciousOperations = useMemo(() => recentSuspiciousOperations(operationLog), [operationLog])
+    const suspiciousOperations = useMemo(() => recentSuspiciousOperations(operationLog, files), [files, operationLog])
     const restoreHistory = useMemo(
         () => operationLog.filter((entry) => entry.operation === 'file.restore' || entry.operation === 'file.version.restore').slice(0, 8),
         [operationLog],

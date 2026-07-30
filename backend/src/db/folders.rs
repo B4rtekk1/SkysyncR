@@ -853,11 +853,11 @@ pub async fn soft_delete_user_folder(
             WHERE owner_id = $2
               AND folder_id IN (SELECT id FROM folder_tree)
               AND is_deleted = FALSE
-            RETURNING size_bytes
+            RETURNING id
         )
         SELECT
             (SELECT COUNT(*)::bigint FROM updated_folders) AS folder_count,
-            COALESCE((SELECT SUM(size_bytes)::bigint FROM updated_files), 0)::bigint AS file_bytes
+            (SELECT COUNT(*)::bigint FROM updated_files) AS file_count
         "#,
     )
     .bind(folder_id)
@@ -866,14 +866,9 @@ pub async fn soft_delete_user_folder(
     .await?;
 
     let folder_count: i64 = row.try_get("folder_count")?;
-    let file_bytes: i64 = row.try_get("file_bytes")?;
     if folder_count == 0 {
         tx.rollback().await?;
         return Ok(0);
-    }
-
-    if file_bytes > 0 {
-        super::storage::try_apply_storage_delta(&mut tx, user_id, -file_bytes).await?;
     }
 
     tx.commit().await?;
@@ -908,42 +903,6 @@ pub async fn restore_user_folder(
 
     if !target {
         tx.rollback().await?;
-        return Ok(0);
-    }
-
-    let file_bytes = sqlx::query_scalar::<_, i64>(
-        r#"
-        WITH RECURSIVE folder_tree AS (
-            SELECT id
-            FROM folders
-            WHERE id = $1
-              AND owner_id = $2
-              AND is_deleted = TRUE
-
-            UNION ALL
-
-            SELECT f.id
-            FROM folders f
-            JOIN folder_tree ft ON f.parent_folder_id = ft.id
-            WHERE f.owner_id = $2
-              AND f.is_deleted = TRUE
-        )
-        SELECT COALESCE(SUM(size_bytes), 0)::bigint
-        FROM files
-        WHERE owner_id = $2
-          AND folder_id IN (SELECT id FROM folder_tree)
-          AND is_deleted = TRUE
-        "#,
-    )
-    .bind(folder_id)
-    .bind(user_id)
-    .fetch_one(&mut *tx)
-    .await?;
-
-    if file_bytes > 0
-        && !super::storage::try_apply_storage_delta(&mut tx, user_id, file_bytes).await?
-    {
-        tx.commit().await?;
         return Ok(0);
     }
 
@@ -1569,7 +1528,7 @@ pub async fn list_deleted_folder_file_targets(
             WHERE f.owner_id = $2
               AND f.is_deleted = TRUE
         )
-        SELECT id, storage_path
+        SELECT id, owner_id, storage_path, size_bytes
         FROM files
         WHERE owner_id = $2
           AND folder_id IN (SELECT id FROM folder_tree)

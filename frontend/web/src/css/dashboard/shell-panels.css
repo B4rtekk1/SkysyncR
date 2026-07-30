@@ -6,11 +6,88 @@
 
 .shell__storage-row {
     display: flex;
+    align-items: center;
     justify-content: space-between;
+    gap: 10px;
     font-family: var(--font-mono), monospace;
     font-size: 0.72rem;
     color: var(--mist);
     margin-bottom: 8px;
+}
+
+.shell__storage-label {
+    display: inline-flex;
+    align-items: center;
+    min-width: 0;
+    gap: 5px;
+}
+
+.shell__storage-info {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 17px;
+    height: 17px;
+    flex-shrink: 0;
+    color: var(--mist);
+    cursor: help;
+    opacity: 0.78;
+    transition: color 0.15s ease, opacity 0.15s ease;
+}
+
+.shell__storage-info svg {
+    width: 14px;
+    height: 14px;
+}
+
+.shell__storage-info:hover,
+.shell__storage-info:focus-visible {
+    color: var(--signal);
+    opacity: 1;
+    outline: none;
+}
+
+.shell__storage-tooltip {
+    position: absolute;
+    left: 0;
+    bottom: calc(100% + 8px);
+    z-index: 40;
+    width: min(220px, calc(100vw - 32px));
+    padding: 7px 9px;
+    border: 1px solid var(--line);
+    border-radius: 7px;
+    background: var(--panel);
+    color: var(--paper);
+    box-shadow: 0 12px 28px rgba(0, 0, 0, 0.32);
+    font-family: inherit;
+    font-size: 0.72rem;
+    line-height: 1.3;
+    opacity: 0;
+    pointer-events: none;
+    text-align: left;
+    transform: translateY(4px);
+    transition: opacity 0.14s ease, transform 0.14s ease;
+    white-space: normal;
+}
+
+.shell__storage-tooltip::after {
+    content: '';
+    position: absolute;
+    left: 8px;
+    top: 100%;
+    width: 8px;
+    height: 8px;
+    border-right: 1px solid var(--line);
+    border-bottom: 1px solid var(--line);
+    background: var(--panel);
+    transform: translateY(-4px) rotate(45deg);
+}
+
+.shell__storage-info:hover .shell__storage-tooltip,
+.shell__storage-info:focus-visible .shell__storage-tooltip {
+    opacity: 1;
+    transform: translateY(0);
 }
 
 .shell__storage-summary {
