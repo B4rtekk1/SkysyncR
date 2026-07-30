@@ -13,10 +13,13 @@ use crate::state::AppState;
 pub fn folders_routes() -> Router<AppState> {
     Router::new()
         .route("/folders", get(list_folders).post(create_folder))
-        .route("/share/folders/{token}", get(get_public_folder_manifest))
+        .route(
+            "/share/folders/{token}",
+            get(get_public_folder_manifest).post(get_public_folder_manifest),
+        )
         .route(
             "/share/folders/{token}/files/{file_id}/download",
-            get(download_public_folder_file),
+            get(download_public_folder_file).post(download_public_folder_file),
         )
         .route(
             "/folders/{id}",

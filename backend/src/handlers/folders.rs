@@ -9,7 +9,8 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use base64::{Engine as _, engine::general_purpose};
-use chrono::{DateTime, Utc};
+use bcrypt::{DEFAULT_COST, hash};
+use chrono::{DateTime, Duration, Utc};
 use serde::{Deserialize, Serialize};
 use tokio::fs;
 use tokio_util::io::ReaderStream;
@@ -23,9 +24,10 @@ use crate::db::folders::{
     delete_user_folder_share, folder_belongs_to_user, folder_is_descendant_of,
     get_folder_share_recipient, get_public_folder_file_for_download, get_public_folder_tree,
     list_public_folder_tree_files, list_user_favourite_folders, list_user_folder_shares,
-    list_user_folders, move_user_folder, remove_user_folder_favourite, rename_user_folder,
-    restore_user_folder, restore_user_folder_to_point, soft_delete_user_folder,
-    update_user_folder_share, upsert_user_folder_share, user_folder_exists,
+    list_user_folders, move_user_folder, public_folder_share_access_allowed,
+    remove_user_folder_favourite, rename_user_folder, restore_user_folder,
+    restore_user_folder_to_point, soft_delete_user_folder, update_user_folder_share,
+    upsert_user_folder_share, user_folder_exists,
 };
 use crate::observability::RequestId;
 use crate::services::trash::permanently_delete_user_folder;
@@ -52,6 +54,20 @@ pub struct CreateFolderRequest {
 #[derive(Deserialize)]
 pub struct ShareFolderRequest {
     pub is_public: bool,
+    pub starts_at: Option<DateTime<Utc>>,
+    pub expires_at: Option<DateTime<Utc>>,
+    pub expires_in_seconds: Option<i64>,
+    pub download_limit: Option<i32>,
+    #[serde(default)]
+    pub one_time: bool,
+    pub password: Option<String>,
+    pub recipient_email: Option<String>,
+}
+
+#[derive(Deserialize)]
+pub struct PublicFolderAccessRequest {
+    pub password: Option<String>,
+    pub recipient_email: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -157,12 +173,61 @@ pub async fn share_folder(
     Json(payload): Json<ShareFolderRequest>,
 ) -> Result<Json<FolderRecord>, ApiError> {
     let share_token = payload.is_public.then(|| Uuid::new_v4().to_string());
+    let share_starts_at = if payload.is_public {
+        validate_share_starts_at(payload.starts_at)?
+    } else {
+        None
+    };
+    let share_expires_at = if payload.is_public {
+        validate_share_expires_at(
+            payload.expires_at,
+            payload.expires_in_seconds,
+            share_starts_at,
+        )?
+    } else {
+        None
+    };
+    let share_download_limit = if payload.is_public {
+        payload
+            .download_limit
+            .map(validate_share_download_limit)
+            .transpose()?
+    } else {
+        None
+    };
+    let update_share_password = payload.password.is_some();
+    let share_password_hash = if payload.is_public {
+        validate_share_password(payload.password.as_deref())?
+            .map(|password| hash(password, DEFAULT_COST))
+            .transpose()
+            .map_err(|e| internal_error("hash folder share password", e))?
+    } else {
+        None
+    };
+    let share_recipient_email = if payload.is_public {
+        payload
+            .recipient_email
+            .as_deref()
+            .map(str::trim)
+            .filter(|email| !email.is_empty())
+            .map(normalize_share_email)
+            .transpose()?
+    } else {
+        None
+    };
     let folder = update_user_folder_share(
         &state.db_pool,
         auth.user_id,
         folder_id,
         payload.is_public,
         share_token,
+        share_starts_at,
+        share_expires_at,
+        share_download_limit,
+        payload.is_public && payload.one_time,
+        update_share_password,
+        share_password_hash,
+        share_recipient_email,
     )
     .await
     .map_err(|e| internal_error("share folder", e))?
@@ -174,8 +239,23 @@ pub async fn share_folder(
 pub async fn get_public_folder_manifest(
     State(state): State<AppState>,
     Path(share_token): Path<String>,
+    payload: Option<Json<PublicFolderAccessRequest>>,
 ) -> Result<Json<PublicFolderManifest>, ApiError> {
     let share_token = validate_share_token(&share_token)?;
+    let (password, recipient_email) = public_folder_access_details(payload.as_ref())?;
+    let allowed = public_folder_share_access_allowed(
+        &state.db_pool,
+        &share_token,
+        password,
+        recipient_email.as_deref(),
+    )
+    .await
+    .map_err(|e| internal_error("check public folder access", e))?;
+    if !allowed {
+        return Err(ApiError::BadRequest(
+            "This share link is invalid, expired, or requires valid access details".into(),
+        ));
+    }
     let folders = get_public_folder_tree(&state.db_pool, &share_token)
         .await
         .map_err(|e| internal_error("get public folder tree", e))?;
@@ -199,12 +279,24 @@ pub async fn download_public_folder_file(
     State(state): State<AppState>,
     Extension(request_id): Extension<RequestId>,
     Path((share_token, file_id)): Path<(String, Uuid)>,
+    payload: Option<Json<PublicFolderAccessRequest>>,
 ) -> Result<Response, ApiError> {
     let share_token = validate_share_token(&share_token)?;
-    let file = get_public_folder_file_for_download(&state.db_pool, &share_token, file_id)
-        .await
-        .map_err(|e| internal_error("get public folder download file", e))?
-        .ok_or_else(|| ApiError::BadRequest("File not found in this shared folder".into()))?;
+    let (password, recipient_email) = public_folder_access_details(payload.as_ref())?;
+    let file = get_public_folder_file_for_download(
+        &state.db_pool,
+        &share_token,
+        file_id,
+        password,
+        recipient_email.as_deref(),
+    )
+    .await
+    .map_err(|e| internal_error("get public folder download file", e))?
+    .ok_or_else(|| {
+        ApiError::BadRequest(
+            "File not found in this shared folder or requires valid access details".into(),
+        )
+    })?;
 
     let download = fs::File::open(&file.storage_path)
         .await
@@ -508,6 +600,20 @@ async fn ensure_user_folder_exists(
     }
 }
 
+fn public_folder_access_details<'a>(
+    payload: Option<&'a Json<PublicFolderAccessRequest>>,
+) -> Result<(Option<&'a str>, Option<String>), ApiError> {
+    let password = payload.and_then(|Json(payload)| payload.password.as_deref());
+    let recipient_email = payload
+        .and_then(|Json(payload)| payload.recipient_email.as_deref())
+        .map(str::trim)
+        .filter(|email| !email.is_empty())
+        .map(normalize_share_email)
+        .transpose()?;
+
+    Ok((password, recipient_email))
+}
+
 fn parse_optional_uuid(value: Option<&str>, field_name: &str) -> Result<Option<Uuid>, ApiError> {
     value
         .filter(|raw| !raw.trim().is_empty())
@@ -595,6 +701,102 @@ fn validate_share_token(value: &str) -> Result<String, ApiError> {
     let trimmed = value.trim();
     Uuid::parse_str(trimmed).map_err(|_| ApiError::BadRequest("Invalid share token".into()))?;
     Ok(trimmed.to_string())
+}
+
+fn validate_share_starts_at(
+    starts_at: Option<DateTime<Utc>>,
+) -> Result<Option<DateTime<Utc>>, ApiError> {
+    let Some(starts_at) = starts_at else {
+        return Ok(None);
+    };
+
+    let now = Utc::now();
+    if starts_at < now - Duration::minutes(5) {
+        return Err(ApiError::BadRequest(
+            "Activation date cannot be in the past".into(),
+        ));
+    }
+    if starts_at > now + Duration::days(365) {
+        return Err(ApiError::BadRequest(
+            "Activation date must be within 365 days".into(),
+        ));
+    }
+
+    Ok(Some(starts_at))
+}
+
+fn validate_share_expires_at(
+    expires_at: Option<DateTime<Utc>>,
+    expires_in_seconds: Option<i64>,
+    starts_at: Option<DateTime<Utc>>,
+) -> Result<Option<DateTime<Utc>>, ApiError> {
+    let expiry = if let Some(expires_at) = expires_at {
+        Some(expires_at)
+    } else {
+        expires_in_seconds
+            .map(validate_share_duration)
+            .transpose()?
+            .map(|duration| Utc::now() + duration)
+    };
+
+    let Some(expires_at) = expiry else {
+        return Ok(None);
+    };
+    let activation = starts_at.unwrap_or_else(Utc::now);
+    if expires_at <= activation {
+        return Err(ApiError::BadRequest(
+            "Expiration date must be after activation date".into(),
+        ));
+    }
+    if expires_at > activation + Duration::days(365) {
+        return Err(ApiError::BadRequest(
+            "Expiration date must be within 365 days of activation".into(),
+        ));
+    }
+
+    Ok(Some(expires_at))
+}
+
+fn validate_share_duration(seconds: i64) -> Result<Duration, ApiError> {
+    const MIN_SHARE_SECONDS: i64 = 60;
+    const MAX_SHARE_SECONDS: i64 = 60 * 60 * 24 * 365;
+
+    if !(MIN_SHARE_SECONDS..=MAX_SHARE_SECONDS).contains(&seconds) {
+        return Err(ApiError::BadRequest(
+            "Share duration must be between 1 minute and 365 days".into(),
+        ));
+    }
+
+    Ok(Duration::seconds(seconds))
+}
+
+fn validate_share_download_limit(limit: i32) -> Result<i32, ApiError> {
+    const MIN_DOWNLOAD_LIMIT: i32 = 1;
+    const MAX_DOWNLOAD_LIMIT: i32 = 1_000_000;
+
+    if !(MIN_DOWNLOAD_LIMIT..=MAX_DOWNLOAD_LIMIT).contains(&limit) {
+        return Err(ApiError::BadRequest(
+            "Download limit must be between 1 and 1000000".into(),
+        ));
+    }
+
+    Ok(limit)
+}
+
+fn validate_share_password(value: Option<&str>) -> Result<Option<&str>, ApiError> {
+    const MIN_SHARE_PASSWORD_LEN: usize = 8;
+    const MAX_SHARE_PASSWORD_LEN: usize = 128;
+
+    let Some(password) = value.map(str::trim).filter(|password| !password.is_empty()) else {
+        return Ok(None);
+    };
+    if !(MIN_SHARE_PASSWORD_LEN..=MAX_SHARE_PASSWORD_LEN).contains(&password.len()) {
+        return Err(ApiError::BadRequest(
+            "Share password must be between 8 and 128 characters".into(),
+        ));
+    }
+
+    Ok(Some(password))
 }
 
 fn sanitize_download_filename(filename: &str) -> String {

@@ -124,7 +124,7 @@ function PublicShare() {
       }
       const shareKeys = keyring
 
-      const manifest = await getPublicFolderManifest(shareToken)
+      const manifest = await getPublicFolderManifest(shareToken, accessDetails ?? {})
       const keyCache = new Map<string, CryptoKey>()
 
       async function importKey(rawKey: string): Promise<CryptoKey> {
@@ -145,7 +145,7 @@ function PublicShare() {
         const rawKey = shareKeys.files[file.id]
         if (!rawKey) throw new Error('This secure folder link is missing a file key.')
         const fileKey = await importKey(rawKey)
-        const downloaded = await downloadPublicFolderFile(shareToken, file.id)
+        const downloaded = await downloadPublicFolderFile(shareToken, file.id, accessDetails ?? {})
         await verifyBlobChecksum(downloaded.blob, downloaded.checksum)
         if (!downloaded.encryptionNonce) {
           throw new Error('This secure folder link is missing encryption metadata.')
@@ -262,7 +262,7 @@ function PublicShare() {
           {isFolderShare ? 'Shared folder' : 'Shared file'}
         </h1>
         <p className="not-found__copy">{message}</p>
-        {status === 'error' && !isFolderShare && (
+        {status === 'error' && (
           <form className="auth__form public-share__access-form" onSubmit={submitAccessDetails}>
             <input
               value={recipientEmailDraft}

@@ -66,7 +66,17 @@ type DashboardModalsProps = {
         expiresAt?: string | null,
         oneTime?: boolean,
     ) => Promise<unknown>
-    onSetFolderSharing: (folder: ApiFolder, isPublic: boolean) => Promise<unknown>
+    onSetFolderSharing: (
+        folder: ApiFolder,
+        isPublic: boolean,
+        expiresInSeconds?: number | null,
+        downloadLimit?: number | null,
+        password?: string | null,
+        recipientEmail?: string | null,
+        startsAt?: string | null,
+        expiresAt?: string | null,
+        oneTime?: boolean,
+    ) => Promise<unknown>
 }
 
 function ModalFallback() {
@@ -288,7 +298,7 @@ export function DashboardModals({
                             if ('filename' in shareItem) {
                                 await onSetFileSharing(shareItem, true, expiresInSeconds, downloadLimit, password, recipientEmail, startsAt, expiresAt, oneTime)
                             } else {
-                                await onSetFolderSharing(shareItem, true)
+                                await onSetFolderSharing(shareItem, true, expiresInSeconds, downloadLimit, password, recipientEmail, startsAt, expiresAt, oneTime)
                             }
                         }}
                         onDisableShare={async () => {

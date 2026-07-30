@@ -77,20 +77,20 @@ export function ShareFileModal({
     const [emailDraft, setEmailDraft] = useState('')
     const [permissionDraft, setPermissionDraft] = useState<FileSharePermission>('read')
     const [shareStartsAtDraft, setShareStartsAtDraft] = useState(() =>
-        'filename' in item && item.share_starts_at ? toDatetimeLocalValue(new Date(item.share_starts_at)) : '',
+        item.share_starts_at ? toDatetimeLocalValue(new Date(item.share_starts_at)) : '',
     )
     const [shareExpiresAtDraft, setShareExpiresAtDraft] = useState(() =>
-        'filename' in item && item.share_expires_at
+        item.share_expires_at
             ? toDatetimeLocalValue(new Date(item.share_expires_at))
             : toDatetimeLocalValue(new Date(Date.now() + DEFAULT_SHARE_DURATION_SECONDS * 1000)),
     )
     const [downloadLimitDraft, setDownloadLimitDraft] = useState(() =>
-        'filename' in item && item.share_download_limit ? String(item.share_download_limit) : '',
+        item.share_download_limit ? String(item.share_download_limit) : '',
     )
-    const [oneTimeDraft, setOneTimeDraft] = useState(() => ('filename' in item ? item.share_one_time : false))
+    const [oneTimeDraft, setOneTimeDraft] = useState(() => item.share_one_time)
     const [sharePasswordDraft, setSharePasswordDraft] = useState('')
     const [shareRecipientEmailDraft, setShareRecipientEmailDraft] = useState(() =>
-        'filename' in item ? item.share_recipient_email ?? '' : '',
+        item.share_recipient_email ?? '',
     )
     const [copied, setCopied] = useState(false)
     const [error, setError] = useState<string | null>(null)
@@ -110,7 +110,6 @@ export function ShareFileModal({
         }
     }, [shareUrl])
     const isFileShare = 'filename' in item
-    const fileItem = isFileShare ? item : null
     const title = isFileShare ? item.filename : item.name
     const linkInputValue =
         shareUrl ??
@@ -124,10 +123,9 @@ export function ShareFileModal({
     const startsAtIso = shareStartsAt ? shareStartsAt.toISOString() : null
     const expiresAtIso = shareExpiresAt ? shareExpiresAt.toISOString() : null
     const hasInvalidShareWindow =
-        itemKind === 'file' &&
-        ((shareStartsAtDraft.trim() !== '' && !shareStartsAt) ||
+        (shareStartsAtDraft.trim() !== '' && !shareStartsAt) ||
             (shareExpiresAtDraft.trim() !== '' && !shareExpiresAt) ||
-            Boolean(shareStartsAt && shareExpiresAt && shareExpiresAt <= shareStartsAt))
+            Boolean(shareStartsAt && shareExpiresAt && shareExpiresAt <= shareStartsAt)
     const activationLabel = shareStartsAt
         ? `Starts ${shareStartsAt.toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}`
         : 'Active immediately'
@@ -136,19 +134,16 @@ export function ShareFileModal({
         : 'No expiry'
     const downloadLimit = downloadLimitDraft.trim() ? Number(downloadLimitDraft) : null
     const hasInvalidDownloadLimit =
-        itemKind === 'file' &&
         downloadLimitDraft.trim() !== '' &&
         (downloadLimit === null || !Number.isInteger(downloadLimit) || downloadLimit < 1 || downloadLimit > 1000000)
     const sharePassword = sharePasswordDraft.trim()
     const shareRecipientEmail = shareRecipientEmailDraft.trim().toLowerCase()
-    const hasInvalidSharePassword = itemKind === 'file' && sharePassword !== '' && (sharePassword.length < 8 || sharePassword.length > 128)
-    const hasInvalidShareRecipientEmail = itemKind === 'file' && shareRecipientEmail !== '' && !EMAIL_PATTERN.test(shareRecipientEmail)
+    const hasInvalidSharePassword = sharePassword !== '' && (sharePassword.length < 8 || sharePassword.length > 128)
+    const hasInvalidShareRecipientEmail = shareRecipientEmail !== '' && !EMAIL_PATTERN.test(shareRecipientEmail)
     const downloadLimitLabel =
-        isFileShare
-            ? downloadLimit
-                ? `${item.share_download_count ?? 0} / ${downloadLimit} downloads`
-                : `${item.share_download_count ?? 0} downloads, no limit`
-            : null
+        downloadLimit
+            ? `${item.share_download_count ?? 0} / ${downloadLimit} downloads`
+            : `${item.share_download_count ?? 0} downloads, no limit`
 
     function toSharePerson(person: FileSharePerson): SharePerson {
         return {
@@ -410,8 +405,7 @@ export function ShareFileModal({
                             <span>Anyone with this link</span>
                             <strong>{itemKind === 'folder' ? 'View folder' : 'View only'}</strong>
                         </div>
-                        {itemKind === 'file' && (
-                            <section className="share-modal__settings">
+                        <section className="share-modal__settings">
                                 <button
                                     className="share-modal__settings-trigger"
                                     type="button"
@@ -424,7 +418,7 @@ export function ShareFileModal({
                                             {expiryLabel}
                                             {downloadLimit ? `, ${downloadLimit} downloads max` : ''}
                                             {oneTimeDraft ? ', one-time' : ''}
-                                            {sharePassword || fileItem?.share_password_enabled ? ', password' : ''}
+                                            {sharePassword || item.share_password_enabled ? ', password' : ''}
                                         </small>
                                     </span>
                                     <span className="share-modal__settings-chevron" aria-hidden="true">
@@ -498,11 +492,11 @@ export function ShareFileModal({
                                                 maxLength={128}
                                                 value={sharePasswordDraft}
                                                 onChange={(event) => setSharePasswordDraft(event.target.value)}
-                                                placeholder={fileItem?.share_password_enabled ? 'Password set' : 'No password'}
+                                                placeholder={item.share_password_enabled ? 'Password set' : 'No password'}
                                                 disabled={loading}
                                                 aria-label="Share link password"
                                             />
-                                            <span>{sharePassword ? 'Will require password' : fileItem?.share_password_enabled ? 'Leave empty to remove' : 'Optional'}</span>
+                                            <span>{sharePassword ? 'Will require password' : item.share_password_enabled ? 'Leave empty to remove' : 'Optional'}</span>
                                         </div>
                                         <div className="share-modal__expiry">
                                             <span>Recipient email</span>
@@ -520,8 +514,7 @@ export function ShareFileModal({
                                         </div>
                                     </div>
                                 )}
-                            </section>
-                        )}
+                        </section>
                         <div className="share-modal__link-row">
                             <input value={linkInputValue} readOnly aria-label="Share link" />
                             <button
@@ -542,12 +535,12 @@ export function ShareFileModal({
                                 onClick={() =>
                                     void onEnableShare(
                                         null,
-                                        itemKind === 'file' ? downloadLimit : undefined,
-                                        itemKind === 'file' ? sharePasswordDraft : undefined,
-                                        itemKind === 'file' ? shareRecipientEmail : undefined,
-                                        itemKind === 'file' ? startsAtIso : undefined,
-                                        itemKind === 'file' ? expiresAtIso : undefined,
-                                        itemKind === 'file' ? oneTimeDraft : undefined,
+                                        downloadLimit,
+                                        sharePasswordDraft,
+                                        shareRecipientEmail,
+                                        startsAtIso,
+                                        expiresAtIso,
+                                        oneTimeDraft,
                                     )
                                 }
                                 disabled={loading || hasInvalidDownloadLimit || hasInvalidSharePassword || hasInvalidShareRecipientEmail || hasInvalidShareWindow}

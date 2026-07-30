@@ -43,6 +43,13 @@ pub struct FolderRecord {
     pub parent_folder_id: Option<Uuid>,
     pub is_public: bool,
     pub share_token: Option<String>,
+    pub share_starts_at: Option<DateTime<Utc>>,
+    pub share_expires_at: Option<DateTime<Utc>>,
+    pub share_download_limit: Option<i32>,
+    pub share_download_count: i32,
+    pub share_one_time: bool,
+    pub share_password_enabled: bool,
+    pub share_recipient_email: Option<String>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
     pub is_deleted: bool,
@@ -69,6 +76,14 @@ pub struct NewFolderShare {
     pub encrypted_key: Vec<u8>,
 }
 
+#[derive(FromRow)]
+struct PublicFolderShareAccessRow {
+    id: Uuid,
+    share_one_time: bool,
+    share_password_hash: Option<String>,
+    share_recipient_email: Option<String>,
+}
+
 #[derive(Serialize)]
 pub struct FolderPointRestoreResult {
     pub restored_at: DateTime<Utc>,
@@ -93,6 +108,13 @@ pub async fn list_user_folders(
             f.parent_folder_id,
             f.is_public,
             f.share_token,
+            f.share_starts_at,
+            f.share_expires_at,
+            f.share_download_limit,
+            f.share_download_count,
+            f.share_one_time,
+            (f.share_password_hash IS NOT NULL) AS share_password_enabled,
+            f.share_recipient_email,
             f.created_at,
             f.updated_at,
             f.is_deleted,
@@ -123,6 +145,13 @@ pub async fn list_user_folders(
             f.parent_folder_id,
             f.is_public,
             f.share_token,
+            f.share_starts_at,
+            f.share_expires_at,
+            f.share_download_limit,
+            f.share_download_count,
+            f.share_one_time,
+            f.share_password_hash,
+            f.share_recipient_email,
             f.created_at,
             f.updated_at,
             f.encrypted_key
@@ -149,6 +178,13 @@ pub async fn list_user_favourite_folders(
             f.parent_folder_id,
             f.is_public,
             f.share_token,
+            f.share_starts_at,
+            f.share_expires_at,
+            f.share_download_limit,
+            f.share_download_count,
+            f.share_one_time,
+            (f.share_password_hash IS NOT NULL) AS share_password_enabled,
+            f.share_recipient_email,
             f.created_at,
             f.updated_at,
             FALSE AS is_deleted,
@@ -172,6 +208,13 @@ pub async fn list_user_favourite_folders(
             f.parent_folder_id,
             f.is_public,
             f.share_token,
+            f.share_starts_at,
+            f.share_expires_at,
+            f.share_download_limit,
+            f.share_download_count,
+            f.share_one_time,
+            f.share_password_hash,
+            f.share_recipient_email,
             f.created_at,
             f.updated_at,
             f.encrypted_key
@@ -204,6 +247,13 @@ pub async fn create_folder_record(
             parent_folder_id,
             is_public,
             share_token,
+            NULL::timestamptz AS share_starts_at,
+            NULL::timestamptz AS share_expires_at,
+            NULL::int AS share_download_limit,
+            0 AS share_download_count,
+            FALSE AS share_one_time,
+            FALSE AS share_password_enabled,
+            NULL::text AS share_recipient_email,
             created_at,
             updated_at,
             FALSE AS is_deleted,
@@ -252,15 +302,33 @@ pub async fn update_user_folder_share(
     folder_id: Uuid,
     is_public: bool,
     share_token: Option<String>,
+    share_starts_at: Option<DateTime<Utc>>,
+    share_expires_at: Option<DateTime<Utc>>,
+    share_download_limit: Option<i32>,
+    share_one_time: bool,
+    update_share_password: bool,
+    share_password_hash: Option<String>,
+    share_recipient_email: Option<String>,
 ) -> Result<Option<FolderRecord>, sqlx::Error> {
     sqlx::query_as::<_, FolderRecord>(
         r#"
         UPDATE folders
         SET is_public = $1,
             share_token = $2,
+            share_starts_at = $3,
+            share_expires_at = $4,
+            share_download_limit = $5,
+            share_one_time = $6,
+            share_password_hash = CASE
+                WHEN $1 = FALSE THEN NULL
+                WHEN $7 = TRUE THEN $8
+                ELSE share_password_hash
+            END,
+            share_recipient_email = $9,
+            share_download_count = 0,
             updated_at = NOW()
-        WHERE id = $3
-          AND owner_id = $4
+        WHERE id = $10
+          AND owner_id = $11
           AND is_deleted = FALSE
         RETURNING
             id,
@@ -269,6 +337,13 @@ pub async fn update_user_folder_share(
             parent_folder_id,
             is_public,
             share_token,
+            share_starts_at,
+            share_expires_at,
+            share_download_limit,
+            share_download_count,
+            share_one_time,
+            (share_password_hash IS NOT NULL) AS share_password_enabled,
+            share_recipient_email,
             created_at,
             updated_at,
             is_deleted,
@@ -283,7 +358,7 @@ pub async fn update_user_folder_share(
             EXISTS (
                 SELECT 1
                 FROM favorites fav
-                WHERE fav.user_id = $4
+                WHERE fav.user_id = $11
                   AND fav.folder_id = folders.id
             ) AS is_favourite,
             encrypted_key
@@ -291,6 +366,13 @@ pub async fn update_user_folder_share(
     )
     .bind(is_public)
     .bind(share_token)
+    .bind(share_starts_at)
+    .bind(share_expires_at)
+    .bind(share_download_limit)
+    .bind(share_one_time)
+    .bind(update_share_password)
+    .bind(share_password_hash)
+    .bind(share_recipient_email)
     .bind(folder_id)
     .bind(user_id)
     .fetch_optional(pool)
@@ -332,6 +414,13 @@ pub async fn get_public_folder_tree(
             f.parent_folder_id,
             f.is_public,
             f.share_token,
+            f.share_starts_at,
+            f.share_expires_at,
+            f.share_download_limit,
+            f.share_download_count,
+            f.share_one_time,
+            (f.share_password_hash IS NOT NULL) AS share_password_enabled,
+            f.share_recipient_email,
             f.created_at,
             f.updated_at,
             f.is_deleted,
@@ -353,6 +442,38 @@ pub async fn get_public_folder_tree(
     .bind(share_token)
     .fetch_all(pool)
     .await
+}
+
+pub async fn public_folder_share_access_allowed(
+    pool: &PgPool,
+    share_token: &str,
+    password: Option<&str>,
+    recipient_email: Option<&str>,
+) -> Result<bool, sqlx::Error> {
+    let row = sqlx::query_as::<_, PublicFolderShareAccessRow>(
+        r#"
+        SELECT
+            id,
+            share_one_time,
+            share_password_hash,
+            share_recipient_email
+        FROM folders
+        WHERE share_token = $1
+          AND is_public = TRUE
+          AND is_deleted = FALSE
+          AND (share_starts_at IS NULL OR share_starts_at <= NOW())
+          AND (share_expires_at IS NULL OR share_expires_at > NOW())
+          AND (
+              share_download_limit IS NULL
+              OR share_download_count < share_download_limit
+          )
+        "#,
+    )
+    .bind(share_token)
+    .fetch_optional(pool)
+    .await?;
+
+    Ok(row.is_some_and(|row| public_folder_share_row_matches(&row, password, recipient_email)))
 }
 
 pub async fn list_public_folder_tree_files(
@@ -416,8 +537,44 @@ pub async fn get_public_folder_file_for_download(
     pool: &PgPool,
     share_token: &str,
     file_id: Uuid,
+    password: Option<&str>,
+    recipient_email: Option<&str>,
 ) -> Result<Option<DownloadFileRecord>, sqlx::Error> {
-    sqlx::query_as::<_, DownloadFileRecord>(
+    let mut tx = pool.begin().await?;
+    let share_row = sqlx::query_as::<_, PublicFolderShareAccessRow>(
+        r#"
+        SELECT
+            id,
+            share_one_time,
+            share_password_hash,
+            share_recipient_email
+        FROM folders
+        WHERE share_token = $1
+          AND is_public = TRUE
+          AND is_deleted = FALSE
+          AND (share_starts_at IS NULL OR share_starts_at <= NOW())
+          AND (share_expires_at IS NULL OR share_expires_at > NOW())
+          AND (
+              share_download_limit IS NULL
+              OR share_download_count < share_download_limit
+          )
+        FOR UPDATE
+        "#,
+    )
+    .bind(share_token)
+    .fetch_optional(&mut *tx)
+    .await?;
+
+    let Some(share_row) = share_row else {
+        tx.commit().await?;
+        return Ok(None);
+    };
+    if !public_folder_share_row_matches(&share_row, password, recipient_email) {
+        tx.rollback().await?;
+        return Ok(None);
+    }
+
+    let file = sqlx::query_as::<_, DownloadFileRecord>(
         r#"
         WITH RECURSIVE folder_tree AS (
             SELECT id, owner_id
@@ -444,8 +601,54 @@ pub async fn get_public_folder_file_for_download(
     )
     .bind(share_token)
     .bind(file_id)
-    .fetch_optional(pool)
-    .await
+    .fetch_optional(&mut *tx)
+    .await?;
+
+    if file.is_some() {
+        sqlx::query(
+            r#"
+            UPDATE folders
+            SET share_download_count = share_download_count + 1,
+                is_public = CASE WHEN $2 THEN FALSE ELSE is_public END,
+                share_token = CASE WHEN $2 THEN NULL ELSE share_token END,
+                updated_at = NOW()
+            WHERE id = $1
+            "#,
+        )
+        .bind(share_row.id)
+        .bind(share_row.share_one_time)
+        .execute(&mut *tx)
+        .await?;
+    }
+
+    tx.commit().await?;
+    Ok(file)
+}
+
+fn public_folder_share_row_matches(
+    row: &PublicFolderShareAccessRow,
+    password: Option<&str>,
+    recipient_email: Option<&str>,
+) -> bool {
+    if let Some(expected_email) = row.share_recipient_email.as_deref() {
+        let Some(provided_email) = recipient_email else {
+            return false;
+        };
+        if provided_email.trim().to_lowercase() != expected_email {
+            return false;
+        }
+    }
+
+    if let Some(password_hash) = row.share_password_hash.as_deref() {
+        let Some(provided_password) = password else {
+            return false;
+        };
+        if !bcrypt::verify(provided_password, password_hash).unwrap_or(false) {
+            return false;
+        }
+    }
+
+    true
 }
 
 pub async fn get_folder_share_recipient(
@@ -609,6 +812,13 @@ pub async fn rename_user_folder(
             parent_folder_id,
             is_public,
             share_token,
+            share_starts_at,
+            share_expires_at,
+            share_download_limit,
+            share_download_count,
+            share_one_time,
+            (share_password_hash IS NOT NULL) AS share_password_enabled,
+            share_recipient_email,
             created_at,
             updated_at,
             is_deleted,
@@ -670,6 +880,13 @@ pub async fn move_user_folder(
             parent_folder_id,
             is_public,
             share_token,
+            share_starts_at,
+            share_expires_at,
+            share_download_limit,
+            share_download_count,
+            share_one_time,
+            (share_password_hash IS NOT NULL) AS share_password_enabled,
+            share_recipient_email,
             created_at,
             updated_at,
             is_deleted,

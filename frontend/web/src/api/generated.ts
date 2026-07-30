@@ -208,6 +208,13 @@ export type Folder = {
   "encrypted_key": string | null
   "is_public": boolean
   "share_token": string | null
+  "share_starts_at": string | null
+  "share_expires_at": string | null
+  "share_download_limit": number | null
+  "share_download_count": number
+  "share_one_time": boolean
+  "share_password_enabled": boolean
+  "share_recipient_email": string | null
   "created_at": string
   "updated_at": string
   "is_deleted": boolean
@@ -332,6 +339,13 @@ export type RenameFolderRequest = {
 
 export type ShareFolderRequest = {
   "is_public": boolean
+  "starts_at"?: string | null
+  "expires_at"?: string | null
+  "expires_in_seconds"?: number | null
+  "download_limit"?: number | null
+  "one_time"?: boolean
+  "password"?: string | null
+  "recipient_email"?: string | null
 }
 
 export type GroupRequest = {

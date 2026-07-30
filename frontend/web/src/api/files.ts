@@ -525,13 +525,32 @@ export async function setFolderFavourite(id: string, isFavourite: boolean): Prom
     if (!res.ok) throw new Error(await parseErrorMessage(res))
 }
 
-export async function shareFolder(id: string, isPublic: boolean): Promise<ApiFolder> {
+export async function shareFolder(
+    id: string,
+    isPublic: boolean,
+    expiresInSeconds?: number | null,
+    downloadLimit?: number | null,
+    password?: string | null,
+    recipientEmail?: string | null,
+    startsAt?: string | null,
+    expiresAt?: string | null,
+    oneTime?: boolean,
+): Promise<ApiFolder> {
     const res = await authenticatedFetch(`${API_BASE}folders/${id}/share`, {
         method: 'PUT',
         headers: {
             'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ is_public: isPublic }),
+        body: JSON.stringify({
+            is_public: isPublic,
+            starts_at: startsAt ?? null,
+            expires_at: expiresAt ?? null,
+            expires_in_seconds: expiresInSeconds ?? null,
+            download_limit: downloadLimit ?? null,
+            one_time: oneTime ?? false,
+            password: password ?? null,
+            recipient_email: recipientEmail ?? null,
+        }),
     })
     if (!res.ok) throw new Error(await parseErrorMessage(res))
     return readJson(res, folder, 'Folder')
@@ -664,18 +683,51 @@ export async function downloadPublicFile(
     }
 }
 
-export async function getPublicFolderManifest(shareToken: string): Promise<PublicFolderManifest> {
+export async function getPublicFolderManifest(
+    shareToken: string,
+    accessDetails: PublicFileAccessDetails = {},
+): Promise<PublicFolderManifest> {
+    const hasAccessDetails = Boolean(accessDetails.password || accessDetails.recipientEmail)
     const res = await apiFetch(`${API_BASE}share/folders/${encodeURIComponent(shareToken)}`, {
-        method: 'GET',
+        method: hasAccessDetails ? 'POST' : 'GET',
+        ...(hasAccessDetails
+            ? {
+                  headers: {
+                      'Content-Type': 'application/json',
+                  },
+                  body: JSON.stringify({
+                      password: accessDetails.password ?? null,
+                      recipient_email: accessDetails.recipientEmail ?? null,
+                  }),
+              }
+            : {}),
     })
     if (!res.ok) throw new Error(await parseErrorMessage(res))
     return readJson(res, publicFolderManifest, 'PublicFolderManifest')
 }
 
-export async function downloadPublicFolderFile(shareToken: string, fileId: string): Promise<PublicDownload> {
+export async function downloadPublicFolderFile(
+    shareToken: string,
+    fileId: string,
+    accessDetails: PublicFileAccessDetails = {},
+): Promise<PublicDownload> {
+    const hasAccessDetails = Boolean(accessDetails.password || accessDetails.recipientEmail)
     const res = await apiFetch(
         `${API_BASE}share/folders/${encodeURIComponent(shareToken)}/files/${encodeURIComponent(fileId)}/download`,
-        { method: 'GET' },
+        {
+            method: hasAccessDetails ? 'POST' : 'GET',
+            ...(hasAccessDetails
+                ? {
+                      headers: {
+                          'Content-Type': 'application/json',
+                      },
+                      body: JSON.stringify({
+                          password: accessDetails.password ?? null,
+                          recipient_email: accessDetails.recipientEmail ?? null,
+                      }),
+                  }
+                : {}),
+        },
     )
     if (!res.ok) throw new Error(await parseErrorMessage(res))
 

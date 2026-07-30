@@ -183,11 +183,31 @@ export function useFolderActions({
         setShareItem(folder)
     }
 
-    async function setFolderSharing(folder: ApiFolder, isPublic: boolean) {
+    async function setFolderSharing(
+        folder: ApiFolder,
+        isPublic: boolean,
+        expiresInSeconds?: number | null,
+        downloadLimit?: number | null,
+        password?: string | null,
+        recipientEmail?: string | null,
+        startsAt?: string | null,
+        expiresAt?: string | null,
+        oneTime?: boolean,
+    ) {
         setShareLoading(true)
         setError(null)
         try {
-            const shared = await shareFolder(folder.id, isPublic)
+            const shared = await shareFolder(
+                folder.id,
+                isPublic,
+                expiresInSeconds,
+                downloadLimit,
+                password,
+                recipientEmail,
+                startsAt,
+                expiresAt,
+                oneTime,
+            )
             const visibleShared = { ...shared, name: folder.name, description: folder.description, encrypted_key: folder.encrypted_key }
             setFolders((current) => current.map((item) => (item.id === folder.id ? visibleShared : item)))
             setShareItem(visibleShared)
