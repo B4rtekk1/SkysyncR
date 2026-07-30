@@ -62,8 +62,12 @@ pub struct MoveFileRequest {
 #[derive(Deserialize)]
 pub struct ShareFileRequest {
     pub is_public: bool,
+    pub starts_at: Option<chrono::DateTime<Utc>>,
+    pub expires_at: Option<chrono::DateTime<Utc>>,
     pub expires_in_seconds: Option<i64>,
     pub download_limit: Option<i32>,
+    #[serde(default)]
+    pub one_time: bool,
     pub password: Option<String>,
     pub recipient_email: Option<String>,
 }
@@ -875,12 +879,17 @@ pub async fn share_file(
     Json(payload): Json<ShareFileRequest>,
 ) -> Result<Json<FileRecord>, ApiError> {
     let share_token = payload.is_public.then(|| Uuid::new_v4().to_string());
+    let share_starts_at = if payload.is_public {
+        validate_share_starts_at(payload.starts_at)?
+    } else {
+        None
+    };
     let share_expires_at = if payload.is_public {
-        payload
-            .expires_in_seconds
-            .map(validate_share_duration)
-            .transpose()?
-            .map(|duration| Utc::now() + duration)
+        validate_share_expires_at(
+            payload.expires_at,
+            payload.expires_in_seconds,
+            share_starts_at,
+        )?
     } else {
         None
     };
@@ -918,8 +927,10 @@ pub async fn share_file(
         file_id,
         payload.is_public,
         share_token,
+        share_starts_at,
         share_expires_at,
         share_download_limit,
+        payload.is_public && payload.one_time,
         update_share_password,
         share_password_hash,
         share_recipient_email,
@@ -1005,6 +1016,60 @@ pub async fn delete_file_share(
     }
 
     Ok(StatusCode::NO_CONTENT)
+}
+
+fn validate_share_starts_at(
+    starts_at: Option<chrono::DateTime<Utc>>,
+) -> Result<Option<chrono::DateTime<Utc>>, ApiError> {
+    let Some(starts_at) = starts_at else {
+        return Ok(None);
+    };
+
+    let now = Utc::now();
+    if starts_at < now - Duration::minutes(5) {
+        return Err(ApiError::BadRequest(
+            "Activation date cannot be in the past".into(),
+        ));
+    }
+    if starts_at > now + Duration::days(365) {
+        return Err(ApiError::BadRequest(
+            "Activation date must be within 365 days".into(),
+        ));
+    }
+
+    Ok(Some(starts_at))
+}
+
+fn validate_share_expires_at(
+    expires_at: Option<chrono::DateTime<Utc>>,
+    expires_in_seconds: Option<i64>,
+    starts_at: Option<chrono::DateTime<Utc>>,
+) -> Result<Option<chrono::DateTime<Utc>>, ApiError> {
+    let expiry = if let Some(expires_at) = expires_at {
+        Some(expires_at)
+    } else {
+        expires_in_seconds
+            .map(validate_share_duration)
+            .transpose()?
+            .map(|duration| Utc::now() + duration)
+    };
+
+    let Some(expires_at) = expiry else {
+        return Ok(None);
+    };
+    let activation = starts_at.unwrap_or_else(Utc::now);
+    if expires_at <= activation {
+        return Err(ApiError::BadRequest(
+            "Expiration date must be after activation date".into(),
+        ));
+    }
+    if expires_at > activation + Duration::days(365) {
+        return Err(ApiError::BadRequest(
+            "Expiration date must be within 365 days of activation".into(),
+        ));
+    }
+
+    Ok(Some(expires_at))
 }
 
 fn validate_share_duration(seconds: i64) -> Result<Duration, ApiError> {

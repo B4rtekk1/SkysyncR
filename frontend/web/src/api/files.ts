@@ -487,6 +487,9 @@ export async function shareFile(
     downloadLimit?: number | null,
     password?: string | null,
     recipientEmail?: string | null,
+    startsAt?: string | null,
+    expiresAt?: string | null,
+    oneTime?: boolean,
 ): Promise<ApiFile> {
     const res = await authenticatedFetch(`${API_BASE}files/${id}/share`, {
         method: 'PUT',
@@ -495,8 +498,11 @@ export async function shareFile(
         },
         body: JSON.stringify({
             is_public: isPublic,
+            starts_at: startsAt ?? null,
+            expires_at: expiresAt ?? null,
             expires_in_seconds: expiresInSeconds ?? null,
             download_limit: downloadLimit ?? null,
+            one_time: oneTime ?? false,
             password: password ?? null,
             recipient_email: recipientEmail ?? null,
         }),

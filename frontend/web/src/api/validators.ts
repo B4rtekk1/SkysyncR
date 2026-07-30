@@ -85,6 +85,10 @@ function prop(source: JsonRecord, key: string, path: string): unknown {
   return source[key]
 }
 
+function optionalProp(source: JsonRecord, key: string): unknown {
+  return Object.prototype.hasOwnProperty.call(source, key) ? source[key] : undefined
+}
+
 function string(value: unknown, path: string): string {
   if (typeof value !== 'string') invalid(path, 'string')
   return value
@@ -257,9 +261,11 @@ export const file: Validator<File> = (value, path) => {
     is_deleted: boolean(prop(item, 'is_deleted', path), `${path}.is_deleted`),
     is_public: boolean(prop(item, 'is_public', path), `${path}.is_public`),
     share_token: nullableString(prop(item, 'share_token', path), `${path}.share_token`),
+    share_starts_at: nullableString(optionalProp(item, 'share_starts_at') ?? null, `${path}.share_starts_at`),
     share_expires_at: nullableString(prop(item, 'share_expires_at', path), `${path}.share_expires_at`),
     share_download_limit: nullableNumber(prop(item, 'share_download_limit', path), `${path}.share_download_limit`),
     share_download_count: number(prop(item, 'share_download_count', path), `${path}.share_download_count`),
+    share_one_time: boolean(optionalProp(item, 'share_one_time') ?? false, `${path}.share_one_time`),
     share_password_enabled: boolean(prop(item, 'share_password_enabled', path), `${path}.share_password_enabled`),
     share_recipient_email: nullableString(prop(item, 'share_recipient_email', path), `${path}.share_recipient_email`),
     is_favourite: boolean(prop(item, 'is_favourite', path), `${path}.is_favourite`),

@@ -262,6 +262,7 @@ function PublicShare() {
               value={recipientEmailDraft}
               onChange={(event) => setRecipientEmailDraft(event.target.value)}
               type="email"
+              autoComplete="username"
               placeholder="Recipient email"
               aria-label="Recipient email"
             />
@@ -269,6 +270,7 @@ function PublicShare() {
               value={passwordDraft}
               onChange={(event) => setPasswordDraft(event.target.value)}
               type="password"
+              autoComplete="current-password"
               placeholder="Link password"
               aria-label="Link password"
             />

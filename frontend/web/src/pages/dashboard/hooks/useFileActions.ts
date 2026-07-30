@@ -192,11 +192,14 @@ export function useFileActions({
             downloadLimit?: number | null,
             password?: string | null,
             recipientEmail?: string | null,
+            startsAt?: string | null,
+            expiresAt?: string | null,
+            oneTime?: boolean,
         ) => {
             setShareLoading(true)
             setError(null)
             try {
-                const shared = await shareFile(item.id, isPublic, expiresInSeconds, downloadLimit, password, recipientEmail)
+                const shared = await shareFile(item.id, isPublic, expiresInSeconds, downloadLimit, password, recipientEmail, startsAt, expiresAt, oneTime)
                 const visibleShared = { ...shared, filename: item.filename, mime_type: item.mime_type, note: item.note }
                 setItems((prev) => prev.map((current) => (current.id === item.id ? visibleShared : current)))
                 setStorageItems((prev) => prev.map((current) => (current.id === item.id ? visibleShared : current)))

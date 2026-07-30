@@ -145,9 +145,11 @@ export type File = {
   "is_deleted": boolean
   "is_public": boolean
   "share_token": string | null
+  "share_starts_at": string | null
   "share_expires_at": string | null
   "share_download_limit": number | null
   "share_download_count": number
+  "share_one_time": boolean
   "share_password_enabled": boolean
   "share_recipient_email": string | null
   "is_favourite": boolean
@@ -292,8 +294,11 @@ export type RenameFileRequest = {
 
 export type ShareFileRequest = {
   "is_public": boolean
+  "starts_at"?: string | null
+  "expires_at"?: string | null
   "expires_in_seconds"?: number | null
   "download_limit"?: number | null
+  "one_time"?: boolean
   "password"?: string | null
   "recipient_email"?: string | null
 }

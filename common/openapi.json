@@ -2504,9 +2504,11 @@
           "is_deleted",
           "is_public",
           "share_token",
+          "share_starts_at",
           "share_expires_at",
           "share_download_limit",
           "share_download_count",
+          "share_one_time",
           "share_password_enabled",
           "share_recipient_email",
           "is_favourite",
@@ -2554,6 +2556,11 @@
             "type": "string",
             "nullable": true
           },
+          "share_starts_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
           "share_expires_at": {
             "type": "string",
             "format": "date-time",
@@ -2567,6 +2574,9 @@
           "share_download_count": {
             "type": "integer",
             "format": "int32"
+          },
+          "share_one_time": {
+            "type": "boolean"
           },
           "share_password_enabled": {
             "type": "boolean"
@@ -3134,6 +3144,16 @@
           "is_public": {
             "type": "boolean"
           },
+          "starts_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
           "expires_in_seconds": {
             "type": "integer",
             "format": "int64",
@@ -3143,6 +3163,9 @@
             "type": "integer",
             "format": "int32",
             "nullable": true
+          },
+          "one_time": {
+            "type": "boolean"
           },
           "password": {
             "type": "string",

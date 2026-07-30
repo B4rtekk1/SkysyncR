@@ -1,7 +1,7 @@
-const VERSION = 5
+const VERSION = 6
 const SIZE = 17 + VERSION * 4
-const DATA_CODEWORDS = 108
-const EC_CODEWORDS = 26
+const DATA_CODEWORDS = 136
+const EC_CODEWORDS = 36
 
 type Matrix = Array<Array<boolean | null>>
 
@@ -70,7 +70,7 @@ function appendBits(bits: number[], value: number, length: number) {
 
 function encodeData(value: string) {
     const bytes = Array.from(new TextEncoder().encode(value))
-    if (bytes.length > 106) {
+    if (bytes.length > DATA_CODEWORDS - 2) {
         throw new Error('QR link is too long.')
     }
 
@@ -147,7 +147,7 @@ function drawFunctionPatterns(matrix: Matrix) {
     drawFinder(matrix, 0, 0)
     drawFinder(matrix, SIZE - 7, 0)
     drawFinder(matrix, 0, SIZE - 7)
-    drawAlignment(matrix, 30, 30)
+    drawAlignment(matrix, 34, 34)
 
     for (let i = 8; i < SIZE - 8; i += 1) {
         const dark = i % 2 === 0

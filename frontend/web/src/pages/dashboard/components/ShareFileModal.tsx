@@ -17,7 +17,7 @@ import { unwrapFileKeyForUser, wrapFileKeyForUser } from '../../../crypto/fileEn
 import { useModalA11y } from '../../../hooks/useModalA11y'
 import { CLOSE_ICON, COPY_ICON } from '../icons'
 import { createQrPath } from '../qr'
-import { DEFAULT_SHARE_DURATION_SECONDS, PermissionDropdown, ShareDurationDropdown } from './shareControls'
+import { DEFAULT_SHARE_DURATION_SECONDS, PermissionDropdown } from './shareControls'
 import type { Group, GroupInviteRole, ShareableItem } from '../types'
 
 type ShareFileModalProps = {
@@ -33,6 +33,9 @@ type ShareFileModalProps = {
         downloadLimit?: number | null,
         password?: string | null,
         recipientEmail?: string | null,
+        startsAt?: string | null,
+        expiresAt?: string | null,
+        oneTime?: boolean,
     ) => Promise<void>
     onDisableShare: () => Promise<void>
 }
@@ -44,6 +47,18 @@ type SharePerson = {
 }
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+
+function toDatetimeLocalValue(date: Date): string {
+    const offsetMs = date.getTimezoneOffset() * 60 * 1000
+    return new Date(date.getTime() - offsetMs).toISOString().slice(0, 16)
+}
+
+function parseDatetimeLocalValue(value: string): Date | null {
+    const trimmed = value.trim()
+    if (!trimmed) return null
+    const date = new Date(trimmed)
+    return Number.isNaN(date.getTime()) ? null : date
+}
 
 export function ShareFileModal({
     item,
@@ -59,10 +74,18 @@ export function ShareFileModal({
     const [people, setPeople] = useState<SharePerson[]>([])
     const [emailDraft, setEmailDraft] = useState('')
     const [permissionDraft, setPermissionDraft] = useState<FileSharePermission>('read')
-    const [shareDuration, setShareDuration] = useState<number | null>(DEFAULT_SHARE_DURATION_SECONDS)
+    const [shareStartsAtDraft, setShareStartsAtDraft] = useState(() =>
+        'filename' in item && item.share_starts_at ? toDatetimeLocalValue(new Date(item.share_starts_at)) : '',
+    )
+    const [shareExpiresAtDraft, setShareExpiresAtDraft] = useState(() =>
+        'filename' in item && item.share_expires_at
+            ? toDatetimeLocalValue(new Date(item.share_expires_at))
+            : toDatetimeLocalValue(new Date(Date.now() + DEFAULT_SHARE_DURATION_SECONDS * 1000)),
+    )
     const [downloadLimitDraft, setDownloadLimitDraft] = useState(() =>
         'filename' in item && item.share_download_limit ? String(item.share_download_limit) : '',
     )
+    const [oneTimeDraft, setOneTimeDraft] = useState(() => ('filename' in item ? item.share_one_time : false))
     const [sharePasswordDraft, setSharePasswordDraft] = useState('')
     const [shareRecipientEmailDraft, setShareRecipientEmailDraft] = useState(() =>
         'filename' in item ? item.share_recipient_email ?? '' : '',
@@ -73,10 +96,16 @@ export function ShareFileModal({
     const [peopleSaving, setPeopleSaving] = useState(false)
     const [selectedGroupId, setSelectedGroupId] = useState('')
     const [groupSharing, setGroupSharing] = useState(false)
-    const [sharePreviewBaseTime] = useState(() => Date.now())
     const requestedShareRef = useRef<string | null>(null)
     const dialogRef = useRef<HTMLElement>(null)
-    const qr = useMemo(() => (shareUrl ? createQrPath(shareUrl) : null), [shareUrl])
+    const qr = useMemo(() => {
+        if (!shareUrl) return null
+        try {
+            return createQrPath(shareUrl)
+        } catch {
+            return null
+        }
+    }, [shareUrl])
     const isFileShare = 'filename' in item
     const fileItem = isFileShare ? item : null
     const title = isFileShare ? item.filename : item.name
@@ -87,12 +116,20 @@ export function ShareFileModal({
                 ? `Unlock your private key to create a secure ${itemKind} link`
                 : 'Generating link...'
             : 'Link is inactive')
-    const selectedExpiresAt = shareDuration === null ? null : new Date(sharePreviewBaseTime + shareDuration * 1000)
-    const expiryLabel = selectedExpiresAt
-        ? `Expires ${selectedExpiresAt.toLocaleString([], {
-              dateStyle: 'medium',
-              timeStyle: 'short',
-          })}`
+    const shareStartsAt = parseDatetimeLocalValue(shareStartsAtDraft)
+    const shareExpiresAt = parseDatetimeLocalValue(shareExpiresAtDraft)
+    const startsAtIso = shareStartsAt ? shareStartsAt.toISOString() : null
+    const expiresAtIso = shareExpiresAt ? shareExpiresAt.toISOString() : null
+    const hasInvalidShareWindow =
+        itemKind === 'file' &&
+        ((shareStartsAtDraft.trim() !== '' && !shareStartsAt) ||
+            (shareExpiresAtDraft.trim() !== '' && !shareExpiresAt) ||
+            Boolean(shareStartsAt && shareExpiresAt && shareExpiresAt <= shareStartsAt))
+    const activationLabel = shareStartsAt
+        ? `Starts ${shareStartsAt.toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}`
+        : 'Active immediately'
+    const expiryLabel = shareExpiresAt
+        ? `Expires ${shareExpiresAt.toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}`
         : 'No expiry'
     const downloadLimit = downloadLimitDraft.trim() ? Number(downloadLimitDraft) : null
     const hasInvalidDownloadLimit =
@@ -134,11 +171,19 @@ export function ShareFileModal({
         if (!item.is_public || !item.share_token) {
             if (requestedShareRef.current === item.id) return
             requestedShareRef.current = item.id
-            void onEnableShare(shareDuration, hasInvalidDownloadLimit ? null : downloadLimit).catch((e) => {
+            void onEnableShare(
+                null,
+                hasInvalidDownloadLimit ? null : downloadLimit,
+                null,
+                null,
+                hasInvalidShareWindow ? null : startsAtIso,
+                hasInvalidShareWindow ? null : expiresAtIso,
+                oneTimeDraft,
+            ).catch((e) => {
                 setError(e instanceof Error ? e.message : 'Could not generate share link.')
             })
         }
-    }, [downloadLimit, hasInvalidDownloadLimit, item.id, item.is_public, item.share_token, onEnableShare, shareDuration])
+    }, [downloadLimit, expiresAtIso, hasInvalidDownloadLimit, hasInvalidShareWindow, item.id, item.is_public, item.share_token, onEnableShare, oneTimeDraft, startsAtIso])
 
     useEffect(() => {
         let active = true
@@ -350,7 +395,7 @@ export function ShareFileModal({
                     </button>
                 </header>
 
-                <div className="share-modal__body">
+                <form className="share-modal__body" noValidate onSubmit={(event) => event.preventDefault()}>
                     <section className="share-modal__panel share-modal__panel--link">
                         <div className="share-modal__section-head">
                             <h3>Link</h3>
@@ -365,13 +410,41 @@ export function ShareFileModal({
                         {itemKind === 'file' && (
                             <>
                                 <div className="share-modal__expiry">
-                                    <span>Link duration</span>
-                                    <ShareDurationDropdown
+                                    <span>Activation date</span>
+                                    <input
+                                        className="share-modal__text-input"
+                                        type="datetime-local"
+                                        value={shareStartsAtDraft}
+                                        onChange={(event) => setShareStartsAtDraft(event.target.value)}
                                         disabled={loading}
-                                        value={shareDuration}
-                                        onChange={setShareDuration}
+                                        aria-label="Activation date"
                                     />
-                                    <span>{expiryLabel}</span>
+                                    <span>{activationLabel}</span>
+                                </div>
+                                <div className="share-modal__expiry">
+                                    <span>Expiration date</span>
+                                    <input
+                                        className="share-modal__text-input"
+                                        type="datetime-local"
+                                        value={shareExpiresAtDraft}
+                                        onChange={(event) => setShareExpiresAtDraft(event.target.value)}
+                                        disabled={loading}
+                                        aria-label="Expiration date"
+                                    />
+                                    <span>{hasInvalidShareWindow ? 'Must be after activation' : expiryLabel}</span>
+                                </div>
+                                <div className="share-modal__expiry">
+                                    <span>One-time link</span>
+                                    <label className="share-modal__toggle">
+                                        <input
+                                            type="checkbox"
+                                            checked={oneTimeDraft}
+                                            onChange={(event) => setOneTimeDraft(event.target.checked)}
+                                            disabled={loading}
+                                        />
+                                        <span>{oneTimeDraft ? 'Revokes after first download' : 'Reusable until limits apply'}</span>
+                                    </label>
+                                    <span>{oneTimeDraft ? 'Single use' : 'Multiple downloads'}</span>
                                 </div>
                                 <div className="share-modal__expiry">
                                     <span>Download limit</span>
@@ -395,6 +468,7 @@ export function ShareFileModal({
                                     <input
                                         className="share-modal__text-input"
                                         type="password"
+                                        autoComplete="current-password"
                                         minLength={8}
                                         maxLength={128}
                                         value={sharePasswordDraft}
@@ -410,6 +484,7 @@ export function ShareFileModal({
                                     <input
                                         className="share-modal__text-input"
                                         type="email"
+                                        autoComplete="username"
                                         value={shareRecipientEmailDraft}
                                         onChange={(event) => setShareRecipientEmailDraft(event.target.value)}
                                         placeholder="No email confirmation"
@@ -439,13 +514,16 @@ export function ShareFileModal({
                                 type="button"
                                 onClick={() =>
                                     void onEnableShare(
-                                        itemKind === 'file' ? shareDuration : undefined,
+                                        null,
                                         itemKind === 'file' ? downloadLimit : undefined,
                                         itemKind === 'file' ? sharePasswordDraft : undefined,
                                         itemKind === 'file' ? shareRecipientEmail : undefined,
+                                        itemKind === 'file' ? startsAtIso : undefined,
+                                        itemKind === 'file' ? expiresAtIso : undefined,
+                                        itemKind === 'file' ? oneTimeDraft : undefined,
                                     )
                                 }
-                                disabled={loading || hasInvalidDownloadLimit || hasInvalidSharePassword || hasInvalidShareRecipientEmail}
+                                disabled={loading || hasInvalidDownloadLimit || hasInvalidSharePassword || hasInvalidShareRecipientEmail || hasInvalidShareWindow}
                             >
                                 {item.is_public ? 'Update link' : 'Create link'}
                             </button>
@@ -465,6 +543,8 @@ export function ShareFileModal({
                                     <rect className="share-modal__qr-bg" x="0" y="0" width="100%" height="100%" rx="5" />
                                     <path className="share-modal__qr-modules" d={qr.path} />
                                 </svg>
+                            ) : shareUrl ? (
+                                <span className="share-modal__qr-empty">Link is too long for QR</span>
                             ) : item.is_public || loading ? (
                                 <span className="spinner" />
                             ) : (
@@ -540,7 +620,7 @@ export function ShareFileModal({
                             )}
                         </div>
                     </section>
-                </div>
+                </form>
 
                 <footer className="share-modal__footer">
                     <span>{copied ? 'Copied' : error ?? `${people.length} selected`}</span>

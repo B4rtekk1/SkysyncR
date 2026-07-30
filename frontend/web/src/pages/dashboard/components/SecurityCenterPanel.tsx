@@ -17,9 +17,11 @@ type PublicLinkItem =
           sizeBytes: number
           updatedAt: string
           shareToken: string
+          startsAt: string | null
           expiresAt: string | null
           downloadLimit: number | null
           downloadCount: number
+          oneTime: boolean
           passwordEnabled: boolean
           recipientEmail: string | null
       }
@@ -92,9 +94,11 @@ function toPublicLinks(files: ApiFile[], folders: ApiFolder[]): PublicLinkItem[]
             sizeBytes: file.size_bytes,
             updatedAt: file.updated_at,
             shareToken: file.share_token as string,
+            startsAt: file.share_starts_at,
             expiresAt: file.share_expires_at,
             downloadLimit: file.share_download_limit,
             downloadCount: file.share_download_count,
+            oneTime: file.share_one_time,
             passwordEnabled: file.share_password_enabled,
             recipientEmail: file.share_recipient_email,
         }))
@@ -283,7 +287,9 @@ export function SecurityCenterPanel({
                                 </small>
                                 {link.kind === 'file' && (
                                     <small>
+                                        {link.startsAt ? `Starts ${formatTime(link.startsAt)} · ` : ''}
                                         {link.expiresAt ? `Expires ${formatTime(link.expiresAt)}` : 'No expiry'}
+                                        {link.oneTime ? ' · one-time' : ''}
                                         {link.passwordEnabled ? ' · password' : ''}
                                         {link.recipientEmail ? ` · ${link.recipientEmail}` : ''}
                                     </small>

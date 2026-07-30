@@ -62,6 +62,9 @@ type DashboardModalsProps = {
         downloadLimit?: number | null,
         password?: string | null,
         recipientEmail?: string | null,
+        startsAt?: string | null,
+        expiresAt?: string | null,
+        oneTime?: boolean,
     ) => Promise<unknown>
     onSetFolderSharing: (folder: ApiFolder, isPublic: boolean) => Promise<unknown>
 }
@@ -272,9 +275,9 @@ export function DashboardModals({
                         privateKey={privateKey}
                         groups={groups}
                         onClose={onCloseShare}
-                        onEnableShare={async (expiresInSeconds, downloadLimit, password, recipientEmail) => {
+                        onEnableShare={async (expiresInSeconds, downloadLimit, password, recipientEmail, startsAt, expiresAt, oneTime) => {
                             if ('filename' in shareItem) {
-                                await onSetFileSharing(shareItem, true, expiresInSeconds, downloadLimit, password, recipientEmail)
+                                await onSetFileSharing(shareItem, true, expiresInSeconds, downloadLimit, password, recipientEmail, startsAt, expiresAt, oneTime)
                             } else {
                                 await onSetFolderSharing(shareItem, true)
                             }

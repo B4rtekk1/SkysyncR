@@ -20,6 +20,7 @@ struct PublicFileShareDownloadRow {
     size_bytes: i64,
     checksum: Option<String>,
     encryption_nonce: Vec<u8>,
+    share_one_time: bool,
     share_password_hash: Option<String>,
     share_recipient_email: Option<String>,
 }
@@ -54,9 +55,11 @@ pub async fn list_user_files(
             is_deleted,
             is_public,
             share_token,
+            share_starts_at,
             share_expires_at,
             share_download_limit,
             share_download_count,
+            share_one_time,
             (share_password_hash IS NOT NULL) AS share_password_enabled,
             share_recipient_email,
             EXISTS (
@@ -130,9 +133,11 @@ pub async fn create_file_record(
             is_deleted,
             is_public,
             share_token,
+            NULL::timestamptz AS share_starts_at,
             share_expires_at,
             share_download_limit,
             share_download_count,
+            FALSE AS share_one_time,
             FALSE AS share_password_enabled,
             NULL::text AS share_recipient_email,
             FALSE AS is_favourite,
@@ -203,12 +208,14 @@ pub async fn consume_public_file_share_for_download(
             size_bytes,
             checksum,
             encryption_nonce,
+            share_one_time,
             share_password_hash,
             share_recipient_email
         FROM files
         WHERE share_token = $1
           AND is_public = TRUE
           AND is_deleted = FALSE
+          AND (share_starts_at IS NULL OR share_starts_at <= NOW())
           AND (share_expires_at IS NULL OR share_expires_at > NOW())
           AND (
               share_download_limit IS NULL
@@ -252,11 +259,14 @@ pub async fn consume_public_file_share_for_download(
         r#"
         UPDATE files
         SET share_download_count = share_download_count + 1,
+            is_public = CASE WHEN $2 THEN FALSE ELSE is_public END,
+            share_token = CASE WHEN $2 THEN NULL ELSE share_token END,
             updated_at = NOW()
         WHERE id = $1
         "#,
     )
     .bind(row.id)
+    .bind(row.share_one_time)
     .execute(&mut *tx)
     .await?;
     tx.commit().await?;
@@ -675,9 +685,11 @@ pub async fn list_files_shared_with_user(
             f.is_deleted,
             f.is_public,
             f.share_token,
+            f.share_starts_at,
             f.share_expires_at,
             f.share_download_limit,
             f.share_download_count,
+            f.share_one_time,
             (f.share_password_hash IS NOT NULL) AS share_password_enabled,
             f.share_recipient_email,
             EXISTS (
@@ -721,9 +733,11 @@ pub async fn list_files_shared_with_user(
                 is_deleted: row.is_deleted,
                 is_public: row.is_public,
                 share_token: row.share_token,
+                share_starts_at: row.share_starts_at,
                 share_expires_at: row.share_expires_at,
                 share_download_limit: row.share_download_limit,
                 share_download_count: row.share_download_count,
+                share_one_time: row.share_one_time,
                 share_password_enabled: row.share_password_enabled,
                 share_recipient_email: row.share_recipient_email,
                 is_favourite: row.is_favourite,
@@ -1080,9 +1094,11 @@ pub async fn rename_user_file(
             is_deleted,
             is_public,
             share_token,
+            share_starts_at,
             share_expires_at,
             share_download_limit,
             share_download_count,
+            share_one_time,
             (share_password_hash IS NOT NULL) AS share_password_enabled,
             share_recipient_email,
             EXISTS (
@@ -1142,9 +1158,11 @@ pub async fn move_user_file(
             is_deleted,
             is_public,
             share_token,
+            share_starts_at,
             share_expires_at,
             share_download_limit,
             share_download_count,
+            share_one_time,
             (share_password_hash IS NOT NULL) AS share_password_enabled,
             share_recipient_email,
             EXISTS (
@@ -1257,9 +1275,11 @@ pub async fn update_user_file_content(
             is_deleted,
             is_public,
             share_token,
+            share_starts_at,
             share_expires_at,
             share_download_limit,
             share_download_count,
+            share_one_time,
             (share_password_hash IS NOT NULL) AS share_password_enabled,
             share_recipient_email,
             EXISTS (
@@ -1293,8 +1313,10 @@ pub async fn update_user_file_share(
     file_id: Uuid,
     is_public: bool,
     share_token: Option<String>,
+    share_starts_at: Option<DateTime<Utc>>,
     share_expires_at: Option<DateTime<Utc>>,
     share_download_limit: Option<i32>,
+    share_one_time: bool,
     update_share_password: bool,
     share_password_hash: Option<String>,
     share_recipient_email: Option<String>,
@@ -1304,18 +1326,20 @@ pub async fn update_user_file_share(
         UPDATE files
         SET is_public = $1,
             share_token = $2,
-            share_expires_at = $3,
-            share_download_limit = $4,
+            share_starts_at = $3,
+            share_expires_at = $4,
+            share_download_limit = $5,
+            share_one_time = $6,
             share_password_hash = CASE
                 WHEN $1 = FALSE THEN NULL
-                WHEN $5 = TRUE THEN $6
+                WHEN $7 = TRUE THEN $8
                 ELSE share_password_hash
             END,
-            share_recipient_email = $7,
+            share_recipient_email = $9,
             share_download_count = 0,
             updated_at = NOW()
-        WHERE id = $8
-          AND owner_id = $9
+        WHERE id = $10
+          AND owner_id = $11
           AND is_deleted = FALSE
         RETURNING
             id,
@@ -1328,15 +1352,17 @@ pub async fn update_user_file_share(
             is_deleted,
             is_public,
             share_token,
+            share_starts_at,
             share_expires_at,
             share_download_limit,
             share_download_count,
+            share_one_time,
             (share_password_hash IS NOT NULL) AS share_password_enabled,
             share_recipient_email,
             EXISTS (
                 SELECT 1
                 FROM favorites fav
-                WHERE fav.user_id = $9
+                WHERE fav.user_id = $11
                   AND fav.file_id = files.id
             ) AS is_favourite,
             encrypted_key,
@@ -1348,8 +1374,10 @@ pub async fn update_user_file_share(
     )
     .bind(is_public)
     .bind(share_token)
+    .bind(share_starts_at)
     .bind(share_expires_at)
     .bind(share_download_limit)
+    .bind(share_one_time)
     .bind(update_share_password)
     .bind(share_password_hash)
     .bind(share_recipient_email)
@@ -1393,9 +1421,11 @@ pub async fn update_user_file_note(
             is_deleted,
             is_public,
             share_token,
+            share_starts_at,
             share_expires_at,
             share_download_limit,
             share_download_count,
+            share_one_time,
             (share_password_hash IS NOT NULL) AS share_password_enabled,
             share_recipient_email,
             EXISTS (
