@@ -7,6 +7,8 @@ import {
     ARROW_RIGHT_ICON,
     CHECK_ICON,
     CLOSE_ICON,
+    CREATED_ICON,
+    MEMBERS_ICON,
     PLUS_ICON,
 } from './groupIcons'
 import { RoleDropdown } from './groupControls'
@@ -245,14 +247,14 @@ export function GroupsPanel({
 
                     <div className="groups-summary">
                         <div className="groups-summary__item">
-                            <span className="groups-summary__icon" aria-hidden="true">{PLUS_ICON}</span>
+                            <span className="groups-summary__icon" aria-hidden="true">{MEMBERS_ICON}</span>
                             <div>
                                 <strong>{activeGroup.members.length}</strong>
                                 <span>{activeGroup.members.length === 1 ? 'Member' : 'Members'}</span>
                             </div>
                         </div>
                         <div className="groups-summary__item">
-                            <span className="groups-summary__icon" aria-hidden="true">•</span>
+                            <span className="groups-summary__icon" aria-hidden="true">{CREATED_ICON}</span>
                             <div>
                                 <strong>{formatRelative(activeGroup.createdAt)}</strong>
                                 <span>Created</span>

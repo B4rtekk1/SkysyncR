@@ -389,7 +389,7 @@ export function FileCard({
                 <span className="file-card__meta-divider" aria-hidden="true" />
                 <time dateTime={item.updated_at} title={updatedTitle}>{updatedRelative}</time>
             </div>
-            {(shared || item.is_public || item.note) && (
+            {(shared || item.note) && (
                 <div className="file-card__signals" aria-label="File status">
                     {shared && (
                         <span
@@ -397,11 +397,6 @@ export function FileCard({
                             title={item.shared_by_user_name ? `Shared by ${item.shared_by_user_name}` : 'Shared with you'}
                         >
                             <span aria-hidden="true">↗</span>
-                        </span>
-                    )}
-                    {!shared && item.is_public && (
-                        <span className="file-card__signal file-card__signal--public" title="Public link">
-                            <span aria-hidden="true">◎</span>
                         </span>
                     )}
                     {item.note && (

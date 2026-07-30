@@ -273,12 +273,18 @@ html[data-theme='light'] .groups-hero__mark {
     background: var(--panel-2);
 }
 
-.groups-summary__icon {
+.groups-summary .groups-summary__icon {
+    display: grid;
+    flex: 0 0 32px;
+    place-items: center;
     width: 32px;
     height: 32px;
     border-radius: 8px;
     background: var(--panel);
     box-shadow: 0 0 0 1px var(--line);
+    color: var(--signal);
+    font-size: 0;
+    line-height: 1;
 }
 
 .groups-panel .btn svg,
@@ -295,6 +301,7 @@ html[data-theme='light'] .groups-hero__mark {
 .groups-summary__icon svg {
     width: 18px;
     height: 18px;
+    stroke-width: 1.8;
 }
 
 .groups-empty__icon svg {
@@ -345,6 +352,10 @@ html[data-theme='light'] .groups-hero__mark {
 
 .groups-invites__row {
     border-radius: 8px;
+    background: var(--panel);
+}
+
+.groups-invites__empty {
     background: var(--panel);
 }
 

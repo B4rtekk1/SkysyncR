@@ -170,7 +170,8 @@
 
 .security-center__activity-row {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(120px, auto) auto;
+    grid-template-columns: minmax(8rem, 1fr) minmax(0, 14rem) 5.5rem;
+    align-items: center;
     gap: 12px;
     color: var(--paper);
     font-size: 0.78rem;
@@ -183,6 +184,12 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+}
+
+.security-center__activity-row time {
+    justify-self: end;
+    font-variant-numeric: tabular-nums;
+    text-align: right;
 }
 
 @media (max-width: 980px) {
@@ -199,9 +206,22 @@
     }
 
     .security-center__row,
-    .security-center__row--action,
-    .security-center__activity-row {
+    .security-center__row--action {
         grid-template-columns: 1fr;
+    }
+
+    .security-center__activity-row {
+        grid-template-columns: minmax(0, 1fr) 5.5rem;
+        gap: 4px 10px;
+    }
+
+    .security-center__activity-row small {
+        grid-column: 1 / -1;
+    }
+
+    .security-center__activity-row time {
+        grid-column: 2;
+        grid-row: 1;
     }
 
     .security-center__actions {

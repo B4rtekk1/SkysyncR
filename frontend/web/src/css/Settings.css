@@ -664,7 +664,7 @@
 
 .settings-activity-item {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-columns: minmax(0, 1fr) 6rem;
     gap: 12px;
     align-items: start;
     width: 100%;
@@ -682,8 +682,12 @@
 }
 
 .settings-activity-item strong {
+    min-width: 0;
+    overflow: hidden;
     color: var(--paper);
     font-size: 0.84rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .settings-activity-item small,
@@ -694,7 +698,16 @@
 }
 
 .settings-activity-item time {
+    justify-self: end;
+    font-variant-numeric: tabular-nums;
     text-align: right;
+    white-space: nowrap;
+}
+
+.settings-activity-item small {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
     white-space: nowrap;
 }
 
@@ -876,7 +889,7 @@ html[data-theme='light'] .settings-actions {
 
     .settings-session-item,
     .settings-activity-item {
-        grid-template-columns: 1fr;
+        grid-template-columns: minmax(0, 1fr) 6rem;
         flex-direction: column;
     }
 
@@ -886,8 +899,7 @@ html[data-theme='light'] .settings-actions {
     }
 
     .settings-activity-item time {
-        text-align: left;
-        white-space: normal;
+        text-align: right;
     }
 
     .settings-toggle {
