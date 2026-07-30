@@ -22,7 +22,8 @@ type DashboardModalsProps = {
     filePreview: FilePreviewState | null
     onCloseFilePreview: () => void
     onDownload: (item: Item) => void | Promise<void>
-    onSaveTextFile: (item: Item, text: string) => Promise<void>
+    onSaveTextFile: (item: Item, text: string, options?: { force?: boolean }) => Promise<void>
+    onReloadFilePreview: (item: Item, options?: { startEditing?: boolean }) => void | Promise<void>
     settingsOpen: boolean
     currentUser: CurrentUserResponse | null
     onCloseSettings: () => void
@@ -132,6 +133,7 @@ export function DashboardModals({
     onCloseFilePreview,
     onDownload,
     onSaveTextFile,
+    onReloadFilePreview,
     settingsOpen,
     currentUser,
     onCloseSettings,
@@ -231,6 +233,7 @@ export function DashboardModals({
                         onClose={onCloseFilePreview}
                         onDownload={onDownload}
                         onSaveText={onSaveTextFile}
+                        onReload={() => onReloadFilePreview(filePreview.item, { startEditing: true })}
                     />
                 </Suspense>
             )}

@@ -294,7 +294,8 @@ pub async fn get_user_file_for_content_update_in_tx(
             checksum,
             encrypted_key,
             encryption_nonce,
-            content_key_fingerprint
+            content_key_fingerprint,
+            updated_at
         FROM files
         WHERE id = $1
           AND owner_id = $2
@@ -527,7 +528,8 @@ pub async fn restore_user_file_version(
             fv.checksum,
             fv.encrypted_key,
             fv.encryption_nonce,
-            fv.content_key_fingerprint
+            fv.content_key_fingerprint,
+            f.updated_at
         FROM file_versions fv
         JOIN files f ON f.id = fv.file_id
         WHERE fv.id = $1

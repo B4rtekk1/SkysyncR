@@ -395,6 +395,8 @@ struct UpdateContentPayload {
     encryption_nonce: Vec<u8>,
     content_key_fingerprint: String,
     share_keys: Vec<FileShareKeyPayload>,
+    base_updated_at: Option<chrono::DateTime<Utc>>,
+    force: bool,
 }
 
 #[derive(Deserialize)]
@@ -687,6 +689,20 @@ pub async fn update_file_content(
             return Err(internal_error("get file for content update", err));
         }
     };
+
+    if !payload.force {
+        let Some(base_updated_at) = payload.base_updated_at else {
+            let _ = fs::remove_file(&temp_path).await;
+            return Err(ApiError::BadRequest("Missing base_updated_at".into()));
+        };
+
+        if base_updated_at != target.updated_at {
+            let _ = fs::remove_file(&temp_path).await;
+            return Err(ApiError::Conflict(
+                "File changed since you opened it. Refresh the preview or force save to create another version.".into(),
+            ));
+        }
+    }
 
     let size_delta =
         file_size.saturating_sub(target.size_bytes) - target.size_bytes.saturating_sub(file_size);
@@ -1399,6 +1415,8 @@ async fn parse_update_content_payload(
     let mut encryption_nonce: Option<Vec<u8>> = None;
     let mut content_key_fingerprint: Option<String> = None;
     let mut share_keys: Option<Vec<FileShareKeyPayload>> = None;
+    let mut base_updated_at: Option<chrono::DateTime<Utc>> = None;
+    let mut force = false;
 
     while let Some(field) = multipart
         .next_field()
@@ -1452,6 +1470,27 @@ async fn parse_update_content_payload(
                         .map_err(|_| ApiError::BadRequest("Invalid share_keys".into()))?,
                 );
             }
+            "base_updated_at" => {
+                let value = field
+                    .text()
+                    .await
+                    .map_err(|_| ApiError::BadRequest("Invalid base_updated_at".into()))?;
+                let trimmed = value.trim();
+                if !trimmed.is_empty() {
+                    base_updated_at = Some(
+                        chrono::DateTime::parse_from_rfc3339(trimmed)
+                            .map_err(|_| ApiError::BadRequest("Invalid base_updated_at".into()))?
+                            .with_timezone(&Utc),
+                    );
+                }
+            }
+            "force" => {
+                let value = field
+                    .text()
+                    .await
+                    .map_err(|_| ApiError::BadRequest("Invalid force".into()))?;
+                force = value.trim().eq_ignore_ascii_case("true") || value.trim() == "1";
+            }
             _ => {}
         }
     }
@@ -1471,6 +1510,8 @@ async fn parse_update_content_payload(
         content_key_fingerprint: content_key_fingerprint
             .ok_or_else(|| ApiError::BadRequest("Missing content_key_fingerprint".into()))?,
         share_keys: share_keys.unwrap_or_default(),
+        base_updated_at,
+        force,
     })
 }
 

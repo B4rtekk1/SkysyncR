@@ -40,6 +40,13 @@ async function parseErrorMessage(response: Response): Promise<string> {
     }
 }
 
+export class FileContentConflictError extends Error {
+    constructor(message: string) {
+        super(message)
+        this.name = 'FileContentConflictError'
+    }
+}
+
 export type {
     ApiFile,
     ApiFolder,
@@ -462,12 +469,16 @@ export async function updateFileContent(params: {
     wrappedKey: ArrayBuffer | Uint8Array | string
     encryptionNonce: ArrayBuffer | Uint8Array
     contentKeyFingerprint: string
+    baseUpdatedAt?: string
+    force?: boolean
     shareKeys?: Array<{ shareId: string; encryptedKey: ArrayBuffer | Uint8Array | string }>
 }): Promise<ApiFile> {
     const res = await authenticatedMultipartStream(`${API_BASE}files/${params.id}/content`, [
         textPart('encrypted_key', typeof params.wrappedKey === 'string' ? params.wrappedKey : arrayBufferToBase64(params.wrappedKey)),
         textPart('encryption_nonce', arrayBufferToBase64(params.encryptionNonce)),
         textPart('content_key_fingerprint', params.contentKeyFingerprint),
+        ...(params.baseUpdatedAt ? [textPart('base_updated_at', params.baseUpdatedAt)] : []),
+        ...(params.force ? [textPart('force', 'true')] : []),
         textPart('share_keys', JSON.stringify((params.shareKeys ?? []).map((shareKey) => ({
             share_id: shareKey.shareId,
             encrypted_key: typeof shareKey.encryptedKey === 'string'
@@ -476,6 +487,7 @@ export async function updateFileContent(params: {
         })))),
         streamPart('file', params.encryptedFile, params.originalFilename, 'application/octet-stream'),
     ], 'PUT')
+    if (res.status === 409) throw new FileContentConflictError(await parseErrorMessage(res))
     if (!res.ok) throw new Error(await parseErrorMessage(res))
     return readJson(res, file, 'File')
 }

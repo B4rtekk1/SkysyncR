@@ -157,6 +157,7 @@ pub struct UpdateFileContentTarget {
     pub encrypted_key: Vec<u8>,
     pub encryption_nonce: Vec<u8>,
     pub content_key_fingerprint: Option<String>,
+    pub updated_at: DateTime<Utc>,
 }
 
 #[derive(FromRow)]

@@ -258,6 +258,34 @@
     font-size: 0.82rem;
 }
 
+.image-preview__conflict-actions {
+    display: flex;
+    flex-wrap: wrap;
+    grid-column: 1 / -1;
+    gap: 8px;
+}
+
+.image-preview__conflict-actions button {
+    min-height: 34px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--panel-2);
+    color: var(--paper);
+    cursor: pointer;
+    font: inherit;
+    font-size: 0.82rem;
+    padding: 0 12px;
+}
+
+.image-preview__conflict-actions button:hover:not(:disabled) {
+    border-color: rgba(var(--signal-rgb), 0.68);
+}
+
+.image-preview__conflict-actions button:disabled {
+    cursor: wait;
+    opacity: 0.64;
+}
+
 .image-preview__autosave {
     grid-column: 1 / -1;
     margin: 0;

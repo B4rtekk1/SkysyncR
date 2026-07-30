@@ -921,6 +921,7 @@ function Dashboard() {
                 onCloseFilePreview={closeFilePreview}
                 onDownload={handleDownload}
                 onSaveTextFile={handleSaveTextFile}
+                onReloadFilePreview={handleFilePreview}
                 settingsOpen={settingsOpen}
                 currentUser={currentUser}
                 onCloseSettings={() => setSettingsOpen(false)}

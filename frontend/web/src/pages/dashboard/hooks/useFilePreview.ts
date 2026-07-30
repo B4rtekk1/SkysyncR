@@ -202,7 +202,7 @@ export function useFilePreview(
         }
     }
 
-    async function handleSaveTextFile(item: Item, text: string) {
+    async function handleSaveTextFile(item: Item, text: string, options: { force?: boolean } = {}) {
         if (!privateKey) {
             throw new Error('Private key is locked. Sign in again to save encrypted files.')
         }
@@ -229,6 +229,8 @@ export function useFilePreview(
             wrappedKey: wrappedOwnerKey,
             encryptionNonce: encryptedFileFormatNonce(),
             contentKeyFingerprint: await fileContentKeyFingerprint(fileKey),
+            baseUpdatedAt: item.updated_at,
+            force: Boolean(options.force),
             shareKeys,
         })
 

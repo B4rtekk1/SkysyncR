@@ -451,8 +451,11 @@ export function TextFileEditor({
     highlightLanguage,
     error,
     onChange,
+    onForceSave,
+    onReload,
     onSave,
     saving,
+    showConflictActions = false,
     text,
 }: {
     autosaveStatus?: 'idle' | 'pending' | 'saving' | 'saved' | 'error'
@@ -461,8 +464,11 @@ export function TextFileEditor({
     highlightLanguage: CodeHighlightLanguage | null
     error: string | null
     onChange: (text: string) => void
+    onForceSave?: () => void
+    onReload?: () => void
     onSave: () => void
     saving: boolean
+    showConflictActions?: boolean
     text: string
 }) {
     const highlightRef = useRef<HTMLPreElement>(null)
@@ -653,6 +659,16 @@ export function TextFileEditor({
             )}
             <CodeTypeDiagnostics diagnostics={typeDiagnostics} language={highlightLanguage} />
             {error && <p className="image-preview__editor-error">{error}</p>}
+            {showConflictActions && (
+                <div className="image-preview__conflict-actions">
+                    <button type="button" onClick={onReload} disabled={saving}>
+                        Reload changed file
+                    </button>
+                    <button type="button" onClick={onForceSave} disabled={saving}>
+                        Force save as latest version
+                    </button>
+                </div>
+            )}
         </div>
     )
 }
