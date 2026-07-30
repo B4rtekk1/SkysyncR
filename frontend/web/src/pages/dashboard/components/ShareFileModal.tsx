@@ -98,6 +98,7 @@ export function ShareFileModal({
     const [peopleSaving, setPeopleSaving] = useState(false)
     const [selectedGroupId, setSelectedGroupId] = useState('')
     const [groupSharing, setGroupSharing] = useState(false)
+    const [showLinkSettings, setShowLinkSettings] = useState(false)
     const requestedShareRef = useRef<string | null>(null)
     const dialogRef = useRef<HTMLElement>(null)
     const qr = useMemo(() => {
@@ -392,7 +393,7 @@ export function ShareFileModal({
                         </p>
                         <h2 id="share-title">{title}</h2>
                     </div>
-                    <button className="image-preview__close" type="button" onClick={onClose} aria-label="Close share dialog">
+                    <button className="share-modal__close" type="button" onClick={onClose} aria-label="Close share dialog">
                         {CLOSE_ICON}
                     </button>
                 </header>
@@ -410,92 +411,116 @@ export function ShareFileModal({
                             <strong>{itemKind === 'folder' ? 'View folder' : 'View only'}</strong>
                         </div>
                         {itemKind === 'file' && (
-                            <>
-                                <div className="share-modal__expiry">
-                                    <span>Activation date</span>
-                                    <input
-                                        className="share-modal__text-input"
-                                        type="datetime-local"
-                                        value={shareStartsAtDraft}
-                                        onChange={(event) => setShareStartsAtDraft(event.target.value)}
-                                        disabled={loading}
-                                        aria-label="Activation date"
-                                    />
-                                    <span>{activationLabel}</span>
-                                </div>
-                                <div className="share-modal__expiry">
-                                    <span>Expiration date</span>
-                                    <input
-                                        className="share-modal__text-input"
-                                        type="datetime-local"
-                                        value={shareExpiresAtDraft}
-                                        onChange={(event) => setShareExpiresAtDraft(event.target.value)}
-                                        disabled={loading}
-                                        aria-label="Expiration date"
-                                    />
-                                    <span>{hasInvalidShareWindow ? 'Must be after activation' : expiryLabel}</span>
-                                </div>
-                                <div className="share-modal__expiry">
-                                    <span>One-time link</span>
-                                    <label className="share-modal__toggle">
-                                        <input
-                                            type="checkbox"
-                                            checked={oneTimeDraft}
-                                            onChange={(event) => setOneTimeDraft(event.target.checked)}
-                                            disabled={loading}
-                                        />
-                                        <span>{oneTimeDraft ? 'Revokes after first download' : 'Reusable until limits apply'}</span>
-                                    </label>
-                                    <span>{oneTimeDraft ? 'Single use' : 'Multiple downloads'}</span>
-                                </div>
-                                <div className="share-modal__expiry">
-                                    <span>Download limit</span>
-                                    <input
-                                        className="share-modal__number-input"
-                                        type="number"
-                                        min="1"
-                                        max="1000000"
-                                        step="1"
-                                        inputMode="numeric"
-                                        value={downloadLimitDraft}
-                                        onChange={(event) => setDownloadLimitDraft(event.target.value)}
-                                        placeholder="No limit"
-                                        disabled={loading}
-                                        aria-label="Download limit"
-                                    />
-                                    <span>{downloadLimitLabel}</span>
-                                </div>
-                                <div className="share-modal__expiry">
-                                    <span>Link password</span>
-                                    <input
-                                        className="share-modal__text-input"
-                                        type="password"
-                                        autoComplete="current-password"
-                                        minLength={8}
-                                        maxLength={128}
-                                        value={sharePasswordDraft}
-                                        onChange={(event) => setSharePasswordDraft(event.target.value)}
-                                        placeholder={fileItem?.share_password_enabled ? 'Password set' : 'No password'}
-                                        disabled={loading}
-                                        aria-label="Share link password"
-                                    />
-                                    <span>{sharePassword ? 'Will require password' : fileItem?.share_password_enabled ? 'Leave empty to remove' : 'Optional'}</span>
-                                </div>
-                                <div className="share-modal__expiry">
-                                    <span>Recipient email</span>
-                                    <input
-                                        className="share-modal__text-input"
-                                        type="email"
-                                        autoComplete="username"
-                                        value={shareRecipientEmailDraft}
-                                        onChange={(event) => setShareRecipientEmailDraft(event.target.value)}
-                                        placeholder="No email confirmation"
-                                        disabled={loading}
-                                        aria-label="Public link recipient email"
-                                    />
-                                    <span>{shareRecipientEmail ? 'Must match before download' : 'Optional'}</span>
-                                </div>
-                            </>
+                            <section className="share-modal__settings">
+                                <button
+                                    className="share-modal__settings-trigger"
+                                    type="button"
+                                    onClick={() => setShowLinkSettings((current) => !current)}
+                                    aria-expanded={showLinkSettings}
+                                >
+                                    <span>
+                                        <strong>Link settings</strong>
+                                        <small>
+                                            {expiryLabel}
+                                            {downloadLimit ? `, ${downloadLimit} downloads max` : ''}
+                                            {oneTimeDraft ? ', one-time' : ''}
+                                            {sharePassword || fileItem?.share_password_enabled ? ', password' : ''}
+                                        </small>
+                                    </span>
+                                    <span className="share-modal__settings-chevron" aria-hidden="true">
+                                        v
+                                    </span>
+                                </button>
+
+                                {showLinkSettings && (
+                                    <div className="share-modal__settings-grid">
+                                        <div className="share-modal__expiry">
+                                            <span>Activation date</span>
+                                            <input
+                                                className="share-modal__text-input"
+                                                type="datetime-local"
+                                                value={shareStartsAtDraft}
+                                                onChange={(event) => setShareStartsAtDraft(event.target.value)}
+                                                disabled={loading}
+                                                aria-label="Activation date"
+                                            />
+                                            <span>{activationLabel}</span>
+                                        </div>
+                                        <div className="share-modal__expiry">
+                                            <span>Expiration date</span>
+                                            <input
+                                                className="share-modal__text-input"
+                                                type="datetime-local"
+                                                value={shareExpiresAtDraft}
+                                                onChange={(event) => setShareExpiresAtDraft(event.target.value)}
+                                                disabled={loading}
+                                                aria-label="Expiration date"
+                                            />
+                                            <span>{hasInvalidShareWindow ? 'Must be after activation' : expiryLabel}</span>
+                                        </div>
+                                        <div className="share-modal__expiry">
+                                            <span>One-time link</span>
+                                            <label className="share-modal__toggle">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={oneTimeDraft}
+                                                    onChange={(event) => setOneTimeDraft(event.target.checked)}
+                                                    disabled={loading}
+                                                />
+                                                <span>{oneTimeDraft ? 'Revokes after first download' : 'Reusable until limits apply'}</span>
+                                            </label>
+                                            <span>{oneTimeDraft ? 'Single use' : 'Multiple downloads'}</span>
+                                        </div>
+                                        <div className="share-modal__expiry">
+                                            <span>Download limit</span>
+                                            <input
+                                                className="share-modal__number-input"
+                                                type="number"
+                                                min="1"
+                                                max="1000000"
+                                                step="1"
+                                                inputMode="numeric"
+                                                value={downloadLimitDraft}
+                                                onChange={(event) => setDownloadLimitDraft(event.target.value)}
+                                                placeholder="No limit"
+                                                disabled={loading}
+                                                aria-label="Download limit"
+                                            />
+                                            <span>{downloadLimitLabel}</span>
+                                        </div>
+                                        <div className="share-modal__expiry">
+                                            <span>Link password</span>
+                                            <input
+                                                className="share-modal__text-input"
+                                                type="password"
+                                                autoComplete="current-password"
+                                                minLength={8}
+                                                maxLength={128}
+                                                value={sharePasswordDraft}
+                                                onChange={(event) => setSharePasswordDraft(event.target.value)}
+                                                placeholder={fileItem?.share_password_enabled ? 'Password set' : 'No password'}
+                                                disabled={loading}
+                                                aria-label="Share link password"
+                                            />
+                                            <span>{sharePassword ? 'Will require password' : fileItem?.share_password_enabled ? 'Leave empty to remove' : 'Optional'}</span>
+                                        </div>
+                                        <div className="share-modal__expiry">
+                                            <span>Recipient email</span>
+                                            <input
+                                                className="share-modal__text-input"
+                                                type="email"
+                                                autoComplete="username"
+                                                value={shareRecipientEmailDraft}
+                                                onChange={(event) => setShareRecipientEmailDraft(event.target.value)}
+                                                placeholder="No email confirmation"
+                                                disabled={loading}
+                                                aria-label="Public link recipient email"
+                                            />
+                                            <span>{shareRecipientEmail ? 'Must match before download' : 'Optional'}</span>
+                                        </div>
+                                    </div>
+                                )}
+                            </section>
                         )}
                         <div className="share-modal__link-row">
                             <input value={linkInputValue} readOnly aria-label="Share link" />
