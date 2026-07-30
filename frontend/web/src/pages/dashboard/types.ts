@@ -22,15 +22,26 @@ export type FileTypeFilterKey =
     | 'code'
     | 'file'
 export type FileVisibilityFilterKey = 'any' | 'public' | 'private'
+export type FileOwnerFilterOption = {
+    id: string
+    label: string
+}
+export type FileFolderFilterOption = {
+    id: string
+    label: string
+}
 export type FileFilters = {
     types: FileTypeFilterKey[]
     visibility: FileVisibilityFilterKey
+    ownerId: string
+    folderId: string
     tagId: string
     minSizeMb: string
     maxSizeMb: string
     excludedExtensions: string
     modifiedFrom: string
     modifiedTo: string
+    noteQuery: string
 }
 export type Item = ApiFile | SharedFile
 export type ShareableItem = Item | ApiFolder

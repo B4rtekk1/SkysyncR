@@ -14,12 +14,15 @@ import type { FileFilters, Item } from './types.ts'
 const emptyFilters: FileFilters = {
   types: [],
   visibility: 'any',
+  ownerId: '',
+  folderId: '',
   tagId: '',
   minSizeMb: '',
   maxSizeMb: '',
   excludedExtensions: '',
   modifiedFrom: '',
   modifiedTo: '',
+  noteQuery: '',
 }
 
 function item(overrides: Partial<Item>): Item {
@@ -74,6 +77,15 @@ test('filter summary and active state reflect selected criteria', () => {
   assert.equal(getFilterSummary(filters), '1 type · Shared · 2 excluded')
 
   assert.equal(getFilterSummary({ ...emptyFilters, tagId: 'tag-1' }, [{ id: 'tag-1', owner_id: 'user-1', name: 'Finance', color: null, created_at: '2026-07-12T10:00:00Z' }]), 'Tag: Finance')
+  assert.equal(
+    getFilterSummary(
+      { ...emptyFilters, ownerId: 'owner-1', folderId: 'folder-1', noteQuery: 'budget' },
+      [],
+      [{ id: 'owner-1', label: 'Ada' }],
+      [{ id: 'folder-1', label: 'Reports' }],
+    ),
+    'Owner: Ada · Folder: Reports · Notes',
+  )
 })
 
 test('parseExcludedExtensions handles dots, whitespace, commas and semicolons', () => {
@@ -109,6 +121,25 @@ test('matchesFileFilters applies selected tag filter', () => {
 
   assert.equal(matchesFileFilters(base, { ...emptyFilters, tagId: 'tag-1' }, tags), true)
   assert.equal(matchesFileFilters(base, { ...emptyFilters, tagId: 'tag-2' }, tags), false)
+})
+
+test('matchesFileFilters applies owner, folder and note filters', () => {
+  const ownFile = item({ folder_id: 'folder-1', note: 'Quarterly budget draft' })
+  const sharedFile = {
+    ...item({ id: 'shared-1', folder_id: null, note: 'Roadmap notes' }),
+    permissions: 'read',
+    shared_by_user_id: 'owner-1',
+    shared_by_user_name: 'Ada',
+  } as Item
+
+  assert.equal(matchesFileFilters(ownFile, { ...emptyFilters, ownerId: '__me__' }), true)
+  assert.equal(matchesFileFilters(sharedFile, { ...emptyFilters, ownerId: '__me__' }), false)
+  assert.equal(matchesFileFilters(sharedFile, { ...emptyFilters, ownerId: 'owner-1' }), true)
+  assert.equal(matchesFileFilters(ownFile, { ...emptyFilters, folderId: 'folder-1' }), true)
+  assert.equal(matchesFileFilters(ownFile, { ...emptyFilters, folderId: '__root__' }), false)
+  assert.equal(matchesFileFilters(sharedFile, { ...emptyFilters, folderId: '__root__' }), true)
+  assert.equal(matchesFileFilters(ownFile, { ...emptyFilters, noteQuery: 'budget' }), true)
+  assert.equal(matchesFileFilters(ownFile, { ...emptyFilters, noteQuery: 'roadmap' }), false)
 })
 
 test('sortFiles keeps manual order by reference and sorts copies for computed keys', () => {

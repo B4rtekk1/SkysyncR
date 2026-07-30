@@ -8,7 +8,13 @@ import {
     formatSizeInputValue,
 } from '../fileFilters'
 import type { Tag } from '../../../api/tags'
-import type { FileFilters, FileTypeFilterKey, FileVisibilityFilterKey } from '../types'
+import type {
+    FileFilters,
+    FileFolderFilterOption,
+    FileOwnerFilterOption,
+    FileTypeFilterKey,
+    FileVisibilityFilterKey,
+} from '../types'
 
 type SizeFilterField = 'minSizeMb' | 'maxSizeMb'
 type ModifiedDateField = 'modifiedFrom' | 'modifiedTo'
@@ -20,6 +26,8 @@ type FileFilterModalProps = {
     query: string
     fileFilters: FileFilters
     tags: Tag[]
+    ownerOptions: FileOwnerFilterOption[]
+    folderOptions: FileFolderFilterOption[]
     hasActiveFilter: boolean
     sizeSliderMax: number
     sizeSliderMinValue: number
@@ -31,11 +39,14 @@ type FileFilterModalProps = {
     onClearFileTypes: () => void
     onToggleFileType: (type: FileTypeFilterKey) => void
     onVisibilityChange: (visibility: FileVisibilityFilterKey) => void
+    onOwnerChange: (ownerId: string) => void
+    onFolderChange: (folderId: string) => void
     onTagChange: (tagId: string) => void
     onSizeInputChange: (field: SizeFilterField, value: string) => void
     onSizeSliderChange: (field: SizeFilterField, value: string) => void
     onExcludedExtensionsChange: (value: string) => void
     onModifiedDateChange: (field: ModifiedDateField, value: string) => void
+    onNoteQueryChange: (value: string) => void
     onClearFilters: () => void
 }
 
@@ -46,6 +57,8 @@ export function FileFilterModal({
     query,
     fileFilters,
     tags,
+    ownerOptions,
+    folderOptions,
     hasActiveFilter,
     sizeSliderMax,
     sizeSliderMinValue,
@@ -57,11 +70,14 @@ export function FileFilterModal({
     onClearFileTypes,
     onToggleFileType,
     onVisibilityChange,
+    onOwnerChange,
+    onFolderChange,
     onTagChange,
     onSizeInputChange,
     onSizeSliderChange,
     onExcludedExtensionsChange,
     onModifiedDateChange,
+    onNoteQueryChange,
     onClearFilters,
 }: FileFilterModalProps) {
     const dialogRef = useRef<HTMLDivElement>(null)
@@ -173,6 +189,44 @@ export function FileFilterModal({
 
                         <div className="file-filter__section">
                             <div className="file-filter__section-head">
+                                <span>Owner</span>
+                            </div>
+                            <select
+                                className="file-filter__select"
+                                value={fileFilters.ownerId}
+                                onChange={(e) => onOwnerChange(e.target.value)}
+                                aria-label="Owner filter"
+                            >
+                                <option value="">Any owner</option>
+                                {ownerOptions.map((owner) => (
+                                    <option key={owner.id} value={owner.id}>
+                                        {owner.label}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+
+                        <div className="file-filter__section">
+                            <div className="file-filter__section-head">
+                                <span>Folder</span>
+                            </div>
+                            <select
+                                className="file-filter__select"
+                                value={fileFilters.folderId}
+                                onChange={(e) => onFolderChange(e.target.value)}
+                                aria-label="Folder filter"
+                            >
+                                <option value="">Any folder</option>
+                                {folderOptions.map((folder) => (
+                                    <option key={folder.id} value={folder.id}>
+                                        {folder.label}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+
+                        <div className="file-filter__section">
+                            <div className="file-filter__section-head">
                                 <span>Tag</span>
                             </div>
                             <select
@@ -279,6 +333,20 @@ export function FileFilterModal({
                                     aria-label="Modified to"
                                 />
                             </div>
+                        </div>
+
+                        <div className="file-filter__section">
+                            <div className="file-filter__section-head">
+                                <span>Notes</span>
+                            </div>
+                            <input
+                                className="file-filter__text-input"
+                                type="text"
+                                placeholder="Search notes"
+                                value={fileFilters.noteQuery}
+                                onChange={(e) => onNoteQueryChange(e.target.value)}
+                                aria-label="Note content filter"
+                            />
                         </div>
                     </div>
                 </div>

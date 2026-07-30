@@ -81,12 +81,15 @@ function isFileSortKey(value: string | null): value is FileSortKey {
 export const DEFAULT_FILE_FILTERS: FileFilters = {
     types: [],
     visibility: 'any',
+    ownerId: '',
+    folderId: '',
     tagId: '',
     minSizeMb: '',
     maxSizeMb: '',
     excludedExtensions: '',
     modifiedFrom: '',
     modifiedTo: '',
+    noteQuery: '',
 }
 
 export function loadFileFilter(): FileFilters {
@@ -108,12 +111,15 @@ export function loadFileFilter(): FileFilters {
                 parsed.visibility === 'public' || parsed.visibility === 'private' || parsed.visibility === 'any'
                     ? parsed.visibility
                     : 'any',
+            ownerId: typeof parsed.ownerId === 'string' ? parsed.ownerId : '',
+            folderId: typeof parsed.folderId === 'string' ? parsed.folderId : '',
             tagId: typeof parsed.tagId === 'string' ? parsed.tagId : '',
             minSizeMb: typeof parsed.minSizeMb === 'string' ? parsed.minSizeMb : '',
             maxSizeMb: typeof parsed.maxSizeMb === 'string' ? parsed.maxSizeMb : '',
             excludedExtensions: typeof parsed.excludedExtensions === 'string' ? parsed.excludedExtensions : '',
             modifiedFrom: typeof parsed.modifiedFrom === 'string' ? parsed.modifiedFrom : '',
             modifiedTo: typeof parsed.modifiedTo === 'string' ? parsed.modifiedTo : '',
+            noteQuery: typeof parsed.noteQuery === 'string' ? parsed.noteQuery : '',
         }
     } catch {
         return DEFAULT_FILE_FILTERS

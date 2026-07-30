@@ -1,6 +1,14 @@
 import { kindFromFile } from './fileUtils.ts'
 import type { FileTag, Tag } from '../../api/tags'
-import type { FileFilters, FileSortKey, FileTypeFilterKey, FileVisibilityFilterKey, Item } from './types'
+import type {
+    FileFilters,
+    FileFolderFilterOption,
+    FileOwnerFilterOption,
+    FileSortKey,
+    FileTypeFilterKey,
+    FileVisibilityFilterKey,
+    Item,
+} from './types'
 
 export const FILE_SORT_LABELS: Record<FileSortKey, string> = {
     manual: 'Manual order',
@@ -97,28 +105,45 @@ export function hasActiveFileFilters(filters: FileFilters) {
     return (
         filters.types.length > 0 ||
         filters.visibility !== 'any' ||
+        filters.ownerId !== '' ||
+        filters.folderId !== '' ||
         filters.tagId !== '' ||
         filters.minSizeMb.trim() !== '' ||
         filters.maxSizeMb.trim() !== '' ||
         filters.excludedExtensions.trim() !== '' ||
         filters.modifiedFrom !== '' ||
-        filters.modifiedTo !== ''
+        filters.modifiedTo !== '' ||
+        filters.noteQuery.trim() !== ''
     )
 }
 
-export function getFilterSummary(filters: FileFilters, tags: Tag[] = []) {
+export function getFilterSummary(
+    filters: FileFilters,
+    tags: Tag[] = [],
+    ownerOptions: FileOwnerFilterOption[] = [],
+    folderOptions: FileFolderFilterOption[] = [],
+) {
     const excludedExtensions = parseExcludedExtensions(filters.excludedExtensions)
     const selectedTag = filters.tagId ? tags.find((tag) => tag.id === filters.tagId) : null
+    const selectedOwner = filters.ownerId ? ownerOptions.find((owner) => owner.id === filters.ownerId) : null
+    const selectedFolder = filters.folderId ? folderOptions.find((folder) => folder.id === filters.folderId) : null
     const activeParts = [
         filters.types.length > 0 ? `${filters.types.length} type${filters.types.length > 1 ? 's' : ''}` : null,
         filters.visibility !== 'any' ? FILE_VISIBILITY_LABELS[filters.visibility] : null,
+        selectedOwner ? `Owner: ${selectedOwner.label}` : filters.ownerId ? 'Owner' : null,
+        selectedFolder ? `Folder: ${selectedFolder.label}` : filters.folderId ? 'Folder' : null,
         selectedTag ? `Tag: ${selectedTag.name}` : filters.tagId ? 'Tag' : null,
         filters.minSizeMb.trim() || filters.maxSizeMb.trim() ? 'Size' : null,
         excludedExtensions.length > 0 ? `${excludedExtensions.length} excluded` : null,
         filters.modifiedFrom || filters.modifiedTo ? 'Modified' : null,
+        filters.noteQuery.trim() ? 'Notes' : null,
     ].filter(Boolean)
 
     return activeParts.length > 0 ? activeParts.join(' · ') : 'All files'
+}
+
+function isSharedFile(item: Item): item is Item & { shared_by_user_id: string; shared_by_user_name: string | null } {
+    return 'shared_by_user_id' in item
 }
 
 export function matchesFileFilters(item: Item, filters: FileFilters, fileTags: FileTag[] = []) {
@@ -127,6 +152,12 @@ export function matchesFileFilters(item: Item, filters: FileFilters, fileTags: F
     }
     if (filters.visibility === 'public' && !item.is_public) return false
     if (filters.visibility === 'private' && item.is_public) return false
+    if (filters.ownerId === '__me__' && isSharedFile(item)) return false
+    if (filters.ownerId && filters.ownerId !== '__me__') {
+        if (!isSharedFile(item) || item.shared_by_user_id !== filters.ownerId) return false
+    }
+    if (filters.folderId === '__root__' && item.folder_id !== null) return false
+    if (filters.folderId && filters.folderId !== '__root__' && item.folder_id !== filters.folderId) return false
     if (filters.tagId && !fileTags.some((tag) => tag.tag_id === filters.tagId)) return false
 
     const minSizeMb = parseSizeMb(filters.minSizeMb)
@@ -148,6 +179,8 @@ export function matchesFileFilters(item: Item, filters: FileFilters, fileTags: F
         const modifiedTo = new Date(`${filters.modifiedTo}T23:59:59.999`).getTime()
         if (Number.isFinite(modifiedTo) && modifiedAt > modifiedTo) return false
     }
+    const normalizedNoteQuery = filters.noteQuery.trim().toLowerCase()
+    if (normalizedNoteQuery && !(item.note ?? '').toLowerCase().includes(normalizedNoteQuery)) return false
     return true
 }
 

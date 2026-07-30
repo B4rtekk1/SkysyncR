@@ -136,22 +136,28 @@ test('loadFileFilter sanitizes structured stored filters', () => {
     JSON.stringify({
       types: ['image', 'bad', 'code'],
       visibility: 'team',
+      ownerId: 'owner-1',
+      folderId: 'folder-1',
       tagId: 'tag-1',
       minSizeMb: 12,
       maxSizeMb: '20',
       excludedExtensions: '.tmp',
       modifiedFrom: '2026-07-01',
       modifiedTo: null,
+      noteQuery: 'budget',
     }),
   )
 
   assert.deepEqual(loadFileFilter(), {
     ...DEFAULT_FILE_FILTERS,
     types: ['image', 'code'],
+    ownerId: 'owner-1',
+    folderId: 'folder-1',
     tagId: 'tag-1',
     maxSizeMb: '20',
     excludedExtensions: '.tmp',
     modifiedFrom: '2026-07-01',
+    noteQuery: 'budget',
   })
 })
 
@@ -159,12 +165,15 @@ test('saveFileFilter round-trips complete filter objects', () => {
   const filters: FileFilters = {
     types: ['archive', 'video'],
     visibility: 'private',
+    ownerId: 'owner-2',
+    folderId: 'folder-2',
     tagId: 'tag-2',
     minSizeMb: '1',
     maxSizeMb: '10',
     excludedExtensions: 'tmp',
     modifiedFrom: '2026-07-01',
     modifiedTo: '2026-07-31',
+    noteQuery: 'invoice',
   }
 
   saveFileFilter(filters)

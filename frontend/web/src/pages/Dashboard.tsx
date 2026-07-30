@@ -181,6 +181,8 @@ function Dashboard() {
         sortKey,
         setSortKey,
         fileFilters,
+        ownerOptions,
+        folderOptions,
         hasActiveFilter,
         filterSummary,
         sortedItems,
@@ -192,13 +194,16 @@ function Dashboard() {
         clearFileTypes,
         toggleFileTypeFilter,
         updateVisibilityFilter,
+        updateOwnerFilter,
+        updateFolderFilter,
         updateTagFilter,
         updateSizeFilter,
         updateSizeSlider,
         updateExcludedExtensions,
         updateModifiedDateFilter,
+        updateNoteQuery,
         clearFileFilters,
-    } = useFileFilterControls(items, tags, fileTagsByFileId)
+    } = useFileFilterControls(items, tags, fileTagsByFileId, folders, currentUser)
     const tagSearchTextByItemId = useMemo(() => {
         return new Map(
             Array.from(fileTagsByFileId.entries()).map(([fileId, fileTags]) => [
@@ -773,6 +778,8 @@ function Dashboard() {
                     query={query}
                     fileFilters={fileFilters}
                     tags={tags}
+                    ownerOptions={ownerOptions}
+                    folderOptions={folderOptions}
                     hasActiveFilter={hasActiveFilter}
                     sizeSliderMax={sizeSliderMax}
                     sizeSliderMinValue={sizeSliderMinValue}
@@ -788,11 +795,14 @@ function Dashboard() {
                     onClearFileTypes={clearFileTypes}
                     onToggleFileType={toggleFileTypeFilter}
                     onVisibilityChange={updateVisibilityFilter}
+                    onOwnerChange={updateOwnerFilter}
+                    onFolderChange={updateFolderFilter}
                     onTagChange={updateTagFilter}
                     onSizeInputChange={updateSizeFilter}
                     onSizeSliderChange={updateSizeSlider}
                     onExcludedExtensionsChange={updateExcludedExtensions}
                     onModifiedDateChange={updateModifiedDateFilter}
+                    onNoteQueryChange={updateNoteQuery}
                     onClearFilters={clearFileFilters}
                     onLayoutModeChange={changeLayoutMode}
                     onOpenFileCreate={() => setFileCreateOpen(true)}

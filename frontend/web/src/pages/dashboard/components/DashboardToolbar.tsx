@@ -2,7 +2,16 @@ import { lazy, Suspense, useEffect, useRef, useState, type ChangeEvent, type Ref
 import { GRID_VIEW_ICON, LIST_VIEW_ICON } from '../icons'
 import { FILE_SORT_LABELS } from '../fileFilters'
 import type { Tag } from '../../../api/tags'
-import type { FileFilters, FileSortKey, FileTypeFilterKey, FileVisibilityFilterKey, LayoutMode, ViewKey } from '../types'
+import type {
+    FileFilters,
+    FileFolderFilterOption,
+    FileOwnerFilterOption,
+    FileSortKey,
+    FileTypeFilterKey,
+    FileVisibilityFilterKey,
+    LayoutMode,
+    ViewKey,
+} from '../types'
 
 const FileFilterModal = lazy(() => import('./FileFilterModal').then((module) => ({ default: module.FileFilterModal })))
 
@@ -21,6 +30,8 @@ type DashboardToolbarProps = {
     query: string
     fileFilters: FileFilters
     tags: Tag[]
+    ownerOptions: FileOwnerFilterOption[]
+    folderOptions: FileFolderFilterOption[]
     hasActiveFilter: boolean
     sizeSliderMax: number
     sizeSliderMinValue: number
@@ -36,11 +47,14 @@ type DashboardToolbarProps = {
     onClearFileTypes: () => void
     onToggleFileType: (type: FileTypeFilterKey) => void
     onVisibilityChange: (visibility: FileVisibilityFilterKey) => void
+    onOwnerChange: (ownerId: string) => void
+    onFolderChange: (folderId: string) => void
     onTagChange: (tagId: string) => void
     onSizeInputChange: (field: 'minSizeMb' | 'maxSizeMb', value: string) => void
     onSizeSliderChange: (field: 'minSizeMb' | 'maxSizeMb', value: string) => void
     onExcludedExtensionsChange: (value: string) => void
     onModifiedDateChange: (field: 'modifiedFrom' | 'modifiedTo', value: string) => void
+    onNoteQueryChange: (value: string) => void
     onClearFilters: () => void
     onLayoutModeChange: (mode: LayoutMode) => void
     onOpenFileCreate: () => void
@@ -63,6 +77,8 @@ export function DashboardToolbar({
     query,
     fileFilters,
     tags,
+    ownerOptions,
+    folderOptions,
     hasActiveFilter,
     sizeSliderMax,
     sizeSliderMinValue,
@@ -78,11 +94,14 @@ export function DashboardToolbar({
     onClearFileTypes,
     onToggleFileType,
     onVisibilityChange,
+    onOwnerChange,
+    onFolderChange,
     onTagChange,
     onSizeInputChange,
     onSizeSliderChange,
     onExcludedExtensionsChange,
     onModifiedDateChange,
+    onNoteQueryChange,
     onClearFilters,
     onLayoutModeChange,
     onOpenFileCreate,
@@ -239,6 +258,8 @@ export function DashboardToolbar({
                                 query={query}
                                 fileFilters={fileFilters}
                                 tags={tags}
+                                ownerOptions={ownerOptions}
+                                folderOptions={folderOptions}
                                 hasActiveFilter={hasActiveFilter}
                                 sizeSliderMax={sizeSliderMax}
                                 sizeSliderMinValue={sizeSliderMinValue}
@@ -250,11 +271,14 @@ export function DashboardToolbar({
                                 onClearFileTypes={onClearFileTypes}
                                 onToggleFileType={onToggleFileType}
                                 onVisibilityChange={onVisibilityChange}
+                                onOwnerChange={onOwnerChange}
+                                onFolderChange={onFolderChange}
                                 onTagChange={onTagChange}
                                 onSizeInputChange={onSizeInputChange}
                                 onSizeSliderChange={onSizeSliderChange}
                                 onExcludedExtensionsChange={onExcludedExtensionsChange}
                                 onModifiedDateChange={onModifiedDateChange}
+                                onNoteQueryChange={onNoteQueryChange}
                                 onClearFilters={onClearFilters}
                             />
                         </Suspense>

@@ -15,6 +15,8 @@ import type { FileCardDropPosition } from '../hooks/useManualCardOrdering'
 import type { UploadTransfer } from '../hooks/useFileUpload'
 import type {
     FileFilters,
+    FileFolderFilterOption,
+    FileOwnerFilterOption,
     FileSortKey,
     FileTypeFilterKey,
     FileVisibilityFilterKey,
@@ -44,6 +46,8 @@ type DashboardContentProps = {
     query: string
     fileFilters: FileFilters
     tags: Tag[]
+    ownerOptions: FileOwnerFilterOption[]
+    folderOptions: FileFolderFilterOption[]
     hasActiveFilter: boolean
     sizeSliderMax: number
     sizeSliderMinValue: number
@@ -59,11 +63,14 @@ type DashboardContentProps = {
     onClearFileTypes: () => void
     onToggleFileType: (type: FileTypeFilterKey) => void
     onVisibilityChange: (visibility: FileVisibilityFilterKey) => void
+    onOwnerChange: (ownerId: string) => void
+    onFolderChange: (folderId: string) => void
     onTagChange: (tagId: string) => void
     onSizeInputChange: (field: 'minSizeMb' | 'maxSizeMb', value: string) => void
     onSizeSliderChange: (field: 'minSizeMb' | 'maxSizeMb', value: string) => void
     onExcludedExtensionsChange: (value: string) => void
     onModifiedDateChange: (field: 'modifiedFrom' | 'modifiedTo', value: string) => void
+    onNoteQueryChange: (value: string) => void
     onClearFilters: () => void
     onLayoutModeChange: (mode: LayoutMode) => void
     onOpenFileCreate: () => void
@@ -202,6 +209,8 @@ export function DashboardContent({
     query,
     fileFilters,
     tags,
+    ownerOptions,
+    folderOptions,
     hasActiveFilter,
     sizeSliderMax,
     sizeSliderMinValue,
@@ -217,11 +226,14 @@ export function DashboardContent({
     onClearFileTypes,
     onToggleFileType,
     onVisibilityChange,
+    onOwnerChange,
+    onFolderChange,
     onTagChange,
     onSizeInputChange,
     onSizeSliderChange,
     onExcludedExtensionsChange,
     onModifiedDateChange,
+    onNoteQueryChange,
     onClearFilters,
     onLayoutModeChange,
     onOpenFileCreate,
@@ -410,6 +422,8 @@ export function DashboardContent({
                         query={query}
                         fileFilters={fileFilters}
                         tags={tags}
+                        ownerOptions={ownerOptions}
+                        folderOptions={folderOptions}
                         hasActiveFilter={hasActiveFilter}
                         sizeSliderMax={sizeSliderMax}
                         sizeSliderMinValue={sizeSliderMinValue}
@@ -425,11 +439,14 @@ export function DashboardContent({
                         onClearFileTypes={onClearFileTypes}
                         onToggleFileType={onToggleFileType}
                         onVisibilityChange={onVisibilityChange}
+                        onOwnerChange={onOwnerChange}
+                        onFolderChange={onFolderChange}
                         onTagChange={onTagChange}
                         onSizeInputChange={onSizeInputChange}
                         onSizeSliderChange={onSizeSliderChange}
                         onExcludedExtensionsChange={onExcludedExtensionsChange}
                         onModifiedDateChange={onModifiedDateChange}
+                        onNoteQueryChange={onNoteQueryChange}
                         onClearFilters={onClearFilters}
                         onLayoutModeChange={onLayoutModeChange}
                         onOpenFileCreate={onOpenFileCreate}
