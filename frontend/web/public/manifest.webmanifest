@@ -1,0 +1,24 @@
+{
+  "name": "SkysyncR",
+  "short_name": "SkysyncR",
+  "description": "Encrypted cloud storage with a limited offline mode.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#0b1117",
+  "theme_color": "#0f766e",
+  "icons": [
+    {
+      "src": "/og-image.png",
+      "sizes": "343x361",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

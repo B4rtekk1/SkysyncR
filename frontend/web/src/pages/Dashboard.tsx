@@ -39,6 +39,7 @@ import { useNavOrdering } from './dashboard/hooks/useNavOrdering'
 import { useNoteActions } from './dashboard/hooks/useNoteActions'
 import { useSidebarState } from './dashboard/hooks/useSidebarState'
 import { useStorageSummary } from './dashboard/hooks/useStorageSummary'
+import { useNetworkStatus } from '../hooks/useNetworkStatus'
 
 function Dashboard() {
     const navigate = useNavigate()
@@ -55,6 +56,7 @@ function Dashboard() {
     const [selectedFolderIds, setSelectedFolderIds] = useState<Set<string>>(() => new Set())
     const [folderDropTargetId, setFolderDropTargetId] = useState<string | null>(null)
     const [pathDropTargetId, setPathDropTargetId] = useState<string | null>(null)
+    const online = useNetworkStatus()
     const normalizedQuery = query.trim().toLowerCase()
     const {
         navOrder,
@@ -136,9 +138,10 @@ function Dashboard() {
         folderFavouriteIds,
         setFolderFavouriteIds,
         refreshQuota,
+        offlineSnapshot,
         handleFileUpdated,
         updateFileTags,
-    } = useDashboardData({ view, activeFolderId, privateKey })
+    } = useDashboardData({ view, activeFolderId, privateKey, userId: currentUser?.id ?? null })
 
     const {
         downloadTransfers,
@@ -254,6 +257,7 @@ function Dashboard() {
     } = useFileUpload({
         publicKey,
         folderId: view === 'all' ? activeFolderId : null,
+        online,
         setItems,
         setPendingIds,
         setError,
@@ -822,6 +826,8 @@ function Dashboard() {
                     onOpenRoot={openFolderRootWithSelectionReset}
                     onOpenFolderAt={openFolderAtWithSelectionReset}
                     error={error}
+                    online={online}
+                    offlineSnapshotSavedAt={offlineSnapshot?.savedAt ?? null}
                     loading={loading}
                     visibleItems={visibleItems}
                     renderedItems={renderedItems}

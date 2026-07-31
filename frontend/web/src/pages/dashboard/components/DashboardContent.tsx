@@ -88,6 +88,8 @@ type DashboardContentProps = {
     onOpenRoot: () => void
     onOpenFolderAt: (folder: ApiFolder, index: number) => void
     error: string | null
+    online: boolean
+    offlineSnapshotSavedAt: number | null
     loading: boolean
     visibleItems: Item[]
     renderedItems: Item[]
@@ -251,6 +253,8 @@ export function DashboardContent({
     onOpenRoot,
     onOpenFolderAt,
     error,
+    online,
+    offlineSnapshotSavedAt,
     loading,
     visibleItems,
     renderedItems,
@@ -508,6 +512,22 @@ export function DashboardContent({
                 <p className="shell__error" role="alert">
                     {error}
                 </p>
+            )}
+
+            {(!online || offlineSnapshotSavedAt) && (
+                <section className="offline-mode" aria-label="Limited offline mode">
+                    <div>
+                        <h2 className="offline-mode__title">Limited offline mode</h2>
+                        <p className="offline-mode__text">
+                            Uploads stay queued locally. This device only keeps encrypted metadata snapshots unless you explicitly decrypt during this session.
+                        </p>
+                    </div>
+                    {offlineSnapshotSavedAt && (
+                        <span className="offline-mode__stamp">
+                            Snapshot {new Date(offlineSnapshotSavedAt).toLocaleString()}
+                        </span>
+                    )}
+                </section>
             )}
 
             <TransferQueuePanel

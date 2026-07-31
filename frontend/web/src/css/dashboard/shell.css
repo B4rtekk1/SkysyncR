@@ -236,6 +236,40 @@
     color: var(--signal);
 }
 
+.offline-mode {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    border: 1px solid rgba(255, 176, 76, 0.26);
+    border-radius: 8px;
+    background: rgba(255, 176, 76, 0.08);
+    color: var(--paper);
+    margin: 0 0 16px;
+    padding: 12px 14px;
+}
+
+.offline-mode__title {
+    font-size: 0.84rem;
+    line-height: 1.2;
+    margin: 0;
+}
+
+.offline-mode__text {
+    color: var(--mist);
+    font-size: 0.78rem;
+    line-height: 1.45;
+    margin: 4px 0 0;
+}
+
+.offline-mode__stamp {
+    color: var(--amber);
+    flex-shrink: 0;
+    font-size: 0.72rem;
+    font-weight: 800;
+    white-space: nowrap;
+}
+
 .shell__navlist--primary .shell__navitem.is-active:hover {
     background: transparent;
 }
@@ -456,6 +490,15 @@
 
     .shell__content-actions {
         flex-wrap: wrap;
+    }
+
+    .offline-mode {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+
+    .offline-mode__stamp {
+        white-space: normal;
     }
 }
 

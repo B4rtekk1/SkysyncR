@@ -13,6 +13,11 @@ import { listAllFileTags, listTags, type FileTag, type Tag } from '../../../api/
 import { applySavedOrder, clearLegacyLocalFileMetadata, loadFavouriteIds } from '../storage'
 import { decryptFilesMetadata, decryptFoldersMetadata } from '../encryptedMetadata'
 import { migratePlaintextFileMetadata } from '../metadataMigration'
+import {
+    loadEncryptedMetadataSnapshot,
+    saveEncryptedMetadataSnapshot,
+    type OfflineMetadataSnapshot,
+} from '../offlineMetadataCache'
 import type { Item, ViewKey } from '../types'
 
 type RefreshQuotaOptions = {
@@ -23,9 +28,10 @@ type UseDashboardDataOptions = {
     view: ViewKey
     activeFolderId: string | null
     privateKey: CryptoKey | null
+    userId?: string | null
 }
 
-export function useDashboardData({ view, activeFolderId, privateKey }: UseDashboardDataOptions) {
+export function useDashboardData({ view, activeFolderId, privateKey, userId }: UseDashboardDataOptions) {
     const [items, setItems] = useState<Item[]>([])
     const [folders, setFolders] = useState<ApiFolder[]>([])
     const [pendingIds, setPendingIds] = useState<Set<string>>(new Set())
@@ -37,6 +43,7 @@ export function useDashboardData({ view, activeFolderId, privateKey }: UseDashbo
     const [fileTagsByFileId, setFileTagsByFileId] = useState<Map<string, FileTag[]>>(new Map())
     const [favouriteIds, setFavouriteIds] = useState<Set<string>>(() => loadFavouriteIds())
     const [folderFavouriteIds, setFolderFavouriteIds] = useState<Set<string>>(new Set())
+    const [offlineSnapshot, setOfflineSnapshot] = useState<OfflineMetadataSnapshot | null>(null)
     const migratedMetadataIdsRef = useRef<Set<string>>(new Set())
 
     const scheduleMetadataMigration = useCallback((files: ApiFile[], key: CryptoKey) => {
@@ -159,6 +166,13 @@ export function useDashboardData({ view, activeFolderId, privateKey }: UseDashbo
                         decryptFilesMetadata(fileData, privateKey),
                         decryptFoldersMetadata(folderData, privateKey),
                     ])
+                    void saveEncryptedMetadataSnapshot({
+                        userId,
+                        view,
+                        folderId: view === 'all' ? activeFolderId : null,
+                        files: fileData,
+                        folders: folderData,
+                    }).catch(() => {})
                     const scopedFileData =
                         view === 'all'
                             ? visibleFileData.filter((file) => file.folder_id === activeFolderId)
@@ -166,6 +180,7 @@ export function useDashboardData({ view, activeFolderId, privateKey }: UseDashbo
                     if (view !== 'shared') scheduleMetadataMigration(fileData, privateKey)
                     setItems(applySavedOrder(scopedFileData, view))
                     setFolders(visibleFolderData)
+                    setOfflineSnapshot(null)
                     if (view === 'all' || view === 'favourites') {
                         setStorageItems(visibleFileData as ApiFile[])
                         setFavouriteIds(new Set(fileData.filter((file) => file.is_favourite).map((file) => file.id)))
@@ -173,7 +188,33 @@ export function useDashboardData({ view, activeFolderId, privateKey }: UseDashbo
                     }
                 }
             } catch (e) {
-                if (active) setError(e instanceof Error ? e.message : 'Could not load your files.')
+                if (!active) return
+
+                const cached = await loadEncryptedMetadataSnapshot({
+                    userId,
+                    view,
+                    folderId: view === 'all' ? activeFolderId : null,
+                }).catch(() => null)
+                if (cached && privateKey) {
+                    const [visibleFileData, visibleFolderData] = await Promise.all([
+                        decryptFilesMetadata(cached.files, privateKey),
+                        decryptFoldersMetadata(cached.folders, privateKey),
+                    ])
+                    setItems(applySavedOrder(visibleFileData, view))
+                    setFolders(visibleFolderData)
+                    if (view === 'all' || view === 'favourites') {
+                        setStorageItems(visibleFileData as ApiFile[])
+                        setFavouriteIds(new Set(cached.files.filter((file) => 'is_favourite' in file && file.is_favourite).map((file) => file.id)))
+                        setFolderFavouriteIds(new Set(cached.folders.filter((folder) => folder.is_favourite).map((folder) => folder.id)))
+                    }
+                    setFileTagsByFileId(new Map())
+                    setOfflineSnapshot(cached)
+                    setError('Offline mode: showing the most recent encrypted metadata saved on this device.')
+                    return
+                }
+
+                setOfflineSnapshot(null)
+                setError(e instanceof Error ? e.message : 'Could not load your files.')
             } finally {
                 if (active) setLoading(false)
             }
@@ -184,7 +225,7 @@ export function useDashboardData({ view, activeFolderId, privateKey }: UseDashbo
         return () => {
             active = false
         }
-    }, [activeFolderId, loadTagsForFiles, privateKey, scheduleMetadataMigration, view])
+    }, [activeFolderId, loadTagsForFiles, privateKey, scheduleMetadataMigration, userId, view])
 
     function handleFileUpdated(updated: ApiFile) {
         const previousSize = storageItems.find((item) => item.id === updated.id)?.size_bytes ?? updated.size_bytes
@@ -240,6 +281,7 @@ export function useDashboardData({ view, activeFolderId, privateKey }: UseDashbo
         folderFavouriteIds,
         setFolderFavouriteIds,
         refreshQuota,
+        offlineSnapshot,
         handleFileUpdated,
         updateFileTags,
     }

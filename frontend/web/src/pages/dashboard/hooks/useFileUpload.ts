@@ -62,6 +62,7 @@ type UploadJob = PersistedUploadJob & {
 type UseFileUploadOptions = {
     publicKey: string | null
     folderId?: string | null
+    online?: boolean
     setItems: Dispatch<SetStateAction<Item[]>>
     setPendingIds: Dispatch<SetStateAction<Set<string>>>
     setError: Dispatch<SetStateAction<string | null>>
@@ -174,6 +175,7 @@ function toPersistedJob(job: UploadJob): PersistedUploadJob {
 export function useFileUpload({
     publicKey,
     folderId,
+    online = true,
     setItems,
     setPendingIds,
     setError,
@@ -183,6 +185,7 @@ export function useFileUpload({
     const jobsRef = useRef(new Map<string, UploadJob>())
     const activeRef = useRef<string | null>(null)
     const publicKeyRef = useRef(publicKey)
+    const onlineRef = useRef(online)
     const refreshQuotaRef = useRef(refreshQuota)
     const pumpQueueRef = useRef<() => void>(() => {})
 
@@ -193,6 +196,11 @@ export function useFileUpload({
     useEffect(() => {
         publicKeyRef.current = publicKey
     }, [publicKey])
+
+    useEffect(() => {
+        onlineRef.current = online
+        if (online) requestQueuePump()
+    }, [online, requestQueuePump])
 
     useEffect(() => {
         refreshQuotaRef.current = refreshQuota
@@ -368,6 +376,11 @@ export function useFileUpload({
                     return
                 }
 
+                if (!onlineRef.current || navigator.onLine === false) {
+                    updateTransfer(job.id, { status: 'queued', error: 'Waiting for network connection.' })
+                    return
+                }
+
                 const message = error instanceof Error ? error.message : `Failed to upload ${job.file.name}.`
                 updateTransfer(job.id, { status: 'failed', error: message })
                 setError(message)
@@ -387,6 +400,7 @@ export function useFileUpload({
         pumpQueueRef.current = () => {
             if (activeRef.current) return
             if (!publicKeyRef.current) return
+            if (!onlineRef.current) return
 
             const next = Array.from(jobsRef.current.values())
                 .filter((job) => job.transfer.status === 'queued')
