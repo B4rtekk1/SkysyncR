@@ -10,4 +10,5 @@ pub mod ransomware_detection;
 pub mod refresh_tokens;
 pub mod storage;
 pub mod tags;
+pub mod totp;
 pub mod users;

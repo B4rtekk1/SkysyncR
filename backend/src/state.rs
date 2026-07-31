@@ -1,3 +1,4 @@
+use sha2::{Digest, Sha256};
 use sqlx::PgPool;
 use std::path::PathBuf;
 
@@ -20,6 +21,7 @@ pub struct AppConfig {
     pub trash_retention_days: i64,
     pub trash_purge_interval_hours: u64,
     pub audit_log_encryption_key: String,
+    pub totp_encryption_key: [u8; 32],
     pub is_dev: bool,
 }
 
@@ -76,11 +78,19 @@ impl AppConfig {
         let is_dev = std::env::var("APP_ENV")
             .map(|v| v == "development" || v == "dev")
             .unwrap_or(true);
+        let totp_key_material = std::env::var("TOTP_ENCRYPTION_KEY").unwrap_or_else(|_| {
+            format!(
+                "totp:{}",
+                std::env::var("JWT_SECRET").expect("JWT_SECRET must be set")
+            )
+        });
+        let totp_encryption_key: [u8; 32] = Sha256::digest(totp_key_material.as_bytes()).into();
 
         Self {
             jwt_secret: std::env::var("JWT_SECRET").expect("JWT_SECRET must be set"),
             audit_log_encryption_key: std::env::var("AUDIT_LOG_ENCRYPTION_KEY")
                 .unwrap_or_else(|_| std::env::var("JWT_SECRET").expect("JWT_SECRET must be set")),
+            totp_encryption_key,
             max_failed_login_attempts,
             lockout_duration_minutes,
             verification_token_ttl_hours,

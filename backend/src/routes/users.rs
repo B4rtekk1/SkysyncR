@@ -1,7 +1,8 @@
 use crate::handlers::users::{
-    change_password, current_user, list_operation_log, list_sessions, login_user,
-    logout_all_sessions, logout_user, refresh_tokens, register_user, resend_verification_email,
-    revoke_session, update_user_settings, verify_email,
+    change_password, confirm_totp, current_user, disable_totp, list_operation_log, list_sessions,
+    login_totp, login_user, logout_all_sessions, logout_user, refresh_tokens, register_user,
+    resend_verification_email, revoke_session, setup_totp, totp_status, update_user_settings,
+    verify_email,
 };
 use crate::state::AppState;
 use axum::Router;
@@ -15,6 +16,11 @@ pub fn users_routes() -> Router<AppState> {
         .route("/users/change-password", post(change_password))
         .route("/users/sessions", get(list_sessions))
         .route("/users/operation-log", get(list_operation_log))
+        .route(
+            "/users/totp",
+            get(totp_status).post(setup_totp).delete(disable_totp),
+        )
+        .route("/users/totp/confirm", post(confirm_totp))
         .route(
             "/users/sessions/{session_id}",
             axum::routing::delete(revoke_session),
@@ -32,6 +38,7 @@ pub fn auth_limited_routes() -> Router<AppState> {
     Router::new()
         .route("/users/register", post(register_user))
         .route("/users/login", post(login_user))
+        .route("/users/login/totp", post(login_totp))
         .route(
             "/users/resend-verification",
             post(resend_verification_email),

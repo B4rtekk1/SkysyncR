@@ -22,6 +22,12 @@ test('createQrPath supports share links with embedded file keys', () => {
   assert.ok(createQrPath(value).path.length > 1000)
 })
 
+test('createQrPath supports compact TOTP setup URLs', () => {
+  const value = 'otpauth://totp/SkysyncR:user@example.com?secret=GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ&issuer=SkysyncR'
+
+  assert.ok(createQrPath(value).path.length > 1000)
+})
+
 test('createQrPath rejects links that exceed the version capacity', () => {
   assert.throws(() => createQrPath('x'.repeat(135)), /QR link is too long/)
 })

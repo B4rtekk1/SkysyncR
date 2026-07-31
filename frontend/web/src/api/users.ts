@@ -59,6 +59,10 @@ export class ApiRequestError extends Error {
   }
 }
 
+export type TotpLoginRequired = { totp_required: true; challenge_id: string }
+export type TotpSetup = { secret: string; otpauth_url: string }
+export type TotpStatus = { enabled: boolean; pending: boolean }
+
 async function readErrorMessage(res: Response, fallback: string): Promise<string> {
   const contentType = res.headers.get('content-type') ?? ''
 
@@ -99,7 +103,7 @@ export async function registerUser(
 export async function loginUser(
   payload: LoginPayload,
   remember = true,
-): Promise<LoginResponse> {
+): Promise<LoginResponse | TotpLoginRequired> {
   const res = await apiFetch(`${url}users/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -110,9 +114,54 @@ export async function loginUser(
     await throwApiError(res, 'Login failed')
   }
 
+  const body: unknown = await res.json()
+  if (typeof body === 'object' && body !== null && (body as { totp_required?: unknown }).totp_required === true) {
+    const challengeId = (body as { challenge_id?: unknown }).challenge_id
+    if (typeof challengeId !== 'string') throw new Error('Invalid two-factor login response')
+    return { totp_required: true, challenge_id: challengeId }
+  }
+  const tokens = tokenPair(body, 'LoginResponse')
+  saveTokens(tokens)
+  return tokens
+}
+
+export async function loginWithTotp(challengeId: string, code: string): Promise<LoginResponse> {
+  const res = await apiFetch(`${url}users/login/totp`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ challenge_id: challengeId, code }),
+  })
+  if (!res.ok) await throwApiError(res, 'Two-factor verification failed')
   const tokens = await readJson(res, tokenPair, 'LoginResponse')
   saveTokens(tokens)
   return tokens
+}
+
+export async function getTotpStatus(): Promise<TotpStatus> {
+  const res = await authenticatedFetch(`${url}users/totp`)
+  if (!res.ok) await throwApiError(res, 'Could not load two-factor authentication status')
+  const value: unknown = await res.json()
+  if (typeof value !== 'object' || value === null || typeof (value as TotpStatus).enabled !== 'boolean' || typeof (value as TotpStatus).pending !== 'boolean') throw new Error('Invalid TOTP status response')
+  return value as TotpStatus
+}
+
+export async function setupTotp(): Promise<TotpSetup> {
+  const res = await authenticatedFetch(`${url}users/totp`, { method: 'POST' })
+  if (!res.ok) await throwApiError(res, 'Could not start two-factor setup')
+  const value: unknown = await res.json()
+  if (typeof value !== 'object' || value === null || typeof (value as TotpSetup).secret !== 'string' || typeof (value as TotpSetup).otpauth_url !== 'string') throw new Error('Invalid TOTP setup response')
+  return value as TotpSetup
+}
+
+export async function confirmTotp(code: string): Promise<TotpStatus> {
+  const res = await authenticatedFetch(`${url}users/totp/confirm`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code }) })
+  if (!res.ok) await throwApiError(res, 'Could not enable two-factor authentication')
+  return res.json() as Promise<TotpStatus>
+}
+
+export async function disableTotp(code: string): Promise<TotpStatus> {
+  const res = await authenticatedFetch(`${url}users/totp`, { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code }) })
+  if (!res.ok) await throwApiError(res, 'Could not disable two-factor authentication')
+  return res.json() as Promise<TotpStatus>
 }
 
 export async function verifyUser(token: string): Promise<void> {

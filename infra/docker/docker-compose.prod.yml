@@ -25,6 +25,7 @@ services:
     environment:
       DATABASE_URL: postgres://${POSTGRES_USER:-skysyncr}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-skysyncr}
       JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET}
+      TOTP_ENCRYPTION_KEY: ${TOTP_ENCRYPTION_KEY:?set TOTP_ENCRYPTION_KEY}
       APP_ENV: production
       LOG_FORMAT: json
     command: ["skysyncr-migrate"]
@@ -42,6 +43,7 @@ services:
     environment:
       DATABASE_URL: postgres://${POSTGRES_USER:-skysyncr}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-skysyncr}
       JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET}
+      TOTP_ENCRYPTION_KEY: ${TOTP_ENCRYPTION_KEY:?set TOTP_ENCRYPTION_KEY}
       APP_ENV: production
       LOG_FORMAT: ${LOG_FORMAT:-json}
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost}

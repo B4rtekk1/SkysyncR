@@ -1,6 +1,9 @@
 use crate::auth::AuthUser;
 use crate::crypto::jwt::generate_access_token_capped;
 use crate::crypto::refresh_token::generate_refresh_token;
+use crate::crypto::totp::{
+    decrypt_secret, encrypt_secret, generate_secret, otpauth_url, secret_base32, verify_code,
+};
 use crate::db::audit_logs::{NewAuditLog, insert_user_audit_log, list_user_operation_logs};
 use crate::db::notifications::{NewNotification, create_notification};
 use crate::db::refresh_tokens::{
@@ -10,10 +13,15 @@ use crate::db::refresh_tokens::{
     revoke_user_device_refresh_tokens, revoke_user_session, rotate_refresh_token,
     update_active_device_label,
 };
+use crate::db::totp::{
+    consume_login_challenge, create_login_challenge, delete_totp, enable_totp, get_login_challenge,
+    get_user_totp, record_login_challenge_failure, save_pending_totp, update_last_used_counter,
+};
 use crate::db::users::*;
 use crate::models::users::{
-    ChangePasswordRequest, CurrentUserResponse, LoginRequest, LoginResponse, RefreshResponse,
-    RegisterRequest, RegisterResponse, UpdateUserSettingsRequest, UserSettingsResponse,
+    ChangePasswordRequest, CurrentUserResponse, LoginRequest, LoginResponse, LoginResult,
+    LoginTotpRequest, RefreshResponse, RegisterRequest, RegisterResponse, TotpCodeRequest,
+    TotpSetupResponse, TotpStatusResponse, UpdateUserSettingsRequest, UserSettingsResponse,
 };
 use crate::state::AppState;
 use crate::utils::errors::{ApiError, internal_error, map_db_error};
@@ -653,6 +661,60 @@ async fn issue_token_pair(
     ))
 }
 
+async fn complete_login(
+    state: &AppState,
+    user_id: Uuid,
+    email: &str,
+    headers: &HeaderMap,
+    persistent: bool,
+) -> Result<Response, ApiError> {
+    let (access_token, refresh_token, expires_in, session_expires_at, session_id) =
+        issue_token_pair(state, user_id, headers).await?;
+    update_last_login(&state.db_pool, email)
+        .await
+        .map_err(|e| internal_error("update last login", e))?;
+    let (_, device_label, _, ip_address) = request_metadata_values(headers);
+    notify_new_login(
+        state,
+        user_id,
+        session_id,
+        device_label.as_deref(),
+        ip_address.as_deref(),
+    )
+    .await;
+    log_user_operation(
+        state,
+        user_id,
+        "user.login",
+        device_label.as_deref(),
+        serde_json::json!({ "remember": persistent }),
+    )
+    .await;
+
+    let mut response_headers = HeaderMap::new();
+    response_headers.append(
+        header::SET_COOKIE,
+        refresh_token_cookie(
+            &refresh_token,
+            session_expires_at,
+            state.config.is_dev,
+            persistent,
+        )?,
+    );
+    response_headers.append(
+        header::SET_COOKIE,
+        refresh_persistence_cookie(state.config.is_dev, persistent)?,
+    );
+    Ok((
+        response_headers,
+        Json(LoginResponse {
+            access_token,
+            expires_in,
+        }),
+    )
+        .into_response())
+}
+
 pub async fn login_user(
     headers: HeaderMap,
     State(state): State<AppState>,
@@ -709,55 +771,225 @@ pub async fn login_user(
         .await
         .map_err(|e| internal_error("reset failed login", e))?;
 
-    let (access_token, refresh_token, expires_in, session_expires_at, session_id) =
-        issue_token_pair(&state, auth_record.id, &headers).await?;
-
-    update_last_login(&state.db_pool, &email)
-        .await
-        .map_err(|e| internal_error("update last login", e))?;
-
     let persistent = payload.remember.unwrap_or(true);
-    let (_, device_label, _, ip_address) = request_metadata_values(&headers);
-    notify_new_login(
-        &state,
-        auth_record.id,
-        session_id,
-        device_label.as_deref(),
-        ip_address.as_deref(),
+    if auth_record.totp_enabled {
+        let challenge_id = create_login_challenge(&state.db_pool, auth_record.id, persistent)
+            .await
+            .map_err(|e| internal_error("create TOTP login challenge", e))?;
+        return Ok(Json(LoginResult::TotpRequired {
+            totp_required: true,
+            challenge_id: challenge_id.to_string(),
+        })
+        .into_response());
+    }
+    complete_login(&state, auth_record.id, &email, &headers, persistent).await
+}
+
+pub async fn login_totp(
+    headers: HeaderMap,
+    State(state): State<AppState>,
+    Json(payload): Json<LoginTotpRequest>,
+) -> Result<Response, ApiError> {
+    let challenge_id = Uuid::parse_str(payload.challenge_id.trim())
+        .map_err(|_| ApiError::Unauthorized("Invalid or expired verification request".into()))?;
+    let Some(challenge) = get_login_challenge(&state.db_pool, challenge_id)
+        .await
+        .map_err(|e| internal_error("get TOTP login challenge", e))?
+    else {
+        return Err(ApiError::Unauthorized(
+            "Invalid or expired verification request".into(),
+        ));
+    };
+    let Some(record) = get_user_totp(&state.db_pool, challenge.user_id)
+        .await
+        .map_err(|e| internal_error("get TOTP configuration", e))?
+    else {
+        return Err(ApiError::Unauthorized(
+            "Invalid or expired verification request".into(),
+        ));
+    };
+    let secret = decrypt_secret(
+        &state.config.totp_encryption_key,
+        challenge.user_id,
+        &record.secret_ciphertext,
+        &record.secret_nonce,
     )
-    .await;
+    .map_err(ApiError::Internal)?;
+    let Some(counter) = verify_code(
+        &secret,
+        &payload.code,
+        Utc::now().timestamp(),
+        record.last_used_counter,
+    ) else {
+        record_login_challenge_failure(&state.db_pool, challenge_id)
+            .await
+            .map_err(|e| internal_error("record TOTP login failure", e))?;
+        return Err(ApiError::Unauthorized("Invalid verification code".into()));
+    };
+    if !update_last_used_counter(&state.db_pool, challenge.user_id, counter)
+        .await
+        .map_err(|e| internal_error("consume TOTP code", e))?
+        || !consume_login_challenge(&state.db_pool, challenge_id)
+            .await
+            .map_err(|e| internal_error("consume TOTP login challenge", e))?
+    {
+        return Err(ApiError::Unauthorized(
+            "Verification code has already been used".into(),
+        ));
+    }
+    let profile = get_current_user_crypto_profile(&state.db_pool, challenge.user_id)
+        .await
+        .map_err(|e| internal_error("get user profile", e))?
+        .ok_or_else(|| ApiError::Unauthorized("User not found".into()))?;
+    complete_login(
+        &state,
+        challenge.user_id,
+        &profile.email,
+        &headers,
+        challenge.remember,
+    )
+    .await
+}
+
+pub async fn totp_status(
+    State(state): State<AppState>,
+    auth: AuthUser,
+) -> Result<Json<TotpStatusResponse>, ApiError> {
+    let record = get_user_totp(&state.db_pool, auth.user_id)
+        .await
+        .map_err(|e| internal_error("get TOTP status", e))?;
+    Ok(Json(TotpStatusResponse {
+        enabled: record
+            .as_ref()
+            .is_some_and(|item| item.enabled_at.is_some()),
+        pending: record
+            .as_ref()
+            .is_some_and(|item| item.enabled_at.is_none()),
+    }))
+}
+
+pub async fn setup_totp(
+    State(state): State<AppState>,
+    auth: AuthUser,
+) -> Result<Json<TotpSetupResponse>, ApiError> {
+    if get_user_totp(&state.db_pool, auth.user_id)
+        .await
+        .map_err(|e| internal_error("get TOTP configuration", e))?
+        .is_some_and(|item| item.enabled_at.is_some())
+    {
+        return Err(ApiError::Conflict(
+            "Two-factor authentication is already enabled".into(),
+        ));
+    }
+    let profile = get_current_user_crypto_profile(&state.db_pool, auth.user_id)
+        .await
+        .map_err(|e| internal_error("get user profile", e))?
+        .ok_or_else(|| ApiError::Unauthorized("User not found".into()))?;
+    let secret = generate_secret();
+    let (ciphertext, nonce) =
+        encrypt_secret(&state.config.totp_encryption_key, auth.user_id, &secret)
+            .map_err(ApiError::Internal)?;
+    save_pending_totp(&state.db_pool, auth.user_id, &ciphertext, &nonce)
+        .await
+        .map_err(|e| internal_error("save TOTP setup", e))?;
+    Ok(Json(TotpSetupResponse {
+        secret: secret_base32(&secret),
+        otpauth_url: otpauth_url(&profile.email, &secret),
+    }))
+}
+
+pub async fn confirm_totp(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Json(payload): Json<TotpCodeRequest>,
+) -> Result<Json<TotpStatusResponse>, ApiError> {
+    let record = get_user_totp(&state.db_pool, auth.user_id)
+        .await
+        .map_err(|e| internal_error("get TOTP setup", e))?
+        .ok_or_else(|| ApiError::BadRequest("Start TOTP setup first".into()))?;
+    if record.enabled_at.is_some() {
+        return Err(ApiError::Conflict(
+            "Two-factor authentication is already enabled".into(),
+        ));
+    }
+    let secret = decrypt_secret(
+        &state.config.totp_encryption_key,
+        auth.user_id,
+        &record.secret_ciphertext,
+        &record.secret_nonce,
+    )
+    .map_err(ApiError::Internal)?;
+    let counter = verify_code(&secret, &payload.code, Utc::now().timestamp(), None)
+        .ok_or_else(|| ApiError::BadRequest("Invalid verification code".into()))?;
+    if !enable_totp(&state.db_pool, auth.user_id, counter)
+        .await
+        .map_err(|e| internal_error("enable TOTP", e))?
+    {
+        return Err(ApiError::BadRequest(
+            "Could not enable two-factor authentication".into(),
+        ));
+    }
     log_user_operation(
         &state,
-        auth_record.id,
-        "user.login",
-        device_label.as_deref(),
-        serde_json::json!({ "remember": persistent }),
+        auth.user_id,
+        "user.totp.enable",
+        None,
+        serde_json::json!({}),
     )
     .await;
+    Ok(Json(TotpStatusResponse {
+        enabled: true,
+        pending: false,
+    }))
+}
 
-    let mut response_headers = HeaderMap::new();
-    response_headers.append(
-        header::SET_COOKIE,
-        refresh_token_cookie(
-            &refresh_token,
-            session_expires_at,
-            state.config.is_dev,
-            persistent,
-        )?,
-    );
-    response_headers.append(
-        header::SET_COOKIE,
-        refresh_persistence_cookie(state.config.is_dev, persistent)?,
-    );
-
-    Ok((
-        response_headers,
-        Json(LoginResponse {
-            access_token,
-            expires_in,
-        }),
+pub async fn disable_totp(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Json(payload): Json<TotpCodeRequest>,
+) -> Result<Json<TotpStatusResponse>, ApiError> {
+    let record = get_user_totp(&state.db_pool, auth.user_id)
+        .await
+        .map_err(|e| internal_error("get TOTP configuration", e))?
+        .filter(|item| item.enabled_at.is_some())
+        .ok_or_else(|| ApiError::BadRequest("Two-factor authentication is not enabled".into()))?;
+    let secret = decrypt_secret(
+        &state.config.totp_encryption_key,
+        auth.user_id,
+        &record.secret_ciphertext,
+        &record.secret_nonce,
     )
-        .into_response())
+    .map_err(ApiError::Internal)?;
+    let counter = verify_code(
+        &secret,
+        &payload.code,
+        Utc::now().timestamp(),
+        record.last_used_counter,
+    )
+    .ok_or_else(|| ApiError::BadRequest("Invalid verification code".into()))?;
+    if !update_last_used_counter(&state.db_pool, auth.user_id, counter)
+        .await
+        .map_err(|e| internal_error("consume TOTP code", e))?
+    {
+        return Err(ApiError::BadRequest(
+            "Verification code has already been used".into(),
+        ));
+    }
+    delete_totp(&state.db_pool, auth.user_id)
+        .await
+        .map_err(|e| internal_error("disable TOTP", e))?;
+    log_user_operation(
+        &state,
+        auth.user_id,
+        "user.totp.disable",
+        None,
+        serde_json::json!({}),
+    )
+    .await;
+    Ok(Json(TotpStatusResponse {
+        enabled: false,
+        pending: false,
+    }))
 }
 
 pub async fn refresh_tokens(

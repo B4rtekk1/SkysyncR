@@ -81,13 +81,14 @@ pub struct LoginAuthRecord {
     pub password_hash: String,
     pub email_verified: bool,
     pub login_allowed: bool,
+    pub totp_enabled: bool,
 }
 
 pub async fn get_login_auth_record(
     pool: &PgPool,
     email: &str,
 ) -> Result<Option<LoginAuthRecord>, sqlx::Error> {
-    let result = sqlx::query_as::<_, (Uuid, String, bool, bool)>(
+    let result = sqlx::query_as::<_, (Uuid, String, bool, bool, bool)>(
         r#"
         SELECT
             id,
@@ -98,6 +99,7 @@ pub async fn get_login_auth_record(
                 WHEN locked_until <= NOW() THEN TRUE
                 ELSE FALSE
             END AS login_allowed
+            , EXISTS (SELECT 1 FROM user_totp WHERE user_totp.user_id = users.id AND enabled_at IS NOT NULL) AS totp_enabled
         FROM users
         WHERE email = $1
           AND is_active = TRUE
@@ -108,11 +110,12 @@ pub async fn get_login_auth_record(
     .await?;
 
     Ok(result.map(
-        |(id, password_hash, email_verified, login_allowed)| LoginAuthRecord {
+        |(id, password_hash, email_verified, login_allowed, totp_enabled)| LoginAuthRecord {
             id,
             password_hash,
             email_verified,
             login_allowed,
+            totp_enabled,
         },
     ))
 }

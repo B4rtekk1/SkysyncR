@@ -53,6 +53,39 @@ pub struct LoginResponse {
 }
 
 #[derive(Serialize)]
+#[serde(untagged)]
+pub enum LoginResult {
+    Authenticated(LoginResponse),
+    TotpRequired {
+        totp_required: bool,
+        challenge_id: String,
+    },
+}
+
+#[derive(Debug, Deserialize)]
+pub struct LoginTotpRequest {
+    pub challenge_id: String,
+    pub code: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct TotpCodeRequest {
+    pub code: String,
+}
+
+#[derive(Serialize)]
+pub struct TotpSetupResponse {
+    pub secret: String,
+    pub otpauth_url: String,
+}
+
+#[derive(Serialize)]
+pub struct TotpStatusResponse {
+    pub enabled: bool,
+    pub pending: bool,
+}
+
+#[derive(Serialize)]
 pub struct RefreshResponse {
     pub access_token: String,
     pub expires_in: i64,

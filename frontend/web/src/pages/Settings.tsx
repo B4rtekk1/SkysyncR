@@ -10,6 +10,10 @@ import {
     changePassword,
     getOperationLog,
     getSessions,
+    getTotpStatus,
+    setupTotp,
+    confirmTotp,
+    disableTotp,
     revokeSession,
     updateUserSettings,
     type CurrentUserResponse,
@@ -31,6 +35,7 @@ import {
     saveActiveView,
     saveLayoutMode,
 } from './dashboard/storage'
+import { createQrPath } from './dashboard/qr'
 import type { ViewKey } from './dashboard/types'
 import {
     clearLegacyProfileStorage,
@@ -206,12 +211,26 @@ function SettingsModalContent({ currentUser, onClose, onSave }: SettingsModalPro
     const [operationLog, setOperationLog] = useState<OperationLogResponse | null>(null)
     const [operationLogLoading, setOperationLogLoading] = useState(false)
     const [operationLogError, setOperationLogError] = useState<string | null>(null)
+    const [totpStatus, setTotpStatus] = useState<{ enabled: boolean; pending: boolean } | null>(null)
+    const [totpSetup, setTotpSetup] = useState<{ secret: string; otpauth_url: string } | null>(null)
+    const [totpCode, setTotpCode] = useState('')
+    const [totpSaving, setTotpSaving] = useState(false)
+    const [totpError, setTotpError] = useState<string | null>(null)
     const dialogRef = useRef<HTMLElement>(null)
     const { theme, themePreference, setThemePreference } = useTheme()
     const initials = useMemo(() => {
         const source = settings.displayName || currentUser?.email || 'S'
         return source.trim().charAt(0).toUpperCase()
     }, [settings.displayName, currentUser?.email])
+    const totpQr = useMemo(() => {
+        if (!totpSetup) return null
+        try {
+            return createQrPath(totpSetup.otpauth_url)
+        } catch {
+            return null
+        }
+    }, [totpSetup])
+    const totpQrUnavailable = Boolean(totpSetup && !totpQr)
 
     const requestClose = useCallback(() => {
         setClosing((alreadyClosing) => {
@@ -262,6 +281,33 @@ function SettingsModalContent({ currentUser, onClose, onSave }: SettingsModalPro
     useEffect(() => {
         void Promise.resolve().then(loadOperationLog)
     }, [loadOperationLog])
+
+    useEffect(() => {
+        void getTotpStatus().then(setTotpStatus).catch(() => setTotpError('Could not load two-factor authentication status.'))
+    }, [])
+
+    async function beginTotpSetup() {
+        setTotpSaving(true); setTotpError(null)
+        try { setTotpSetup(await setupTotp()); setTotpCode('') }
+        catch (error) { setTotpError(error instanceof Error ? error.message : 'Could not start two-factor setup.') }
+        finally { setTotpSaving(false) }
+    }
+
+    async function saveTotp() {
+        if (totpCode.length !== 6) { setTotpError('Enter the 6-digit code from your authenticator app.'); return }
+        setTotpSaving(true); setTotpError(null)
+        try { setTotpStatus(await confirmTotp(totpCode)); setTotpSetup(null); setTotpCode(''); void loadOperationLog() }
+        catch (error) { setTotpError(error instanceof Error ? error.message : 'Could not enable two-factor authentication.') }
+        finally { setTotpSaving(false) }
+    }
+
+    async function removeTotp() {
+        if (totpCode.length !== 6) { setTotpError('Enter the current 6-digit code to disable two-factor authentication.'); return }
+        setTotpSaving(true); setTotpError(null)
+        try { setTotpStatus(await disableTotp(totpCode)); setTotpCode(''); void loadOperationLog() }
+        catch (error) { setTotpError(error instanceof Error ? error.message : 'Could not disable two-factor authentication.') }
+        finally { setTotpSaving(false) }
+    }
 
     function updateSetting<K extends keyof SettingsState>(key: K, value: SettingsState[K]) {
         setSettings((prev) => ({ ...prev, [key]: value }))
@@ -810,6 +856,42 @@ function SettingsModalContent({ currentUser, onClose, onSave }: SettingsModalPro
                                         onChange={(e) => updateSetting('syncOnMetered', e.target.checked)}
                                     />
                                 </label>
+                            </div>
+                            <div className="settings-session-history" style={{ marginTop: '1.25rem' }}>
+                                <h3>Authenticator app</h3>
+                                {totpStatus?.enabled ? (
+                                    <>
+                                        <p className="settings-muted">Two-factor authentication is enabled. A verification code is required when signing in.</p>
+                                        <label className="settings-field">
+                                            <span>Current 6-digit code</span>
+                                            <input inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={totpCode} onChange={(event) => setTotpCode(event.target.value.replace(/\D/g, ''))} placeholder="123456" />
+                                        </label>
+                                        <button className="btn btn--outline" type="button" disabled={totpSaving} onClick={() => void removeTotp()}>
+                                            {totpSaving ? 'Disabling...' : 'Disable two-factor authentication'}
+                                        </button>
+                                    </>
+                                ) : totpSetup ? (
+                                    <>
+                                        <p className="settings-muted">Scan this code in Google Authenticator, Microsoft Authenticator, 1Password or a compatible app, then enter its code to finish.</p>
+                                        {totpQr && <svg width="196" height="196" viewBox={totpQr.viewBox} role="img" aria-label="Two-factor authentication QR code"><rect width="100%" height="100%" fill="white" /><path d={totpQr.path} fill="black" /></svg>}
+                                        {totpQrUnavailable && <p className="settings-error">QR code could not be generated. Use the manual key below.</p>}
+                                        <label className="settings-field">
+                                            <span>Manual key</span>
+                                            <input readOnly value={totpSetup.secret} onFocus={(event) => event.currentTarget.select()} />
+                                        </label>
+                                        <label className="settings-field">
+                                            <span>6-digit code</span>
+                                            <input inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={totpCode} onChange={(event) => setTotpCode(event.target.value.replace(/\D/g, ''))} placeholder="123456" />
+                                        </label>
+                                        <button className="btn btn--solid" type="button" disabled={totpSaving} onClick={() => void saveTotp()}>{totpSaving ? 'Enabling...' : 'Enable two-factor authentication'}</button>
+                                    </>
+                                ) : (
+                                    <>
+                                        <p className="settings-muted">Protect your account with a 6-digit code from an authenticator app.</p>
+                                        <button className="btn btn--outline" type="button" disabled={totpSaving} onClick={() => void beginTotpSetup()}>{totpSaving ? 'Preparing...' : 'Set up two-factor authentication'}</button>
+                                    </>
+                                )}
+                                {totpError && <p className="settings-error">{totpError}</p>}
                             </div>
                         </section>
 

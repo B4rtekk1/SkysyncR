@@ -2,7 +2,7 @@ import { type SubmitEvent, useEffect, useState } from 'react'
 import { Link, useNavigate } from '../../router'
 import { clearTokens } from '../../api/auth.ts'
 import { getUnlockedVaultSession, setUnlockedVaultSession } from '../../api/session.ts'
-import { ApiRequestError, getCurrentUser, loginUser, resendVerificationEmail } from '../../api/users.ts'
+import { ApiRequestError, getCurrentUser, loginUser, loginWithTotp, resendVerificationEmail } from '../../api/users.ts'
 import { isNetworkError } from '../../api/http.ts'
 import {
   clearPendingVerificationEmail,
@@ -39,6 +39,8 @@ function LoginForm() {
   const [pendingResendStatus, setPendingResendStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle')
   const [error, setError] = useState<LoginError | null>(null)
   const [showPassword, setShowPassword] = useState(false)
+  const [totpChallengeId, setTotpChallengeId] = useState<string | null>(null)
+  const [totpCode, setTotpCode] = useState('')
 
   useEffect(() => {
     let active = true
@@ -168,13 +170,32 @@ function LoginForm() {
     setLoading(true)
 
     try {
-      await loginUser(
+      const result = await loginUser(
           {
             email,
             password,
           },
           remember,
       )
+      if ('totp_required' in result) {
+        setTotpChallengeId(result.challenge_id)
+        return
+      }
+      await unlockVault()
+    } catch (err) {
+      const loginError = getLoginError(err)
+      if (loginError.canResendVerification) {
+        const normalizedEmail = email.trim().toLowerCase()
+        savePendingVerificationEmail(normalizedEmail)
+        setPendingVerificationEmail(normalizedEmail)
+      }
+      setError(loginError)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function unlockVault() {
       const user = await getCurrentUser()
       const encryptedPrivateKey = await loadEncryptedPrivateKey(user.id)
 
@@ -210,17 +231,18 @@ function LoginForm() {
       clearPendingVerificationEmail()
       setPendingVerificationEmail(null)
       navigate('/dashboard', { replace: true })
+  }
+
+  async function handleTotpSubmit(e: SubmitEvent<HTMLFormElement>) {
+    e.preventDefault()
+    if (!totpChallengeId || totpCode.trim().length !== 6) return
+    setLoading(true); setError(null)
+    try {
+      await loginWithTotp(totpChallengeId, totpCode)
+      await unlockVault()
     } catch (err) {
-      const loginError = getLoginError(err)
-      if (loginError.canResendVerification) {
-        const normalizedEmail = email.trim().toLowerCase()
-        savePendingVerificationEmail(normalizedEmail)
-        setPendingVerificationEmail(normalizedEmail)
-      }
-      setError(loginError)
-    } finally {
-      setLoading(false)
-    }
+      setError(getLoginError(err))
+    } finally { setLoading(false) }
   }
 
   async function resendVerification() {
@@ -275,7 +297,17 @@ function LoginForm() {
             </div>
         )}
 
-        <form className="auth-form" onSubmit={handleSubmit} noValidate>
+        <form className="auth-form" onSubmit={totpChallengeId ? handleTotpSubmit : handleSubmit} noValidate>
+          {totpChallengeId ? (
+            <>
+              <p className="auth__subtitle">Enter the 6-digit code from your authenticator app.</p>
+              <label className="field">
+                <span className="field__label">Authentication code</span>
+                <input className="field__input" inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" maxLength={6} value={totpCode} onChange={(e) => setTotpCode(e.target.value.replace(/\D/g, ''))} autoFocus />
+              </label>
+              <button type="button" className="btn btn--outline" onClick={() => { setTotpChallengeId(null); setTotpCode(''); setError(null) }}>Use a different account</button>
+            </>
+          ) : <>
           <label className="field">
             <span className="field__label">Email address</span>
             <input
@@ -334,7 +366,7 @@ function LoginForm() {
                 checked={remember}
                 onChange={(e) => setRemember(e.target.checked)}
             />
-            <span>Remember this device</span>
+            <span>Stay signed in on this browser</span>
           </label>
 
           <label className="checkbox checkbox--stacked">
@@ -344,10 +376,11 @@ function LoginForm() {
                 onChange={(e) => setRememberUnlock(e.target.checked)}
             />
             <span>
-              <strong>Remember unlock on this device</strong>
-              <small>Keep the non-exportable private key recoverable for up to 15 minutes of activity.</small>
+              <strong>Keep vault unlocked briefly</strong>
+              <small>Skip re-unlocking encrypted files for up to 15 minutes of activity on this browser.</small>
             </span>
           </label>
+          </>}
 
           {error && (
               <div className="auth-form__error" role="alert">
@@ -376,7 +409,7 @@ function LoginForm() {
               className="btn btn--solid btn--lg auth-form__submit"
               disabled={loading}
           >
-            {loading ? 'Unlocking…' : 'Sign in'}
+            {loading ? 'Unlocking…' : totpChallengeId ? 'Verify code' : 'Sign in'}
           </button>
         </form>
 

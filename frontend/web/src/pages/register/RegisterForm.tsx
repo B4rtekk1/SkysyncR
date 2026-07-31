@@ -378,8 +378,8 @@ function RegisterForm() {
                 onChange={(e) => setRememberUnlock(e.target.checked)}
             />
             <span>
-              <strong>Remember unlock on this device</strong>
-              <small>Keep the non-exportable private key recoverable for up to 15 minutes of activity.</small>
+              <strong>Keep vault unlocked briefly</strong>
+              <small>Skip re-unlocking encrypted files for up to 15 minutes of activity on this browser.</small>
             </span>
           </label>
 
