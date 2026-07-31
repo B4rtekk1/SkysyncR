@@ -93,7 +93,12 @@ export type UserSession = {
   "created_at": string
   "last_used_at": string
   "expires_at": string
+  "trusted": boolean
   "current": boolean
+}
+
+export type UpdateSessionTrustRequest = {
+  "trusted": boolean
 }
 
 export type UserSessionActivity = {

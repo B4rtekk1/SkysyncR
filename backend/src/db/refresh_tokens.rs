@@ -68,6 +68,7 @@ pub struct UserSession {
     pub created_at: DateTime<Utc>,
     pub last_used_at: DateTime<Utc>,
     pub expires_at: DateTime<Utc>,
+    pub trusted: bool,
     pub current: bool,
 }
 
@@ -247,6 +248,32 @@ pub async fn revoke_user_device_refresh_tokens(
     Ok(())
 }
 
+pub async fn update_user_session_trust(
+    pool: &PgPool,
+    user_id: Uuid,
+    session_id: Uuid,
+    trusted: bool,
+) -> Result<bool, sqlx::Error> {
+    let result = sqlx::query(
+        r#"
+        UPDATE refresh_tokens
+        SET trusted = $3
+        WHERE user_id = $1
+          AND session_id = $2
+          AND revoked = FALSE
+          AND expires_at > NOW()
+          AND session_expires_at > NOW()
+        "#,
+    )
+    .bind(user_id)
+    .bind(session_id)
+    .bind(trusted)
+    .execute(pool)
+    .await?;
+
+    Ok(result.rows_affected() > 0)
+}
+
 pub async fn update_active_device_label(
     pool: &PgPool,
     user_id: Uuid,
@@ -365,6 +392,7 @@ pub async fn list_active_user_sessions(
             DateTime<Utc>,
             DateTime<Utc>,
             DateTime<Utc>,
+            bool,
         ),
     >(
         r#"
@@ -375,7 +403,8 @@ pub async fn list_active_user_sessions(
                 ip_address,
                 created_at,
                 last_used_at,
-                session_expires_at
+                session_expires_at,
+                trusted
             FROM refresh_tokens
             WHERE user_id = $1
               AND revoked = FALSE
@@ -388,7 +417,8 @@ pub async fn list_active_user_sessions(
                 device_label,
                 ip_address,
                 last_used_at,
-                session_expires_at
+                session_expires_at,
+                trusted
             FROM active
             ORDER BY session_id, last_used_at DESC
         )
@@ -402,7 +432,8 @@ pub async fn list_active_user_sessions(
                 WHERE active.session_id = latest.session_id
             ) AS created_at,
             latest.last_used_at,
-            latest.session_expires_at
+            latest.session_expires_at,
+            latest.trusted
         FROM latest
         "#,
     )
@@ -413,14 +444,17 @@ pub async fn list_active_user_sessions(
     let mut sessions: Vec<UserSession> = rows
         .into_iter()
         .map(
-            |(id, device_label, ip_address, created_at, last_used_at, expires_at)| UserSession {
-                current: current_session_id == Some(id),
-                id,
-                device_label: device_label.unwrap_or_else(|| "Unknown device".into()),
-                ip_address,
-                created_at,
-                last_used_at,
-                expires_at,
+            |(id, device_label, ip_address, created_at, last_used_at, expires_at, trusted)| {
+                UserSession {
+                    current: current_session_id == Some(id),
+                    id,
+                    device_label: device_label.unwrap_or_else(|| "Unknown device".into()),
+                    ip_address,
+                    created_at,
+                    last_used_at,
+                    expires_at,
+                    trusted,
+                }
             },
         )
         .collect();

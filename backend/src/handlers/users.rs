@@ -11,7 +11,7 @@ use crate::db::refresh_tokens::{
     create_refresh_token, insert_refresh_token_activity, list_active_user_sessions,
     list_user_session_activity, revoke_all_user_refresh_tokens, revoke_refresh_token,
     revoke_user_device_refresh_tokens, revoke_user_session, rotate_refresh_token,
-    update_active_device_label,
+    update_active_device_label, update_user_session_trust,
 };
 use crate::db::totp::{
     consume_login_challenge, create_login_challenge, delete_totp, enable_totp, get_login_challenge,
@@ -69,6 +69,11 @@ pub struct SessionsResponse {
 #[derive(Serialize)]
 pub struct OperationLogResponse {
     pub operations: Vec<crate::db::audit_logs::OperationLogRecord>,
+}
+
+#[derive(Deserialize)]
+pub struct UpdateSessionTrustRequest {
+    pub trusted: bool,
 }
 
 async fn log_user_operation(
@@ -1227,6 +1232,58 @@ pub async fn revoke_session(
     } else {
         Ok("Session revoked".into_response())
     }
+}
+
+pub async fn update_session_trust(
+    headers: HeaderMap,
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Path(session_id): Path<Uuid>,
+    Json(payload): Json<UpdateSessionTrustRequest>,
+) -> Result<Json<crate::db::refresh_tokens::UserSession>, ApiError> {
+    let current_session_id = current_refresh_session_id(&state, &headers, auth.user_id).await?;
+    let updated =
+        update_user_session_trust(&state.db_pool, auth.user_id, session_id, payload.trusted)
+            .await
+            .map_err(|e| internal_error("update session trust", e))?;
+
+    if !updated {
+        return Err(ApiError::BadRequest("Session not found".into()));
+    }
+
+    let (device_id, device_label, user_agent, ip_address) = request_metadata_values(&headers);
+    let metadata = owned_refresh_metadata(&device_id, &device_label, &user_agent, &ip_address);
+    insert_refresh_token_activity(
+        &state.db_pool,
+        auth.user_id,
+        session_id,
+        "trust_changed",
+        metadata,
+    )
+    .await
+    .map_err(|e| internal_error("record session trust activity", e))?;
+
+    log_user_operation(
+        &state,
+        auth.user_id,
+        "user.session.trust",
+        device_label.as_deref(),
+        serde_json::json!({
+            "session_id": session_id,
+            "current_session": current_session_id == Some(session_id),
+            "trusted": payload.trusted,
+        }),
+    )
+    .await;
+
+    let session = list_active_user_sessions(&state.db_pool, auth.user_id, current_session_id)
+        .await
+        .map_err(|e| internal_error("list sessions after trust update", e))?
+        .into_iter()
+        .find(|session| session.id == session_id)
+        .ok_or_else(|| ApiError::BadRequest("Session not found".into()))?;
+
+    Ok(Json(session))
 }
 
 pub async fn verify_email(

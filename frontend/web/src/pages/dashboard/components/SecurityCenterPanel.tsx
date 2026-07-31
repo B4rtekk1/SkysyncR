@@ -4,10 +4,12 @@ import {
     getOperationLog,
     getSessions,
     revokeSession,
+    updateSessionTrust,
     type OperationLogEntry,
     type SessionsResponse,
 } from '../../../api/users'
 import { formatBytes, formatRelative } from '../fileUtils'
+import { describeApproximateLocation } from '../sessionDisplay'
 
 type PublicLinkItem =
     | {
@@ -72,6 +74,7 @@ const sessionActionLabels: Record<string, string> = {
     logout: 'Signed out',
     logout_all: 'Signed out everywhere',
     revoked: 'Session revoked',
+    trust_changed: 'Trusted device changed',
 }
 
 function formatTime(value: string): string {
@@ -148,6 +151,7 @@ export function SecurityCenterPanel({
     const [error, setError] = useState<string | null>(null)
     const [blockingLinkId, setBlockingLinkId] = useState<string | null>(null)
     const [revokingSessionId, setRevokingSessionId] = useState<string | null>(null)
+    const [trustingSessionId, setTrustingSessionId] = useState<string | null>(null)
 
     const publicLinks = useMemo(() => toPublicLinks(files, folders), [files, folders])
     const suspiciousOperations = useMemo(() => recentSuspiciousOperations(operationLog, files), [files, operationLog])
@@ -207,6 +211,19 @@ export function SecurityCenterPanel({
             setError('Could not sign out this device.')
         } finally {
             setRevokingSessionId(null)
+        }
+    }
+
+    async function toggleTrustedSession(sessionId: string, trusted: boolean) {
+        setTrustingSessionId(sessionId)
+        setError(null)
+        try {
+            await updateSessionTrust(sessionId, trusted)
+            await loadSecurityData()
+        } catch {
+            setError('Could not update trusted device.')
+        } finally {
+            setTrustingSessionId(null)
         }
     }
 
@@ -326,12 +343,21 @@ export function SecurityCenterPanel({
                                 <strong>{session.device_label}</strong>
                                 <small>
                                     Last active {formatTime(session.last_used_at)}
-                                    {session.ip_address ? ` from ${session.ip_address}` : ''}
                                 </small>
+                                <small>{describeApproximateLocation(session.ip_address)}</small>
                                 <small>Expires {formatTime(session.expires_at)}</small>
                             </span>
                             <span className="security-center__actions">
                                 {session.current && <span className="security-center__badge">Current</span>}
+                                {session.trusted && <span className="security-center__badge security-center__badge--trusted">Trusted</span>}
+                                <button
+                                    className="btn btn--outline"
+                                    type="button"
+                                    disabled={trustingSessionId === session.id}
+                                    onClick={() => void toggleTrustedSession(session.id, !session.trusted)}
+                                >
+                                    {trustingSessionId === session.id ? 'Saving...' : session.trusted ? 'Untrust' : 'Trust'}
+                                </button>
                                 <button
                                     className="btn btn--outline"
                                     type="button"

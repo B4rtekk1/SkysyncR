@@ -279,6 +279,18 @@ export async function revokeSession(sessionId: string): Promise<void> {
   }
 }
 
+export async function updateSessionTrust(sessionId: string, trusted: boolean): Promise<void> {
+  const res = await authenticatedFetch(`${url}users/sessions/${sessionId}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ trusted }),
+  })
+
+  if (!res.ok) {
+    await throwApiError(res, 'Could not update trusted device')
+  }
+}
+
 export async function forgotPassword(payload: ForgotPasswordPayload): Promise<void> {
   const res = await apiFetch(`${url}users/forgot-password`, {
     method: 'POST',

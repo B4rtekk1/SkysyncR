@@ -104,6 +104,7 @@ CREATE TABLE IF NOT EXISTS refresh_tokens
     user_agent         TEXT,
     ip_address         TEXT,
     last_used_at       timestamptz NOT NULL DEFAULT NOW(),
+    trusted            BOOLEAN     NOT NULL DEFAULT FALSE,
     revoked            BOOLEAN     NOT NULL DEFAULT FALSE,
     created_at         timestamptz NOT NULL DEFAULT NOW()
 );
@@ -117,7 +118,7 @@ CREATE TABLE IF NOT EXISTS refresh_token_activity_logs
     id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id      UUID        NOT NULL REFERENCES users (id) ON DELETE CASCADE,
     session_id   UUID        NOT NULL,
-    action       TEXT        NOT NULL CHECK (action IN ('login', 'refresh', 'logout', 'logout_all', 'revoked')),
+    action       TEXT        NOT NULL CHECK (action IN ('login', 'refresh', 'logout', 'logout_all', 'revoked', 'trust_changed')),
     device_label TEXT,
     ip_address   TEXT,
     created_at   timestamptz NOT NULL DEFAULT NOW()

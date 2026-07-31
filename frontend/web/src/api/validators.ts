@@ -206,6 +206,7 @@ export const userSession: Validator<import('./generated').UserSession> = (value,
     created_at: string(prop(item, 'created_at', path), `${path}.created_at`),
     last_used_at: string(prop(item, 'last_used_at', path), `${path}.last_used_at`),
     expires_at: string(prop(item, 'expires_at', path), `${path}.expires_at`),
+    trusted: boolean(prop(item, 'trusted', path), `${path}.trusted`),
     current: boolean(prop(item, 'current', path), `${path}.current`),
   }
 }

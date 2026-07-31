@@ -3,6 +3,7 @@ ALTER TABLE refresh_tokens ADD COLUMN IF NOT EXISTS device_label TEXT;
 ALTER TABLE refresh_tokens ADD COLUMN IF NOT EXISTS user_agent TEXT;
 ALTER TABLE refresh_tokens ADD COLUMN IF NOT EXISTS ip_address TEXT;
 ALTER TABLE refresh_tokens ADD COLUMN IF NOT EXISTS last_used_at timestamptz NOT NULL DEFAULT NOW();
+ALTER TABLE refresh_tokens ADD COLUMN IF NOT EXISTS trusted BOOLEAN NOT NULL DEFAULT FALSE;
 
 DO $$
 BEGIN
@@ -39,7 +40,7 @@ CREATE TABLE IF NOT EXISTS refresh_token_activity_logs
     id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id      UUID        NOT NULL REFERENCES users (id) ON DELETE CASCADE,
     session_id   UUID        NOT NULL,
-    action       TEXT        NOT NULL CHECK (action IN ('login', 'refresh', 'logout', 'logout_all', 'revoked')),
+    action       TEXT        NOT NULL CHECK (action IN ('login', 'refresh', 'logout', 'logout_all', 'revoked', 'trust_changed')),
     device_label TEXT,
     ip_address   TEXT,
     created_at   timestamptz NOT NULL DEFAULT NOW()

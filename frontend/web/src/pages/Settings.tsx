@@ -15,6 +15,7 @@ import {
     confirmTotp,
     disableTotp,
     revokeSession,
+    updateSessionTrust,
     updateUserSettings,
     type CurrentUserResponse,
     type OperationLogEntry,
@@ -36,6 +37,7 @@ import {
     saveLayoutMode,
 } from './dashboard/storage'
 import { createQrPath } from './dashboard/qr'
+import { describeApproximateLocation } from './dashboard/sessionDisplay'
 import type { ViewKey } from './dashboard/types'
 import {
     clearLegacyProfileStorage,
@@ -126,6 +128,7 @@ const sessionActionLabels: Record<string, string> = {
     logout: 'Signed out',
     logout_all: 'Signed out everywhere',
     revoked: 'Session revoked',
+    trust_changed: 'Trusted device changed',
 }
 
 const operationLabels: Record<string, string> = {
@@ -207,6 +210,7 @@ function SettingsModalContent({ currentUser, onClose, onSave }: SettingsModalPro
     const [sessionsLoading, setSessionsLoading] = useState(false)
     const [sessionsError, setSessionsError] = useState<string | null>(null)
     const [revokingSessionId, setRevokingSessionId] = useState<string | null>(null)
+    const [trustingSessionId, setTrustingSessionId] = useState<string | null>(null)
     const [currentDeviceLabel, setCurrentDeviceLabel] = useState(() => getDeviceLabel())
     const [operationLog, setOperationLog] = useState<OperationLogResponse | null>(null)
     const [operationLogLoading, setOperationLogLoading] = useState(false)
@@ -519,6 +523,19 @@ function SettingsModalContent({ currentUser, onClose, onSave }: SettingsModalPro
             setSessionsError('Could not sign out this device. Try again.')
         } finally {
             setRevokingSessionId(null)
+        }
+    }
+
+    async function toggleTrustedSession(sessionId: string, trusted: boolean) {
+        setSessionsError(null)
+        setTrustingSessionId(sessionId)
+        try {
+            await updateSessionTrust(sessionId, trusted)
+            await loadSessions()
+        } catch {
+            setSessionsError('Could not update trusted device. Try again.')
+        } finally {
+            setTrustingSessionId(null)
         }
     }
 
@@ -929,12 +946,21 @@ function SettingsModalContent({ currentUser, onClose, onSave }: SettingsModalPro
                                             <strong>{session.device_label}</strong>
                                             <small>
                                                 Last active {formatSessionTime(session.last_used_at)}
-                                                {session.ip_address ? ` from ${session.ip_address}` : ''}
                                             </small>
+                                            <small>{describeApproximateLocation(session.ip_address)}</small>
                                             <small>Session expires {formatSessionTime(session.expires_at)}</small>
                                         </span>
                                         <span className="settings-session-controls">
                                             {session.current && <span className="settings-badge">Current</span>}
+                                            {session.trusted && <span className="settings-badge settings-badge--trusted">Trusted</span>}
+                                            <button
+                                                className="btn btn--outline settings-session-button"
+                                                type="button"
+                                                disabled={trustingSessionId === session.id}
+                                                onClick={() => void toggleTrustedSession(session.id, !session.trusted)}
+                                            >
+                                                {trustingSessionId === session.id ? 'Saving...' : session.trusted ? 'Untrust' : 'Trust'}
+                                            </button>
                                             <button
                                                 className="btn btn--outline settings-session-button"
                                                 type="button"
@@ -958,7 +984,8 @@ function SettingsModalContent({ currentUser, onClose, onSave }: SettingsModalPro
                                             <strong>{sessionActionLabels[event.action] ?? event.action}</strong>
                                             <small>
                                                 {event.device_label ?? 'Unknown device'}
-                                                {event.ip_address ? ` from ${event.ip_address}` : ''}
+                                                {' - '}
+                                                {describeApproximateLocation(event.ip_address)}
                                             </small>
                                         </span>
                                         <time dateTime={event.created_at}>{formatSessionTime(event.created_at)}</time>

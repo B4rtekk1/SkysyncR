@@ -1,8 +1,8 @@
 use crate::handlers::users::{
     change_password, confirm_totp, current_user, disable_totp, list_operation_log, list_sessions,
     login_totp, login_user, logout_all_sessions, logout_user, refresh_tokens, register_user,
-    resend_verification_email, revoke_session, setup_totp, totp_status, update_user_settings,
-    verify_email,
+    resend_verification_email, revoke_session, setup_totp, totp_status, update_session_trust,
+    update_user_settings, verify_email,
 };
 use crate::state::AppState;
 use axum::Router;
@@ -23,7 +23,7 @@ pub fn users_routes() -> Router<AppState> {
         .route("/users/totp/confirm", post(confirm_totp))
         .route(
             "/users/sessions/{session_id}",
-            axum::routing::delete(revoke_session),
+            patch(update_session_trust).delete(revoke_session),
         )
         .route("/users/refresh", post(refresh_tokens))
         .route("/users/logout", post(logout_user))

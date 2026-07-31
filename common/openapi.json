@@ -237,6 +237,42 @@
       }
     },
     "/users/sessions/{session_id}": {
+      "patch": {
+        "operationId": "updateSessionTrust",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateSessionTrustRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated trusted device",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserSession"
+                }
+              }
+            }
+          }
+        }
+      },
       "delete": {
         "operationId": "revokeSession",
         "parameters": [
@@ -2317,6 +2353,7 @@
           "created_at",
           "last_used_at",
           "expires_at",
+          "trusted",
           "current"
         ],
         "properties": {
@@ -2343,7 +2380,21 @@
             "type": "string",
             "format": "date-time"
           },
+          "trusted": {
+            "type": "boolean"
+          },
           "current": {
+            "type": "boolean"
+          }
+        }
+      },
+      "UpdateSessionTrustRequest": {
+        "type": "object",
+        "required": [
+          "trusted"
+        ],
+        "properties": {
+          "trusted": {
             "type": "boolean"
           }
         }
@@ -2769,6 +2820,42 @@
             "nullable": true
           },
           "created_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "PublicFileShareAccess": {
+        "type": "object",
+        "required": [
+          "id",
+          "file_id",
+          "share_token",
+          "recipient_email",
+          "user_agent",
+          "accessed_at"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "file_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "share_token": {
+            "type": "string"
+          },
+          "recipient_email": {
+            "type": "string",
+            "nullable": true
+          },
+          "user_agent": {
+            "type": "string",
+            "nullable": true
+          },
+          "accessed_at": {
             "type": "string",
             "format": "date-time"
           }
