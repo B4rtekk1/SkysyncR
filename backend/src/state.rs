@@ -25,6 +25,8 @@ pub struct AppConfig {
     pub trash_purge_interval_hours: u64,
     pub audit_log_encryption_key: String,
     pub totp_encryption_key: [u8; 32],
+    pub db_latency_alert_ms: u64,
+    pub storage_usage_alert_ratio: f64,
     pub is_dev: bool,
 }
 
@@ -78,6 +80,18 @@ impl AppConfig {
             .filter(|hours| *hours >= 1)
             .unwrap_or(24);
 
+        let db_latency_alert_ms = std::env::var("DB_LATENCY_ALERT_MS")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .filter(|milliseconds| *milliseconds >= 1)
+            .unwrap_or(500);
+
+        let storage_usage_alert_ratio = std::env::var("STORAGE_USAGE_ALERT_RATIO")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .filter(|ratio| (0.0..=1.0).contains(ratio))
+            .unwrap_or(0.9);
+
         let is_dev = std::env::var("APP_ENV")
             .map(|v| v == "development" || v == "dev")
             .unwrap_or(true);
@@ -94,6 +108,8 @@ impl AppConfig {
             audit_log_encryption_key: std::env::var("AUDIT_LOG_ENCRYPTION_KEY")
                 .unwrap_or_else(|_| std::env::var("JWT_SECRET").expect("JWT_SECRET must be set")),
             totp_encryption_key,
+            db_latency_alert_ms,
+            storage_usage_alert_ratio,
             max_failed_login_attempts,
             lockout_duration_minutes,
             verification_token_ttl_hours,

@@ -125,6 +125,8 @@ pub enum RefreshTokenAuth {
     NotFound,
 }
 
+const REFRESH_TOKEN_REUSE_GRACE_SECONDS: i32 = 30;
+
 pub async fn authenticate_refresh_token(
     pool: &PgPool,
     raw_token: &str,
@@ -315,7 +317,8 @@ pub async fn rotate_refresh_token(
     sqlx::query(
         r#"
         UPDATE refresh_tokens
-        SET revoked = TRUE
+        SET revoked = TRUE,
+            last_used_at = NOW()
         WHERE id = $1 AND revoked = FALSE
         "#,
     )
@@ -341,6 +344,7 @@ pub async fn rotate_refresh_token(
             last_used_at
         )
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())
+        RETURNING id
         "#,
     )
     .bind(user_id)
@@ -352,7 +356,7 @@ pub async fn rotate_refresh_token(
     .bind(metadata.device_label)
     .bind(metadata.user_agent)
     .bind(metadata.ip_address)
-    .execute(&mut *tx)
+    .fetch_one(&mut *tx)
     .await?;
 
     sqlx::query(
@@ -376,6 +380,137 @@ pub async fn rotate_refresh_token(
 
     tx.commit().await?;
     Ok(())
+}
+
+pub async fn rotate_recent_refresh_token_reuse(
+    pool: &PgPool,
+    reused_raw_token: &str,
+    new_raw_token: &str,
+    metadata: RefreshTokenMetadata<'_>,
+) -> Result<Option<ValidRefreshToken>, sqlx::Error> {
+    let reused_token_hash = hash_refresh_token(reused_raw_token);
+    let mut tx = pool.begin().await?;
+
+    let reused = sqlx::query_as::<_, (Uuid, Uuid, DateTime<Utc>)>(
+        r#"
+        SELECT session_id, user_id, session_expires_at
+        FROM refresh_tokens
+        WHERE token_hash = $1
+          AND revoked = TRUE
+          AND expires_at > NOW()
+          AND session_expires_at > NOW()
+          AND last_used_at > NOW() - ($2 * interval '1 second')
+          AND (device_id IS NULL OR device_id = $3)
+        FOR UPDATE
+        "#,
+    )
+    .bind(reused_token_hash)
+    .bind(REFRESH_TOKEN_REUSE_GRACE_SECONDS)
+    .bind(metadata.device_id)
+    .fetch_optional(&mut *tx)
+    .await?;
+
+    let Some((session_id, user_id, session_expires_at)) = reused else {
+        tx.rollback().await?;
+        return Ok(None);
+    };
+
+    let active_token_id = sqlx::query_scalar::<_, Uuid>(
+        r#"
+        SELECT id
+        FROM refresh_tokens
+        WHERE user_id = $1
+          AND session_id = $2
+          AND revoked = FALSE
+          AND expires_at > NOW()
+          AND session_expires_at > NOW()
+        ORDER BY last_used_at DESC
+        LIMIT 1
+        FOR UPDATE
+        "#,
+    )
+    .bind(user_id)
+    .bind(session_id)
+    .fetch_optional(&mut *tx)
+    .await?;
+
+    let Some(active_token_id) = active_token_id else {
+        tx.rollback().await?;
+        return Ok(None);
+    };
+
+    sqlx::query(
+        r#"
+        UPDATE refresh_tokens
+        SET revoked = TRUE,
+            last_used_at = NOW()
+        WHERE id = $1 AND revoked = FALSE
+        "#,
+    )
+    .bind(active_token_id)
+    .execute(&mut *tx)
+    .await?;
+
+    let token_hash = hash_refresh_token(new_raw_token);
+    let expires_at: DateTime<Utc> = refresh_token_expires_at(session_expires_at);
+
+    let new_token_id = sqlx::query_scalar::<_, Uuid>(
+        r#"
+        INSERT INTO refresh_tokens (
+            user_id,
+            session_id,
+            token_hash,
+            expires_at,
+            session_expires_at,
+            device_id,
+            device_label,
+            user_agent,
+            ip_address,
+            last_used_at
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())
+        RETURNING id
+        "#,
+    )
+    .bind(user_id)
+    .bind(session_id)
+    .bind(token_hash)
+    .bind(expires_at)
+    .bind(session_expires_at)
+    .bind(metadata.device_id)
+    .bind(metadata.device_label)
+    .bind(metadata.user_agent)
+    .bind(metadata.ip_address)
+    .fetch_one(&mut *tx)
+    .await?;
+
+    sqlx::query(
+        r#"
+        INSERT INTO refresh_token_activity_logs (
+            user_id,
+            session_id,
+            action,
+            device_label,
+            ip_address
+        )
+        VALUES ($1, $2, 'refresh', $3, $4)
+        "#,
+    )
+    .bind(user_id)
+    .bind(session_id)
+    .bind(metadata.device_label)
+    .bind(metadata.ip_address)
+    .execute(&mut *tx)
+    .await?;
+
+    tx.commit().await?;
+
+    Ok(Some(ValidRefreshToken {
+        id: new_token_id,
+        user_id,
+        session_id,
+        session_expires_at,
+    }))
 }
 
 pub async fn list_active_user_sessions(

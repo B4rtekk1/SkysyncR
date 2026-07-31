@@ -19,6 +19,7 @@ function contentSecurityPolicy(connectSources: string[], scriptSources = ["'self
     "font-src 'self' https://fonts.gstatic.com",
     "media-src 'self' blob:",
     "worker-src 'self' blob:",
+    "manifest-src 'self'",
     `connect-src ${validConnectSources.join(' ')}`,
   ].join('; ')
 }

@@ -53,6 +53,7 @@ const CONTENT_SECURITY_POLICY: &str = concat!(
     "style-src 'self'; ",
     "img-src 'self' data:; ",
     "font-src 'self'; ",
+    "manifest-src 'self'; ",
     "connect-src 'self'"
 );
 
@@ -121,6 +122,8 @@ pub async fn run_server() {
         file_transfer_timeout_seconds = config.file_transfer_timeout_seconds,
         trash_retention_days = config.trash_retention_days,
         trash_purge_interval_hours = config.trash_purge_interval_hours,
+        db_latency_alert_ms = config.db_latency_alert_ms,
+        storage_usage_alert_ratio = config.storage_usage_alert_ratio,
         "loaded application config"
     );
 
@@ -156,6 +159,8 @@ pub async fn run_server() {
 
     let app = Router::new()
         .route("/", get(hello))
+        .route("/healthz", get(crate::observability::healthz))
+        .route("/metrics", get(crate::observability::metrics_endpoint))
         .merge(auth_routes)
         .merge(users_routes())
         .merge(storage_routes())

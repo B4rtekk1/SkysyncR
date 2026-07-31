@@ -11,7 +11,7 @@ where
     serializer.serialize_str(&general_purpose::STANDARD.encode(bytes))
 }
 
-#[derive(FromRow, Serialize)]
+#[derive(Clone, FromRow, Serialize)]
 pub struct FileRecord {
     pub id: Uuid,
     pub filename: String,

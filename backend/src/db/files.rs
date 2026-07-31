@@ -33,6 +33,17 @@ pub struct UpdatedFileContent {
     pub checksum: Option<String>,
 }
 
+pub struct FileListPageCursor {
+    pub updated_at: DateTime<Utc>,
+    pub id: Uuid,
+}
+
+pub struct FileListPageOptions {
+    pub limit: i64,
+    pub cursor: Option<FileListPageCursor>,
+    pub search: Option<String>,
+}
+
 pub async fn list_user_files(
     pool: &PgPool,
     user_id: Uuid,
@@ -100,6 +111,109 @@ pub async fn list_user_files(
     .bind(root_only)
     .fetch_all(pool)
     .await
+}
+
+pub async fn list_user_files_page(
+    pool: &PgPool,
+    user_id: Uuid,
+    folder_id: Option<Uuid>,
+    tag_id: Option<Uuid>,
+    trashed: bool,
+    root_only: bool,
+    options: FileListPageOptions,
+) -> Result<(Vec<FileRecord>, bool), sqlx::Error> {
+    let fetch_limit = options.limit + 1;
+    let mut query_builder = QueryBuilder::<Postgres>::new(
+        r#"
+        SELECT
+            id,
+            filename,
+            storage_path,
+            mime_type,
+            size_bytes,
+            folder_id,
+            note,
+            is_deleted,
+            is_public,
+            share_token,
+            share_starts_at,
+            share_expires_at,
+            share_download_limit,
+            share_download_count,
+            share_one_time,
+            (share_password_hash IS NOT NULL) AS share_password_enabled,
+            share_recipient_email,
+            EXISTS (
+                SELECT 1
+                FROM favorites fav
+                WHERE fav.user_id = "#,
+    );
+    query_builder.push_bind(user_id);
+    query_builder.push(
+        r#"
+                  AND fav.file_id = files.id
+            ) AS is_favourite,
+            encrypted_key,
+            encryption_nonce,
+            created_at,
+            updated_at,
+            deleted_at
+        FROM files
+        WHERE owner_id = "#,
+    );
+    query_builder.push_bind(user_id);
+    query_builder.push(" AND is_deleted = ");
+    query_builder.push_bind(trashed);
+    query_builder.push(" AND ((");
+    query_builder.push_bind(root_only);
+    query_builder.push("::boolean = TRUE AND folder_id IS NULL) OR (");
+    query_builder.push_bind(root_only);
+    query_builder.push("::boolean = FALSE AND (");
+    query_builder.push_bind(folder_id);
+    query_builder.push("::uuid IS NULL OR folder_id = ");
+    query_builder.push_bind(folder_id);
+    query_builder.push(")))");
+    query_builder.push(" AND (");
+    query_builder.push_bind(tag_id);
+    query_builder.push(
+        r#"::uuid IS NULL
+              OR EXISTS (
+                  SELECT 1
+                  FROM file_tags ft
+                  JOIN tags t ON t.id = ft.tag_id
+                  WHERE ft.file_id = files.id
+                    AND ft.tag_id = "#,
+    );
+    query_builder.push_bind(tag_id);
+    query_builder.push(" AND t.owner_id = ");
+    query_builder.push_bind(user_id);
+    query_builder.push("))");
+
+    if let Some(search) = options.search.as_deref() {
+        query_builder.push(" AND filename ILIKE ");
+        query_builder.push_bind(format!("%{search}%"));
+    }
+
+    if let Some(cursor) = options.cursor {
+        query_builder.push(" AND (updated_at, id) < (");
+        query_builder.push_bind(cursor.updated_at);
+        query_builder.push(", ");
+        query_builder.push_bind(cursor.id);
+        query_builder.push(")");
+    }
+
+    query_builder.push(" ORDER BY updated_at DESC, id DESC LIMIT ");
+    query_builder.push_bind(fetch_limit);
+
+    let mut rows = query_builder
+        .build_query_as::<FileRecord>()
+        .fetch_all(pool)
+        .await?;
+    let has_more = rows.len() > options.limit as usize;
+    if has_more {
+        rows.truncate(options.limit as usize);
+    }
+    Ok((rows, has_more))
 }
 
 pub async fn create_file_record(

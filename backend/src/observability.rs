@@ -1,14 +1,22 @@
-use axum::extract::{ConnectInfo, Request};
-use axum::http::{HeaderName, HeaderValue, header};
+use axum::body::Body;
+use axum::extract::{ConnectInfo, Request, State};
+use axum::http::{HeaderName, HeaderValue, StatusCode, header};
 use axum::middleware::Next;
-use axum::response::Response;
+use axum::response::{IntoResponse, Response};
+use serde::Serialize;
+use std::collections::BTreeMap;
 use std::net::SocketAddr;
-use std::time::Instant;
+use std::sync::{Mutex, OnceLock};
+use std::time::{Duration, Instant};
 use tracing_subscriber::EnvFilter;
 use uuid::Uuid;
 
+use crate::db::storage::{StorageOverview, get_storage_overview};
+use crate::state::AppState;
+
 const REQUEST_ID_HEADER: HeaderName = HeaderName::from_static("x-request-id");
 const DEFAULT_LOG_FILTER: &str = "skysyncr=info,tower_http=info,sqlx=warn";
+const METRICS_CONTENT_TYPE: &str = "text/plain; version=0.0.4; charset=utf-8";
 
 pub fn init_tracing() {
     let env_filter =
@@ -67,6 +75,7 @@ pub async fn request_observability(mut request: Request, next: Next) -> Response
     let status = response.status();
     let response_bytes = content_length(response.headers());
     let latency_ms = started.elapsed().as_secs_f64() * 1000.0;
+    metrics().record_http_request(&method.to_string(), &path, status.as_u16(), latency_ms);
 
     if let Ok(value) = HeaderValue::from_str(&request_id) {
         response.headers_mut().insert(REQUEST_ID_HEADER, value);
@@ -114,6 +123,512 @@ pub async fn request_observability(mut request: Request, next: Next) -> Response
     }
 
     response
+}
+
+pub fn record_transfer_success(direction: &'static str, bytes: i64) {
+    metrics().record_transfer(direction, "success", bytes.max(0) as u64);
+}
+
+pub fn record_transfer_error(direction: &'static str, reason: &'static str) {
+    metrics().record_transfer(direction, reason, 0);
+    tracing::warn!(
+        transfer_direction = direction,
+        transfer_error = reason,
+        alert = "file_transfer_error",
+        "file transfer failed"
+    );
+}
+
+pub fn observe_db_latency(operation: &'static str, elapsed: Duration) {
+    let latency_ms = elapsed.as_secs_f64() * 1000.0;
+    metrics().record_db_latency(operation, latency_ms);
+}
+
+pub async fn metrics_endpoint(State(state): State<AppState>) -> Response {
+    let db_latency = probe_database_latency(&state).await;
+    let storage_overview = match get_storage_overview(&state.db_pool).await {
+        Ok(overview) => Some(overview),
+        Err(err) => {
+            tracing::error!(error = %err, alert = "storage_metrics_unavailable", "failed to collect storage metrics");
+            None
+        }
+    };
+    if let Some(overview) = storage_overview.as_ref() {
+        emit_storage_alert(&state, overview);
+    }
+
+    let body = metrics().render(
+        db_latency,
+        storage_overview.as_ref(),
+        state.db_pool.size(),
+        state.db_pool.num_idle() as u32,
+    );
+
+    Response::builder()
+        .status(StatusCode::OK)
+        .header(header::CONTENT_TYPE, METRICS_CONTENT_TYPE)
+        .body(Body::from(body))
+        .unwrap_or_else(|_| StatusCode::INTERNAL_SERVER_ERROR.into_response())
+}
+
+pub async fn healthz(State(state): State<AppState>) -> impl IntoResponse {
+    let db_latency = probe_database_latency(&state).await;
+    let storage = get_storage_overview(&state.db_pool).await.ok();
+    if let Some(overview) = storage.as_ref() {
+        emit_storage_alert(&state, overview);
+    }
+
+    let alerts = active_alerts(&state, db_latency, storage.as_ref());
+    let status = if db_latency.is_some() && alerts.iter().all(|alert| alert.severity != "critical")
+    {
+        StatusCode::OK
+    } else {
+        StatusCode::SERVICE_UNAVAILABLE
+    };
+
+    (
+        status,
+        axum::Json(HealthResponse {
+            status: if status == StatusCode::OK {
+                "ok"
+            } else {
+                "degraded"
+            },
+            database: DatabaseHealth {
+                reachable: db_latency.is_some(),
+                latency_ms: db_latency,
+                pool_size: state.db_pool.size(),
+                pool_idle: state.db_pool.num_idle() as u32,
+            },
+            storage: storage.map(StorageHealth::from),
+            alerts,
+        }),
+    )
+}
+
+async fn probe_database_latency(state: &AppState) -> Option<f64> {
+    let started = Instant::now();
+    let result = sqlx::query_scalar::<_, i32>("SELECT 1")
+        .fetch_one(&state.db_pool)
+        .await;
+    let latency_ms = started.elapsed().as_secs_f64() * 1000.0;
+    observe_db_latency("health_probe", started.elapsed());
+
+    match result {
+        Ok(_) => {
+            if latency_ms > state.config.db_latency_alert_ms as f64 {
+                tracing::warn!(
+                    latency_ms,
+                    threshold_ms = state.config.db_latency_alert_ms,
+                    alert = "database_latency_high",
+                    "database health probe exceeded latency threshold"
+                );
+            }
+            Some(latency_ms)
+        }
+        Err(err) => {
+            metrics().increment_alert("database_unreachable");
+            tracing::error!(error = %err, alert = "database_unreachable", "database health probe failed");
+            None
+        }
+    }
+}
+
+fn emit_storage_alert(state: &AppState, overview: &StorageOverview) {
+    let Some(ratio) = overview.usage_ratio() else {
+        return;
+    };
+    if ratio >= state.config.storage_usage_alert_ratio {
+        metrics().increment_alert("storage_usage_high");
+        tracing::warn!(
+            used_bytes = overview.used_bytes,
+            total_bytes = overview.total_bytes,
+            usage_ratio = ratio,
+            threshold_ratio = state.config.storage_usage_alert_ratio,
+            alert = "storage_usage_high",
+            "storage usage exceeded alert threshold"
+        );
+    }
+}
+
+fn active_alerts(
+    state: &AppState,
+    db_latency: Option<f64>,
+    storage: Option<&StorageOverview>,
+) -> Vec<OperationalAlert> {
+    let mut alerts = Vec::new();
+
+    match db_latency {
+        Some(latency_ms) if latency_ms > state.config.db_latency_alert_ms as f64 => {
+            alerts.push(OperationalAlert {
+                name: "database_latency_high",
+                severity: "warning",
+                message: "Database health probe latency is above threshold",
+            });
+        }
+        None => alerts.push(OperationalAlert {
+            name: "database_unreachable",
+            severity: "critical",
+            message: "Database health probe failed",
+        }),
+        _ => {}
+    }
+
+    if let Some(overview) = storage
+        && let Some(ratio) = overview.usage_ratio()
+        && ratio >= state.config.storage_usage_alert_ratio
+    {
+        alerts.push(OperationalAlert {
+            name: "storage_usage_high",
+            severity: "warning",
+            message: "Storage usage is above threshold",
+        });
+    }
+
+    alerts
+}
+
+fn metrics() -> &'static Metrics {
+    static METRICS: OnceLock<Metrics> = OnceLock::new();
+    METRICS.get_or_init(Metrics::default)
+}
+
+#[derive(Default)]
+struct Metrics {
+    http_requests: Mutex<BTreeMap<HttpKey, RequestMetric>>,
+    transfers: Mutex<BTreeMap<TransferKey, TransferMetric>>,
+    db_latency: Mutex<BTreeMap<&'static str, LatencyMetric>>,
+    alerts: Mutex<BTreeMap<&'static str, u64>>,
+}
+
+impl Metrics {
+    fn record_http_request(&self, method: &str, path: &str, status: u16, latency_ms: f64) {
+        let key = HttpKey {
+            method: method.to_string(),
+            path: path.to_string(),
+            status_class: format!("{}xx", status / 100),
+        };
+        let mut requests = self.http_requests.lock().expect("metrics mutex poisoned");
+        requests.entry(key).or_default().observe(latency_ms);
+    }
+
+    fn record_transfer(&self, direction: &'static str, result: &'static str, bytes: u64) {
+        let mut transfers = self.transfers.lock().expect("metrics mutex poisoned");
+        transfers
+            .entry(TransferKey { direction, result })
+            .or_default()
+            .observe(bytes);
+    }
+
+    fn record_db_latency(&self, operation: &'static str, latency_ms: f64) {
+        let mut latencies = self.db_latency.lock().expect("metrics mutex poisoned");
+        latencies.entry(operation).or_default().observe(latency_ms);
+    }
+
+    fn increment_alert(&self, name: &'static str) {
+        let mut alerts = self.alerts.lock().expect("metrics mutex poisoned");
+        *alerts.entry(name).or_default() += 1;
+    }
+
+    fn render(
+        &self,
+        db_probe_latency_ms: Option<f64>,
+        storage: Option<&StorageOverview>,
+        db_pool_size: u32,
+        db_pool_idle: u32,
+    ) -> String {
+        let mut out = String::new();
+        out.push_str("# HELP skysyncr_up Application liveness from the metrics endpoint.\n");
+        out.push_str("# TYPE skysyncr_up gauge\nskysyncr_up 1\n");
+        out.push_str("# HELP skysyncr_db_pool_connections PostgreSQL pool connections.\n");
+        out.push_str("# TYPE skysyncr_db_pool_connections gauge\n");
+        push_metric(
+            &mut out,
+            "skysyncr_db_pool_connections",
+            &[("state", "open")],
+            db_pool_size as f64,
+        );
+        push_metric(
+            &mut out,
+            "skysyncr_db_pool_connections",
+            &[("state", "idle")],
+            db_pool_idle as f64,
+        );
+
+        if let Some(latency_ms) = db_probe_latency_ms {
+            out.push_str("# HELP skysyncr_database_health_probe_latency_ms Latest database health probe latency.\n");
+            out.push_str("# TYPE skysyncr_database_health_probe_latency_ms gauge\n");
+            push_metric(
+                &mut out,
+                "skysyncr_database_health_probe_latency_ms",
+                &[],
+                latency_ms,
+            );
+        } else {
+            out.push_str("# HELP skysyncr_database_reachable Database health probe result.\n");
+            out.push_str(
+                "# TYPE skysyncr_database_reachable gauge\nskysyncr_database_reachable 0\n",
+            );
+        }
+
+        if let Some(storage) = storage {
+            out.push_str("# HELP skysyncr_storage_bytes Storage quota usage across users.\n");
+            out.push_str("# TYPE skysyncr_storage_bytes gauge\n");
+            push_metric(
+                &mut out,
+                "skysyncr_storage_bytes",
+                &[("kind", "used")],
+                storage.used_bytes as f64,
+            );
+            push_metric(
+                &mut out,
+                "skysyncr_storage_bytes",
+                &[("kind", "total")],
+                storage.total_bytes as f64,
+            );
+            push_metric(
+                &mut out,
+                "skysyncr_storage_users_total",
+                &[],
+                storage.users as f64,
+            );
+        }
+
+        out.push_str("# HELP skysyncr_http_requests_total HTTP requests grouped by method, path and status class.\n");
+        out.push_str("# TYPE skysyncr_http_requests_total counter\n");
+        out.push_str("# HELP skysyncr_http_request_latency_ms_sum Total HTTP request latency in milliseconds.\n");
+        out.push_str("# TYPE skysyncr_http_request_latency_ms_sum counter\n");
+        out.push_str("# HELP skysyncr_http_request_latency_ms_max Maximum observed HTTP request latency in milliseconds.\n");
+        out.push_str("# TYPE skysyncr_http_request_latency_ms_max gauge\n");
+        for (key, metric) in self
+            .http_requests
+            .lock()
+            .expect("metrics mutex poisoned")
+            .iter()
+        {
+            let labels = [
+                ("method", key.method.as_str()),
+                ("path", key.path.as_str()),
+                ("status_class", key.status_class.as_str()),
+            ];
+            push_metric(
+                &mut out,
+                "skysyncr_http_requests_total",
+                &labels,
+                metric.count as f64,
+            );
+            push_metric(
+                &mut out,
+                "skysyncr_http_request_latency_ms_sum",
+                &labels,
+                metric.latency_ms_sum,
+            );
+            push_metric(
+                &mut out,
+                "skysyncr_http_request_latency_ms_max",
+                &labels,
+                metric.latency_ms_max,
+            );
+        }
+
+        out.push_str("# HELP skysyncr_file_transfer_operations_total File transfer operations grouped by direction and result.\n");
+        out.push_str("# TYPE skysyncr_file_transfer_operations_total counter\n");
+        out.push_str("# HELP skysyncr_file_transfer_bytes_total File transfer bytes grouped by direction and result.\n");
+        out.push_str("# TYPE skysyncr_file_transfer_bytes_total counter\n");
+        for (key, metric) in self
+            .transfers
+            .lock()
+            .expect("metrics mutex poisoned")
+            .iter()
+        {
+            let labels = [("direction", key.direction), ("result", key.result)];
+            push_metric(
+                &mut out,
+                "skysyncr_file_transfer_operations_total",
+                &labels,
+                metric.count as f64,
+            );
+            push_metric(
+                &mut out,
+                "skysyncr_file_transfer_bytes_total",
+                &labels,
+                metric.bytes as f64,
+            );
+        }
+
+        out.push_str("# HELP skysyncr_db_operation_latency_ms_sum Total observed DB operation latency in milliseconds.\n");
+        out.push_str("# TYPE skysyncr_db_operation_latency_ms_sum counter\n");
+        out.push_str("# HELP skysyncr_db_operation_latency_ms_max Maximum observed DB operation latency in milliseconds.\n");
+        out.push_str("# TYPE skysyncr_db_operation_latency_ms_max gauge\n");
+        for (operation, metric) in self
+            .db_latency
+            .lock()
+            .expect("metrics mutex poisoned")
+            .iter()
+        {
+            let labels = [("operation", *operation)];
+            push_metric(
+                &mut out,
+                "skysyncr_db_operation_latency_ms_count",
+                &labels,
+                metric.count as f64,
+            );
+            push_metric(
+                &mut out,
+                "skysyncr_db_operation_latency_ms_sum",
+                &labels,
+                metric.sum,
+            );
+            push_metric(
+                &mut out,
+                "skysyncr_db_operation_latency_ms_max",
+                &labels,
+                metric.max,
+            );
+        }
+
+        out.push_str("# HELP skysyncr_operational_alerts_total Operational alert emissions grouped by alert name.\n");
+        out.push_str("# TYPE skysyncr_operational_alerts_total counter\n");
+        for (name, count) in self.alerts.lock().expect("metrics mutex poisoned").iter() {
+            push_metric(
+                &mut out,
+                "skysyncr_operational_alerts_total",
+                &[("alert", *name)],
+                *count as f64,
+            );
+        }
+
+        out
+    }
+}
+
+#[derive(Clone, Eq, Ord, PartialEq, PartialOrd)]
+struct HttpKey {
+    method: String,
+    path: String,
+    status_class: String,
+}
+
+#[derive(Clone, Eq, Ord, PartialEq, PartialOrd)]
+struct TransferKey {
+    direction: &'static str,
+    result: &'static str,
+}
+
+#[derive(Default)]
+struct RequestMetric {
+    count: u64,
+    latency_ms_sum: f64,
+    latency_ms_max: f64,
+}
+
+impl RequestMetric {
+    fn observe(&mut self, latency_ms: f64) {
+        self.count += 1;
+        self.latency_ms_sum += latency_ms;
+        self.latency_ms_max = self.latency_ms_max.max(latency_ms);
+    }
+}
+
+#[derive(Default)]
+struct TransferMetric {
+    count: u64,
+    bytes: u64,
+}
+
+impl TransferMetric {
+    fn observe(&mut self, bytes: u64) {
+        self.count += 1;
+        self.bytes += bytes;
+    }
+}
+
+#[derive(Default)]
+struct LatencyMetric {
+    count: u64,
+    sum: f64,
+    max: f64,
+}
+
+impl LatencyMetric {
+    fn observe(&mut self, latency_ms: f64) {
+        self.count += 1;
+        self.sum += latency_ms;
+        self.max = self.max.max(latency_ms);
+    }
+}
+
+#[derive(Serialize)]
+struct HealthResponse {
+    status: &'static str,
+    database: DatabaseHealth,
+    storage: Option<StorageHealth>,
+    alerts: Vec<OperationalAlert>,
+}
+
+#[derive(Serialize)]
+struct DatabaseHealth {
+    reachable: bool,
+    latency_ms: Option<f64>,
+    pool_size: u32,
+    pool_idle: u32,
+}
+
+#[derive(Serialize)]
+struct StorageHealth {
+    users: i64,
+    total_bytes: i64,
+    used_bytes: i64,
+    usage_ratio: Option<f64>,
+}
+
+impl From<StorageOverview> for StorageHealth {
+    fn from(value: StorageOverview) -> Self {
+        Self {
+            users: value.users,
+            total_bytes: value.total_bytes,
+            used_bytes: value.used_bytes,
+            usage_ratio: value.usage_ratio(),
+        }
+    }
+}
+
+#[derive(Serialize)]
+struct OperationalAlert {
+    name: &'static str,
+    severity: &'static str,
+    message: &'static str,
+}
+
+fn push_metric(out: &mut String, name: &str, labels: &[(&str, &str)], value: f64) {
+    out.push_str(name);
+    if !labels.is_empty() {
+        out.push('{');
+        for (index, (label, value)) in labels.iter().enumerate() {
+            if index > 0 {
+                out.push(',');
+            }
+            out.push_str(label);
+            out.push_str("=\"");
+            push_escaped_label(out, value);
+            out.push('"');
+        }
+        out.push('}');
+    }
+    out.push(' ');
+    out.push_str(&value.to_string());
+    out.push('\n');
+}
+
+fn push_escaped_label(out: &mut String, value: &str) {
+    for ch in value.chars() {
+        match ch {
+            '\\' => out.push_str("\\\\"),
+            '"' => out.push_str("\\\""),
+            '\n' => out.push_str("\\n"),
+            ch => out.push(ch),
+        }
+    }
 }
 
 #[derive(Clone, Debug)]

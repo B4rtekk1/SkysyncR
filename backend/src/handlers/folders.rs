@@ -19,12 +19,14 @@ use uuid::Uuid;
 use crate::auth::AuthUser;
 use crate::db::files::FileRecord;
 use crate::db::folders::{
-    FolderPointRestoreResult, FolderRecord, FolderShareRecipientRecord, FolderShareRecord,
-    NewFolderRecord, NewFolderShare, add_user_folder_favourite, create_folder_record,
-    delete_user_folder_share, folder_belongs_to_user, folder_is_descendant_of,
-    get_folder_share_recipient, get_public_folder_file_for_download, get_public_folder_tree,
+    FolderListPageCursor, FolderListPageOptions, FolderPointRestoreResult, FolderRecord,
+    FolderShareRecipientRecord, FolderShareRecord, NewFolderRecord, NewFolderShare,
+    add_user_folder_favourite, create_folder_record, delete_user_folder_share,
+    folder_belongs_to_user, folder_is_descendant_of, get_folder_share_recipient,
+    get_public_folder_file_for_download, get_public_folder_tree,
     list_public_folder_share_access_events, list_public_folder_tree_files,
-    list_user_favourite_folders, list_user_folder_shares, list_user_folders, move_user_folder,
+    list_user_favourite_folders, list_user_favourite_folders_page, list_user_folder_shares,
+    list_user_folders, list_user_folders_page, move_user_folder,
     public_folder_share_access_allowed, remove_user_folder_favourite, rename_user_folder,
     restore_user_folder, restore_user_folder_to_point, soft_delete_user_folder,
     update_user_folder_share, upsert_user_folder_share, user_folder_exists,
@@ -43,6 +45,9 @@ pub struct ListFoldersQuery {
     pub favourite: bool,
     #[serde(default)]
     pub trashed: bool,
+    pub limit: Option<i64>,
+    pub cursor: Option<String>,
+    pub search: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -107,11 +112,61 @@ pub struct PublicFolderManifest {
     pub files: Vec<FileRecord>,
 }
 
+#[derive(Serialize)]
+pub struct FolderListPage {
+    pub items: Vec<FolderRecord>,
+    pub next_cursor: Option<String>,
+}
+
+#[derive(Serialize, Deserialize)]
+struct FolderCursorToken {
+    name: String,
+    id: Uuid,
+}
+
 pub async fn list_folders(
     State(state): State<AppState>,
     auth: AuthUser,
     Query(query): Query<ListFoldersQuery>,
-) -> Result<Json<Vec<FolderRecord>>, ApiError> {
+) -> Result<Response, ApiError> {
+    if query.limit.is_some() || query.cursor.is_some() || query.search.is_some() {
+        let limit = validate_page_limit(query.limit)?;
+        let cursor = query
+            .cursor
+            .as_deref()
+            .map(decode_folder_cursor)
+            .transpose()?;
+        let search = normalize_search_query(query.search.as_deref())?;
+        let options = FolderListPageOptions {
+            limit,
+            cursor,
+            search,
+        };
+        let (items, has_more) = if query.favourite {
+            list_user_favourite_folders_page(&state.db_pool, auth.user_id, options)
+                .await
+                .map_err(|e| internal_error("list favourite folders page", e))?
+        } else {
+            let parent_folder_id =
+                parse_optional_uuid(query.parent_folder_id.as_deref(), "parent_folder_id")?;
+            list_user_folders_page(
+                &state.db_pool,
+                auth.user_id,
+                parent_folder_id,
+                query.trashed,
+                options,
+            )
+            .await
+            .map_err(|e| internal_error("list folders page", e))?
+        };
+        let next_cursor = has_more
+            .then(|| items.last())
+            .flatten()
+            .map(encode_folder_cursor)
+            .transpose()?;
+        return Ok(Json(FolderListPage { items, next_cursor }).into_response());
+    }
+
     let folders = if query.favourite {
         list_user_favourite_folders(&state.db_pool, auth.user_id)
             .await
@@ -129,7 +184,7 @@ pub async fn list_folders(
         .map_err(|e| internal_error("list folders", e))?
     };
 
-    Ok(Json(folders))
+    Ok(Json(folders).into_response())
 }
 
 pub async fn create_folder(
@@ -659,6 +714,53 @@ fn parse_optional_uuid(value: Option<&str>, field_name: &str) -> Result<Option<U
                 .map_err(|_| ApiError::BadRequest(format!("Invalid {field_name}")))
         })
         .transpose()
+}
+
+fn validate_page_limit(value: Option<i64>) -> Result<i64, ApiError> {
+    const DEFAULT_LIMIT: i64 = 100;
+    const MAX_LIMIT: i64 = 500;
+
+    let limit = value.unwrap_or(DEFAULT_LIMIT);
+    if !(1..=MAX_LIMIT).contains(&limit) {
+        return Err(ApiError::BadRequest(format!(
+            "limit must be between 1 and {MAX_LIMIT}"
+        )));
+    }
+    Ok(limit)
+}
+
+fn normalize_search_query(value: Option<&str>) -> Result<Option<String>, ApiError> {
+    const MAX_SEARCH_LEN: usize = 200;
+
+    let Some(search) = value.map(str::trim).filter(|value| !value.is_empty()) else {
+        return Ok(None);
+    };
+    if search.len() > MAX_SEARCH_LEN {
+        return Err(ApiError::BadRequest("search is too large".into()));
+    }
+    Ok(Some(search.to_string()))
+}
+
+fn decode_folder_cursor(value: &str) -> Result<FolderListPageCursor, ApiError> {
+    let decoded = general_purpose::URL_SAFE_NO_PAD
+        .decode(value.trim())
+        .map_err(|_| ApiError::BadRequest("Invalid cursor".into()))?;
+    let token: FolderCursorToken = serde_json::from_slice(&decoded)
+        .map_err(|_| ApiError::BadRequest("Invalid cursor".into()))?;
+    Ok(FolderListPageCursor {
+        name: token.name,
+        id: token.id,
+    })
+}
+
+fn encode_folder_cursor(folder: &FolderRecord) -> Result<String, ApiError> {
+    let token = FolderCursorToken {
+        name: folder.name.clone(),
+        id: folder.id,
+    };
+    let serialized =
+        serde_json::to_vec(&token).map_err(|e| internal_error("encode folder cursor", e))?;
+    Ok(general_purpose::URL_SAFE_NO_PAD.encode(serialized))
 }
 
 fn validate_folder_name(value: &str) -> Result<String, ApiError> {

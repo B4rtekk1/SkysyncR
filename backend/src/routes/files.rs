@@ -48,7 +48,10 @@ pub fn files_routes(
             post(restore_file_version),
         )
         .route("/files/{id}/activity", get(list_file_activity))
-        .route("/files/{id}/share/access", get(list_public_file_share_access))
+        .route(
+            "/files/{id}/share/access",
+            get(list_public_file_share_access),
+        )
         .route("/files/{id}/note", put(update_file_note))
         .route("/files/{id}/move", put(move_file))
         .route("/files/{id}/share", put(share_file))

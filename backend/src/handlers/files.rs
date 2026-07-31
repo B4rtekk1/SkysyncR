@@ -21,21 +21,22 @@ use uuid::Uuid;
 
 use crate::auth::AuthUser;
 use crate::db::files::{
-    FileRecord, FileShareRecord, NewFileRecord, NewFileShare, ShareRecipientRecord,
-    SharedFileRecord, UpdatedFileContent, add_user_file_favourite,
-    consume_public_file_share_for_download, create_file_record, create_file_version_snapshot_in_tx,
-    delete_user_file_share, expire_user_file_public_links,
+    FileListPageCursor, FileListPageOptions, FileRecord, FileShareRecord, NewFileRecord,
+    NewFileShare, ShareRecipientRecord, SharedFileRecord, UpdatedFileContent,
+    add_user_file_favourite, consume_public_file_share_for_download, create_file_record,
+    create_file_version_snapshot_in_tx, delete_user_file_share, expire_user_file_public_links,
     file_content_key_fingerprint_exists_in_tx, folder_belongs_to_user, get_file_share_recipient,
     get_user_file_for_content_update_in_tx, get_user_file_for_download, insert_file_audit_log,
     list_files_shared_with_user, list_public_file_share_access_events, list_user_file_audit_logs,
-    list_user_file_shares, list_user_file_versions, list_user_files, move_user_file,
-    remove_user_file_favourite, rename_user_file, restore_user_file, restore_user_file_version,
-    soft_delete_user_file, update_user_file_content, update_user_file_note, update_user_file_share,
-    update_user_file_share_keys_in_tx, upsert_user_file_share, user_file_exists,
+    list_user_file_shares, list_user_file_versions, list_user_files, list_user_files_page,
+    move_user_file, remove_user_file_favourite, rename_user_file, restore_user_file,
+    restore_user_file_version, soft_delete_user_file, update_user_file_content,
+    update_user_file_note, update_user_file_share, update_user_file_share_keys_in_tx,
+    upsert_user_file_share, user_file_exists,
 };
 use crate::db::notifications::NewNotification;
 use crate::db::storage::try_apply_storage_delta;
-use crate::observability::RequestId;
+use crate::observability::{RequestId, record_transfer_error, record_transfer_success};
 use crate::services::notifications::create_and_publish_notification;
 use crate::services::ransomware_detection::detect_and_alert_after_file_mutation;
 use crate::services::trash::permanently_delete_user_file;
@@ -50,6 +51,9 @@ pub struct ListFilesQuery {
     pub tag_id: Option<String>,
     #[serde(default)]
     pub trashed: bool,
+    pub limit: Option<i64>,
+    pub cursor: Option<String>,
+    pub search: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -120,6 +124,18 @@ pub struct UploadSessionStatus {
     pub offset: u64,
 }
 
+#[derive(Serialize)]
+pub struct FileListPage {
+    pub items: Vec<FileRecord>,
+    pub next_cursor: Option<String>,
+}
+
+#[derive(Serialize, Deserialize)]
+struct FileCursorToken {
+    updated_at: chrono::DateTime<Utc>,
+    id: Uuid,
+}
+
 struct UploadPayload {
     filename: String,
     mime_type: Option<String>,
@@ -182,6 +198,7 @@ pub async fn append_resumable_upload_chunk(
     chunk: Bytes,
 ) -> Result<Json<UploadSessionStatus>, ApiError> {
     if chunk.is_empty() {
+        record_transfer_error("resumable_upload_chunk", "empty_chunk");
         return Err(ApiError::BadRequest("Upload chunk is empty".into()));
     }
 
@@ -201,6 +218,7 @@ pub async fn append_resumable_upload_chunk(
     };
 
     if current_offset != expected_offset {
+        record_transfer_error("resumable_upload_chunk", "offset_mismatch");
         return Err(ApiError::Conflict(format!(
             "Upload offset mismatch: expected {current_offset}"
         )));
@@ -210,6 +228,7 @@ pub async fn append_resumable_upload_chunk(
         .checked_add(chunk.len() as u64)
         .ok_or_else(|| ApiError::BadRequest("File is too large".into()))?;
     if next_offset > state.config.max_file_size_bytes {
+        record_transfer_error("resumable_upload_chunk", "file_too_large");
         return Err(ApiError::BadRequest("File is too large".into()));
     }
 
@@ -225,6 +244,7 @@ pub async fn append_resumable_upload_chunk(
     file.flush()
         .await
         .map_err(|e| internal_error("flush resumable upload chunk", e))?;
+    record_transfer_success("resumable_upload_chunk", chunk.len() as i64);
 
     Ok(Json(UploadSessionStatus {
         upload_id,
@@ -242,16 +262,20 @@ pub async fn complete_resumable_upload(
 ) -> Result<(StatusCode, Json<FileRecord>), ApiError> {
     let temp_path =
         resumable_temp_storage_path_for(&state.config.upload_dir, auth.user_id, upload_id);
-    let metadata = fs::metadata(&temp_path)
-        .await
-        .map_err(|_| ApiError::BadRequest("Upload session not found".into()))?;
+    let metadata = fs::metadata(&temp_path).await.map_err(|_| {
+        record_transfer_error("resumable_upload", "session_not_found");
+        ApiError::BadRequest("Upload session not found".into())
+    })?;
     if metadata.len() == 0 {
+        record_transfer_error("resumable_upload", "empty_file");
         return Err(ApiError::BadRequest("File is empty".into()));
     }
     if metadata.len() != payload.size_bytes {
+        record_transfer_error("resumable_upload", "incomplete_upload");
         return Err(ApiError::BadRequest("Upload is incomplete".into()));
     }
     if payload.size_bytes > state.config.max_file_size_bytes {
+        record_transfer_error("resumable_upload", "file_too_large");
         return Err(ApiError::BadRequest("File is too large".into()));
     }
 
@@ -299,6 +323,7 @@ pub async fn complete_resumable_upload(
         .await
         .map_err(|e| internal_error("reserve upload storage", e))?;
     if !quota_reserved {
+        record_transfer_error("resumable_upload", "quota_exceeded");
         return Err(ApiError::BadRequest("Storage quota exceeded".into()));
     }
 
@@ -348,6 +373,7 @@ pub async fn complete_resumable_upload(
     }
 
     if let Err(err) = fs::rename(&temp_path, &storage_path).await {
+        record_transfer_error("resumable_upload", "promote_failed");
         return Err(internal_error("promote resumable uploaded file", err));
     }
 
@@ -364,6 +390,7 @@ pub async fn complete_resumable_upload(
         bytes = file_size,
         "file_transfer"
     );
+    record_transfer_success("resumable_upload", file_size);
 
     log_file_audit(
         &state,
@@ -413,7 +440,7 @@ pub async fn list_files(
     State(state): State<AppState>,
     auth: AuthUser,
     Query(query): Query<ListFilesQuery>,
-) -> Result<Json<Vec<FileRecord>>, ApiError> {
+) -> Result<Response, ApiError> {
     let root_only = query
         .folder_id
         .as_deref()
@@ -435,6 +462,37 @@ pub async fn list_files(
         .transpose()
         .map_err(|_| ApiError::BadRequest("Invalid tag_id".into()))?;
 
+    if query.limit.is_some() || query.cursor.is_some() || query.search.is_some() {
+        let limit = validate_page_limit(query.limit)?;
+        let cursor = query
+            .cursor
+            .as_deref()
+            .map(decode_file_cursor)
+            .transpose()?;
+        let search = normalize_search_query(query.search.as_deref())?;
+        let (items, has_more) = list_user_files_page(
+            &state.db_pool,
+            auth.user_id,
+            folder_id,
+            tag_id,
+            query.trashed,
+            root_only,
+            FileListPageOptions {
+                limit,
+                cursor,
+                search,
+            },
+        )
+        .await
+        .map_err(|e| internal_error("list files page", e))?;
+        let next_cursor = has_more
+            .then(|| items.last())
+            .flatten()
+            .map(encode_file_cursor)
+            .transpose()?;
+        return Ok(Json(FileListPage { items, next_cursor }).into_response());
+    }
+
     let files = list_user_files(
         &state.db_pool,
         auth.user_id,
@@ -446,7 +504,7 @@ pub async fn list_files(
     .await
     .map_err(|e| internal_error("list files", e))?;
 
-    Ok(Json(files))
+    Ok(Json(files).into_response())
 }
 
 pub async fn upload_file(
@@ -470,6 +528,7 @@ pub async fn upload_file(
             Ok(payload) => payload,
             Err(err) => {
                 let _ = fs::remove_file(&temp_path).await;
+                record_transfer_error("upload", "invalid_payload");
                 return Err(err);
             }
         };
@@ -497,6 +556,7 @@ pub async fn upload_file(
         .map_err(|e| internal_error("reserve upload storage", e))?;
     if !quota_reserved {
         let _ = fs::remove_file(&temp_path).await;
+        record_transfer_error("upload", "quota_exceeded");
         return Err(ApiError::BadRequest("Storage quota exceeded".into()));
     }
 
@@ -520,12 +580,14 @@ pub async fn upload_file(
         Ok(record) => record,
         Err(err) => {
             let _ = fs::remove_file(&temp_path).await;
+            record_transfer_error("upload", "record_create_failed");
             return Err(internal_error("create file record", err));
         }
     };
 
     if let Err(err) = fs::rename(&temp_path, &storage_path).await {
         let _ = fs::remove_file(&temp_path).await;
+        record_transfer_error("upload", "promote_failed");
         return Err(internal_error("promote uploaded file", err));
     }
 
@@ -542,6 +604,7 @@ pub async fn upload_file(
         bytes = file_size,
         "file_transfer"
     );
+    record_transfer_success("upload", file_size);
 
     log_file_audit(
         &state,
@@ -670,6 +733,7 @@ pub async fn update_file_content(
             Ok(payload) => payload,
             Err(err) => {
                 let _ = fs::remove_file(&temp_path).await;
+                record_transfer_error("update", "invalid_payload");
                 return Err(err);
             }
         };
@@ -687,10 +751,12 @@ pub async fn update_file_content(
         Ok(Some(target)) => target,
         Ok(None) => {
             let _ = fs::remove_file(&temp_path).await;
+            record_transfer_error("update", "file_not_found");
             return Err(ApiError::BadRequest("File not found".into()));
         }
         Err(err) => {
             let _ = fs::remove_file(&temp_path).await;
+            record_transfer_error("update", "record_lookup_failed");
             return Err(internal_error("get file for content update", err));
         }
     };
@@ -698,11 +764,13 @@ pub async fn update_file_content(
     if !payload.force {
         let Some(base_updated_at) = payload.base_updated_at else {
             let _ = fs::remove_file(&temp_path).await;
+            record_transfer_error("update", "missing_base_version");
             return Err(ApiError::BadRequest("Missing base_updated_at".into()));
         };
 
         if base_updated_at != target.updated_at {
             let _ = fs::remove_file(&temp_path).await;
+            record_transfer_error("update", "version_conflict");
             return Err(ApiError::Conflict(
                 "File changed since you opened it. Refresh the preview or force save to create another version.".into(),
             ));
@@ -716,6 +784,7 @@ pub async fn update_file_content(
         .map_err(|e| internal_error("reserve updated file storage", e))?;
     if !quota_reserved {
         let _ = fs::remove_file(&temp_path).await;
+        record_transfer_error("update", "quota_exceeded");
         return Err(ApiError::BadRequest("Storage quota exceeded".into()));
     }
 
@@ -724,6 +793,7 @@ pub async fn update_file_content(
     let new_storage_path_string = new_storage_path.to_string_lossy().into_owned();
     if let Err(err) = fs::rename(&temp_path, &new_storage_path).await {
         let _ = fs::remove_file(&temp_path).await;
+        record_transfer_error("update", "promote_failed");
         return Err(internal_error("promote updated file", err));
     }
 
@@ -741,6 +811,7 @@ pub async fn update_file_content(
     })?;
     if key_already_used {
         let _ = fs::remove_file(&new_storage_path).await;
+        record_transfer_error("update", "reused_content_key");
         return Err(ApiError::BadRequest(
             "A new file encryption key is required for each file version".into(),
         ));
@@ -783,6 +854,7 @@ pub async fn update_file_content(
             })?;
     if !share_keys_updated {
         let _ = fs::remove_file(&new_storage_path).await;
+        record_transfer_error("update", "missing_share_keys");
         return Err(ApiError::BadRequest(
             "Missing rotated keys for one or more file shares".into(),
         ));
@@ -824,6 +896,7 @@ pub async fn update_file_content(
         bytes = file_size,
         "file_transfer"
     );
+    record_transfer_success("update", file_size);
 
     log_file_audit(
         &state,
@@ -1303,11 +1376,15 @@ pub async fn download_file(
     let file = get_user_file_for_download(&state.db_pool, auth.user_id, file_id)
         .await
         .map_err(|e| internal_error("get download file", e))?
-        .ok_or_else(|| ApiError::BadRequest("File not found".into()))?;
+        .ok_or_else(|| {
+            record_transfer_error("download", "file_not_found");
+            ApiError::BadRequest("File not found".into())
+        })?;
 
-    let download = fs::File::open(&file.storage_path)
-        .await
-        .map_err(|e| internal_error("open download file", e))?;
+    let download = fs::File::open(&file.storage_path).await.map_err(|e| {
+        record_transfer_error("download", "open_failed");
+        internal_error("open download file", e)
+    })?;
 
     let mut headers = HeaderMap::new();
     headers.insert(
@@ -1355,6 +1432,7 @@ pub async fn download_file(
         bytes = file.size_bytes,
         "file_transfer"
     );
+    record_transfer_success("download", file.size_bytes);
 
     Ok((headers, Body::from_stream(ReaderStream::new(download))).into_response())
 }
@@ -1389,14 +1467,16 @@ pub async fn download_public_file(
     .await
     .map_err(|e| internal_error("get public download file", e))?
     .ok_or_else(|| {
+        record_transfer_error("public_download", "share_unavailable");
         ApiError::BadRequest(
             "This share link is invalid, expired, or requires valid access details".into(),
         )
     })?;
 
-    let download = fs::File::open(&file.storage_path)
-        .await
-        .map_err(|e| internal_error("open public download file", e))?;
+    let download = fs::File::open(&file.storage_path).await.map_err(|e| {
+        record_transfer_error("public_download", "open_failed");
+        internal_error("open public download file", e)
+    })?;
 
     let mut headers = HeaderMap::new();
     headers.insert(
@@ -1443,6 +1523,7 @@ pub async fn download_public_file(
         bytes = file.size_bytes,
         "file_transfer"
     );
+    record_transfer_success("public_download", file.size_bytes);
 
     Ok((headers, Body::from_stream(ReaderStream::new(download))).into_response())
 }
@@ -1824,6 +1905,53 @@ fn parse_optional_uuid(value: Option<&str>, field_name: &str) -> Result<Option<U
                 .map_err(|_| ApiError::BadRequest(format!("Invalid {field_name}")))
         })
         .transpose()
+}
+
+fn validate_page_limit(value: Option<i64>) -> Result<i64, ApiError> {
+    const DEFAULT_LIMIT: i64 = 100;
+    const MAX_LIMIT: i64 = 500;
+
+    let limit = value.unwrap_or(DEFAULT_LIMIT);
+    if !(1..=MAX_LIMIT).contains(&limit) {
+        return Err(ApiError::BadRequest(format!(
+            "limit must be between 1 and {MAX_LIMIT}"
+        )));
+    }
+    Ok(limit)
+}
+
+fn normalize_search_query(value: Option<&str>) -> Result<Option<String>, ApiError> {
+    const MAX_SEARCH_LEN: usize = 200;
+
+    let Some(search) = value.map(str::trim).filter(|value| !value.is_empty()) else {
+        return Ok(None);
+    };
+    if search.len() > MAX_SEARCH_LEN {
+        return Err(ApiError::BadRequest("search is too large".into()));
+    }
+    Ok(Some(search.to_string()))
+}
+
+fn decode_file_cursor(value: &str) -> Result<FileListPageCursor, ApiError> {
+    let decoded = general_purpose::URL_SAFE_NO_PAD
+        .decode(value.trim())
+        .map_err(|_| ApiError::BadRequest("Invalid cursor".into()))?;
+    let token: FileCursorToken = serde_json::from_slice(&decoded)
+        .map_err(|_| ApiError::BadRequest("Invalid cursor".into()))?;
+    Ok(FileListPageCursor {
+        updated_at: token.updated_at,
+        id: token.id,
+    })
+}
+
+fn encode_file_cursor(file: &FileRecord) -> Result<String, ApiError> {
+    let token = FileCursorToken {
+        updated_at: file.updated_at,
+        id: file.id,
+    };
+    let serialized =
+        serde_json::to_vec(&token).map_err(|e| internal_error("encode file cursor", e))?;
+    Ok(general_purpose::URL_SAFE_NO_PAD.encode(serialized))
 }
 
 fn is_valid_file_encryption_nonce(value: &[u8]) -> bool {

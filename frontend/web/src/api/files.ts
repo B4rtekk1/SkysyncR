@@ -16,6 +16,7 @@ import type {
     StorageQuota,
 } from './generated'
 import {
+    ApiResponseValidationError,
     file,
     fileActivity,
     fileShare,
@@ -74,9 +75,42 @@ export type {
 }
 export { verifyBlobChecksum, type IntegrityVerificationResult } from './filesIntegrity'
 
-export async function listFiles(folderId?: string | null): Promise<ApiFile[]> {
-    const qs = folderId === null ? '?folder_id=root' : folderId ? `?folder_id=${encodeURIComponent(folderId)}` : '';
-    const res = await authenticatedFetch(`${API_BASE}files${qs}`, {
+export type ListPage<T> = {
+    items: T[]
+    next_cursor: string | null
+}
+
+export type ListFilesPageParams = {
+    folderId?: string | null | undefined
+    tagId?: string | null | undefined
+    trashed?: boolean
+    limit?: number
+    cursor?: string | null | undefined
+    search?: string
+}
+
+export type ListFoldersPageParams = {
+    parentFolderId?: string | null | undefined
+    favourite?: boolean
+    trashed?: boolean
+    limit?: number
+    cursor?: string | null | undefined
+    search?: string
+}
+
+const LIST_PAGE_SIZE = 200
+
+export async function listFilesPage(params: ListFilesPageParams = {}): Promise<ListPage<ApiFile>> {
+    const query = new URLSearchParams()
+    query.set('limit', String(params.limit ?? LIST_PAGE_SIZE))
+    if (params.folderId === null) query.set('folder_id', 'root')
+    else if (params.folderId) query.set('folder_id', params.folderId)
+    if (params.tagId) query.set('tag_id', params.tagId)
+    if (params.trashed) query.set('trashed', 'true')
+    if (params.cursor) query.set('cursor', params.cursor)
+    if (params.search?.trim()) query.set('search', params.search.trim())
+
+    const res = await authenticatedFetch(`${API_BASE}files?${query.toString()}`, {
         method: 'GET',
         cache: 'no-store',
         headers: {
@@ -89,18 +123,15 @@ export async function listFiles(folderId?: string | null): Promise<ApiFile[]> {
         throw new Error(message);
     }
 
-    return readJson(res, files, 'File[]');
+    return readJson(res, fileListPage, 'FileListPage');
+}
+
+export async function listFiles(folderId?: string | null): Promise<ApiFile[]> {
+    return collectPages((cursor) => listFilesPage({ folderId, cursor }))
 }
 
 export async function listTrash(): Promise<ApiFile[]> {
-    const res = await authenticatedFetch(`${API_BASE}files?trashed=true`, {
-        method: 'GET',
-    })
-    if (!res.ok) {
-        const message = await parseErrorMessage(res);
-        throw new Error(message);
-    }
-    return readJson(res, files, 'File[]');
+    return collectPages((cursor) => listFilesPage({ trashed: true, cursor }))
 }
 
 export async function listSharedFilesWithMe(): Promise<SharedFile[]> {
@@ -200,12 +231,15 @@ export async function deleteFileShare(fileId: string, shareId: string): Promise<
     if (!res.ok) throw new Error(await parseErrorMessage(res))
 }
 
-export async function listFolders(parentFolderId?: string, favourite = false): Promise<ApiFolder[]> {
+export async function listFoldersPage(pageParams: ListFoldersPageParams = {}): Promise<ListPage<ApiFolder>> {
     const params = new URLSearchParams()
-    if (parentFolderId) params.set('parent_folder_id', parentFolderId)
-    if (favourite) params.set('favourite', 'true')
-    const qs = params.toString() ? `?${params.toString()}` : ''
-    const res = await authenticatedFetch(`${API_BASE}folders${qs}`, {
+    params.set('limit', String(pageParams.limit ?? LIST_PAGE_SIZE))
+    if (pageParams.parentFolderId) params.set('parent_folder_id', pageParams.parentFolderId)
+    if (pageParams.favourite) params.set('favourite', 'true')
+    if (pageParams.trashed) params.set('trashed', 'true')
+    if (pageParams.cursor) params.set('cursor', pageParams.cursor)
+    if (pageParams.search?.trim()) params.set('search', pageParams.search.trim())
+    const res = await authenticatedFetch(`${API_BASE}folders?${params.toString()}`, {
         method: 'GET',
         cache: 'no-store',
         headers: {
@@ -218,7 +252,11 @@ export async function listFolders(parentFolderId?: string, favourite = false): P
         throw new Error(message);
     }
 
-    return readJson(res, folders, 'Folder[]');
+    return readJson(res, folderListPage, 'FolderListPage');
+}
+
+export async function listFolders(parentFolderId?: string, favourite = false): Promise<ApiFolder[]> {
+    return collectPages((cursor) => listFoldersPage({ parentFolderId, favourite, cursor }))
 }
 
 export async function createFolder(params: {
@@ -776,6 +814,52 @@ async function readVerifiedDownload(res: Response): Promise<VerifiedDownload> {
         blob,
         checksum,
         integrity: await verifyBlobChecksum(blob, checksum),
+    }
+}
+
+async function collectPages<T>(loadPage: (cursor: string | null) => Promise<ListPage<T>>): Promise<T[]> {
+    const collected: T[] = []
+    let cursor: string | null = null
+
+    do {
+        const page = await loadPage(cursor)
+        collected.push(...page.items)
+        cursor = page.next_cursor
+    } while (cursor)
+
+    return collected
+}
+
+function fileListPage(value: unknown, path: string): ListPage<ApiFile> {
+    return listPage(value, path, files)
+}
+
+function folderListPage(value: unknown, path: string): ListPage<ApiFolder> {
+    return listPage(value, path, folders)
+}
+
+function listPage<T>(
+    value: unknown,
+    path: string,
+    itemsValidator: (value: unknown, path: string) => T[],
+): ListPage<T> {
+    if (Array.isArray(value)) {
+        return {
+            items: itemsValidator(value, path),
+            next_cursor: null,
+        }
+    }
+    if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+        throw new ApiResponseValidationError(`${path}: expected object`)
+    }
+    const item = value as Record<string, unknown>
+    const nextCursor = item.next_cursor ?? null
+    if (nextCursor !== null && typeof nextCursor !== 'string') {
+        throw new ApiResponseValidationError(`${path}.next_cursor: expected string or null`)
+    }
+    return {
+        items: itemsValidator(item.items, `${path}.items`),
+        next_cursor: nextCursor,
     }
 }
 

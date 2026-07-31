@@ -9,7 +9,8 @@ use skysyncr::db::files::{
     update_user_file_share_keys_in_tx, upsert_user_file_share,
 };
 use skysyncr::db::refresh_tokens::{
-    RefreshTokenAuth, authenticate_refresh_token, create_refresh_token, rotate_refresh_token,
+    RefreshTokenAuth, authenticate_refresh_token, create_refresh_token,
+    rotate_recent_refresh_token_reuse, rotate_refresh_token,
 };
 use skysyncr::db::storage::{get_storage_quota, try_apply_storage_delta};
 use skysyncr::db::users::{
@@ -499,9 +500,10 @@ async fn refresh_token_rotation_revokes_old_token_and_accepts_new_token() {
         user_agent: Some("test-agent"),
         ip_address: Some("127.0.0.1"),
     };
-    let (session_id, session_expires_at) = create_refresh_token(&pool, user_id, old_token, metadata)
-        .await
-        .unwrap();
+    let (session_id, session_expires_at) =
+        create_refresh_token(&pool, user_id, old_token, metadata)
+            .await
+            .unwrap();
 
     let valid = authenticate_refresh_token(&pool, old_token).await.unwrap();
     let RefreshTokenAuth::Valid(stored) = valid else {
@@ -536,6 +538,72 @@ async fn refresh_token_rotation_revokes_old_token_and_accepts_new_token() {
             );
         }
         _ => panic!("new token should be valid"),
+    }
+}
+
+#[tokio::test]
+async fn recent_refresh_token_reuse_rotates_active_session_token() {
+    let (_guard, pool) = test_pool().await;
+    let user_id = insert_user(&pool, "refresh-race@example.test").await;
+    let old_token = "old-refresh-race-token";
+    let first_rotated_token = "first-rotated-refresh-token";
+    let race_recovery_token = "race-recovery-refresh-token";
+
+    let metadata = skysyncr::db::refresh_tokens::RefreshTokenMetadata {
+        device_id: Some("test-device-id"),
+        device_label: Some("Test browser on Linux"),
+        user_agent: Some("test-agent"),
+        ip_address: Some("127.0.0.1"),
+    };
+    let (session_id, session_expires_at) =
+        create_refresh_token(&pool, user_id, old_token, metadata)
+            .await
+            .unwrap();
+
+    let RefreshTokenAuth::Valid(stored) =
+        authenticate_refresh_token(&pool, old_token).await.unwrap()
+    else {
+        panic!("old token should start valid");
+    };
+
+    rotate_refresh_token(
+        &pool,
+        stored.id,
+        user_id,
+        session_id,
+        first_rotated_token,
+        session_expires_at,
+        metadata,
+    )
+    .await
+    .unwrap();
+
+    let recovered =
+        rotate_recent_refresh_token_reuse(&pool, old_token, race_recovery_token, metadata)
+            .await
+            .unwrap()
+            .expect("recent duplicate refresh should recover the session");
+
+    assert_eq!(recovered.user_id, user_id);
+    assert_eq!(recovered.session_id, session_id);
+
+    match authenticate_refresh_token(&pool, first_rotated_token)
+        .await
+        .unwrap()
+    {
+        RefreshTokenAuth::ReuseDetected { user_id: detected } => assert_eq!(detected, user_id),
+        _ => panic!("first rotated token should be revoked by race recovery"),
+    }
+
+    match authenticate_refresh_token(&pool, race_recovery_token)
+        .await
+        .unwrap()
+    {
+        RefreshTokenAuth::Valid(rotated) => {
+            assert_eq!(rotated.user_id, user_id);
+            assert_eq!(rotated.session_id, session_id);
+        }
+        _ => panic!("race recovery token should be valid"),
     }
 }
 

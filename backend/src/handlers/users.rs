@@ -10,8 +10,8 @@ use crate::db::refresh_tokens::{
     RefreshTokenAuth, RefreshTokenMetadata, ValidRefreshToken, authenticate_refresh_token,
     create_refresh_token, insert_refresh_token_activity, list_active_user_sessions,
     list_user_session_activity, revoke_all_user_refresh_tokens, revoke_refresh_token,
-    revoke_user_device_refresh_tokens, revoke_user_session, rotate_refresh_token,
-    update_active_device_label, update_user_session_trust,
+    revoke_user_device_refresh_tokens, revoke_user_session, rotate_recent_refresh_token_reuse,
+    rotate_refresh_token, update_active_device_label, update_user_session_trust,
 };
 use crate::db::totp::{
     consume_login_challenge, create_login_challenge, delete_totp, enable_totp, get_login_challenge,
@@ -31,9 +31,9 @@ use crate::utils::validation::{
 };
 use axum::{
     Json,
+    body::Body,
     extract::{Path, State},
     http::{HeaderMap, HeaderName, HeaderValue, header},
-    body::Body,
     response::{IntoResponse, Response},
 };
 use base64::{Engine as _, engine::general_purpose};
@@ -1128,7 +1128,52 @@ pub async fn refresh_tokens(
     State(state): State<AppState>,
 ) -> Result<Response, ApiError> {
     let refresh_token = refresh_token_from_cookie(&headers)?;
-    let stored = require_refresh_token(&state, &refresh_token).await?;
+    let new_refresh_token = generate_refresh_token();
+    let persistent = has_cookie(&headers, REFRESH_PERSISTENCE_COOKIE);
+    let (device_id, device_label, user_agent, ip_address) = request_metadata_values(&headers);
+    let metadata = owned_refresh_metadata(&device_id, &device_label, &user_agent, &ip_address);
+
+    let stored = match authenticate_refresh_token(&state.db_pool, &refresh_token)
+        .await
+        .map_err(|e| internal_error("authenticate refresh token", e))?
+    {
+        RefreshTokenAuth::Valid(stored) => {
+            rotate_refresh_token(
+                &state.db_pool,
+                stored.id,
+                stored.user_id,
+                stored.session_id,
+                &new_refresh_token,
+                stored.session_expires_at,
+                metadata,
+            )
+            .await
+            .map_err(|e| internal_error("rotate refresh token", e))?;
+            stored
+        }
+        RefreshTokenAuth::ReuseDetected { user_id } => match rotate_recent_refresh_token_reuse(
+            &state.db_pool,
+            &refresh_token,
+            &new_refresh_token,
+            metadata,
+        )
+        .await
+        .map_err(|e| internal_error("recover refresh token race", e))?
+        {
+            Some(stored) => stored,
+            None => {
+                revoke_all_user_refresh_tokens(&state.db_pool, user_id)
+                    .await
+                    .map_err(|e| internal_error("revoke sessions after token anomaly", e))?;
+                return Err(ApiError::Unauthorized("Session invalid".into()));
+            }
+        },
+        RefreshTokenAuth::NotFound => {
+            return Err(ApiError::Unauthorized(
+                "Invalid or expired refresh token".into(),
+            ));
+        }
+    };
 
     let (access_token, expires_in) = generate_access_token_capped(
         &stored.user_id.to_string(),
@@ -1136,22 +1181,6 @@ pub async fn refresh_tokens(
         stored.session_expires_at,
     )
     .map_err(|e| internal_error("generate access token", e))?;
-
-    let new_refresh_token = generate_refresh_token();
-    let persistent = has_cookie(&headers, REFRESH_PERSISTENCE_COOKIE);
-    let (device_id, device_label, user_agent, ip_address) = request_metadata_values(&headers);
-    let metadata = owned_refresh_metadata(&device_id, &device_label, &user_agent, &ip_address);
-    rotate_refresh_token(
-        &state.db_pool,
-        stored.id,
-        stored.user_id,
-        stored.session_id,
-        &new_refresh_token,
-        stored.session_expires_at,
-        metadata,
-    )
-    .await
-    .map_err(|e| internal_error("rotate refresh token", e))?;
 
     let mut response_headers = HeaderMap::new();
     response_headers.append(

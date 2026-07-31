@@ -1,7 +1,7 @@
 use base64::{Engine as _, engine::general_purpose};
 use chrono::{DateTime, Utc};
 use serde::{Serialize, Serializer};
-use sqlx::{FromRow, PgPool, Postgres, Row, Transaction};
+use sqlx::{FromRow, PgPool, Postgres, QueryBuilder, Row, Transaction};
 use uuid::Uuid;
 
 use super::file_records::{DownloadFileRecord, FileRecord};
@@ -76,6 +76,17 @@ pub struct NewFolderShare {
     pub recipient_email: String,
     pub permission: String,
     pub encrypted_key: Vec<u8>,
+}
+
+pub struct FolderListPageCursor {
+    pub name: String,
+    pub id: Uuid,
+}
+
+pub struct FolderListPageOptions {
+    pub limit: i64,
+    pub cursor: Option<FolderListPageCursor>,
+    pub search: Option<String>,
 }
 
 #[derive(FromRow)]
@@ -178,6 +189,28 @@ pub async fn list_user_folders(
     .await
 }
 
+pub async fn list_user_folders_page(
+    pool: &PgPool,
+    user_id: Uuid,
+    parent_folder_id: Option<Uuid>,
+    trashed: bool,
+    options: FolderListPageOptions,
+) -> Result<(Vec<FolderRecord>, bool), sqlx::Error> {
+    let fetch_limit = options.limit + 1;
+    let mut query_builder = folder_page_query(user_id);
+    query_builder.push(" WHERE f.owner_id = ");
+    query_builder.push_bind(user_id);
+    query_builder.push(" AND f.is_deleted = ");
+    query_builder.push_bind(trashed);
+    query_builder.push(" AND ((");
+    query_builder.push_bind(parent_folder_id);
+    query_builder.push("::uuid IS NULL AND f.parent_folder_id IS NULL) OR f.parent_folder_id = ");
+    query_builder.push_bind(parent_folder_id);
+    query_builder.push(")");
+    append_folder_page_filters(&mut query_builder, options, fetch_limit);
+    fetch_folder_page(pool, query_builder, fetch_limit).await
+}
+
 pub async fn list_user_favourite_folders(
     pool: &PgPool,
     user_id: Uuid,
@@ -237,6 +270,131 @@ pub async fn list_user_favourite_folders(
     .bind(user_id)
     .fetch_all(pool)
     .await
+}
+
+pub async fn list_user_favourite_folders_page(
+    pool: &PgPool,
+    user_id: Uuid,
+    options: FolderListPageOptions,
+) -> Result<(Vec<FolderRecord>, bool), sqlx::Error> {
+    let fetch_limit = options.limit + 1;
+    let mut query_builder = folder_page_query(user_id);
+    query_builder.push(
+        r#"
+        JOIN favorites fav_match ON fav_match.folder_id = f.id AND fav_match.user_id = "#,
+    );
+    query_builder.push_bind(user_id);
+    query_builder.push(" WHERE f.owner_id = ");
+    query_builder.push_bind(user_id);
+    query_builder.push(" AND f.is_deleted = FALSE");
+    append_folder_page_filters(&mut query_builder, options, fetch_limit);
+    fetch_folder_page(pool, query_builder, fetch_limit).await
+}
+
+fn folder_page_query(user_id: Uuid) -> QueryBuilder<Postgres> {
+    let mut query_builder = QueryBuilder::<Postgres>::new(
+        r#"
+        SELECT
+            f.id,
+            f.name,
+            f.description,
+            f.parent_folder_id,
+            f.is_public,
+            f.share_token,
+            f.share_starts_at,
+            f.share_expires_at,
+            f.share_download_limit,
+            f.share_download_count,
+            f.share_one_time,
+            (f.share_password_hash IS NOT NULL) AS share_password_enabled,
+            f.share_recipient_email,
+            f.created_at,
+            f.updated_at,
+            f.is_deleted,
+            f.deleted_at,
+            COUNT(files.id)::bigint AS file_count,
+            EXISTS (
+                SELECT 1
+                FROM favorites fav
+                WHERE fav.user_id = "#,
+    );
+    query_builder.push_bind(user_id);
+    query_builder.push(
+        r#"
+                  AND fav.folder_id = f.id
+            ) AS is_favourite,
+            f.encrypted_key
+        FROM folders f
+        LEFT JOIN files
+          ON files.folder_id = f.id
+         AND files.owner_id = f.owner_id
+         AND files.is_deleted = f.is_deleted
+        "#,
+    );
+    query_builder
+}
+
+fn append_folder_page_filters(
+    query_builder: &mut QueryBuilder<Postgres>,
+    options: FolderListPageOptions,
+    limit: i64,
+) {
+    if let Some(search) = options.search.as_deref() {
+        query_builder.push(" AND (f.name ILIKE ");
+        query_builder.push_bind(format!("%{search}%"));
+        query_builder.push(" OR f.description ILIKE ");
+        query_builder.push_bind(format!("%{search}%"));
+        query_builder.push(")");
+    }
+
+    if let Some(cursor) = options.cursor {
+        query_builder.push(" AND (f.name, f.id) > (");
+        query_builder.push_bind(cursor.name);
+        query_builder.push(", ");
+        query_builder.push_bind(cursor.id);
+        query_builder.push(")");
+    }
+
+    query_builder.push(
+        r#"
+        GROUP BY
+            f.id,
+            f.name,
+            f.description,
+            f.parent_folder_id,
+            f.is_public,
+            f.share_token,
+            f.share_starts_at,
+            f.share_expires_at,
+            f.share_download_limit,
+            f.share_download_count,
+            f.share_one_time,
+            f.share_password_hash,
+            f.share_recipient_email,
+            f.created_at,
+            f.updated_at,
+            f.encrypted_key
+        ORDER BY f.name ASC, f.id ASC
+        LIMIT "#,
+    );
+    query_builder.push_bind(limit);
+}
+
+async fn fetch_folder_page(
+    pool: &PgPool,
+    mut query_builder: QueryBuilder<Postgres>,
+    fetch_limit: i64,
+) -> Result<(Vec<FolderRecord>, bool), sqlx::Error> {
+    let page_limit = fetch_limit - 1;
+    let mut rows = query_builder
+        .build_query_as::<FolderRecord>()
+        .fetch_all(pool)
+        .await?;
+    let has_more = rows.len() > page_limit as usize;
+    if has_more {
+        rows.truncate(page_limit as usize);
+    }
+    Ok((rows, has_more))
 }
 
 pub async fn create_folder_record(

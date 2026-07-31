@@ -1,12 +1,32 @@
 use sqlx::{PgPool, Postgres, Transaction};
+use std::time::Instant;
 use uuid::Uuid;
+
+use crate::observability::observe_db_latency;
 
 pub struct StorageQuota {
     pub total_bytes: i64,
     pub used_bytes: i64,
 }
 
+pub struct StorageOverview {
+    pub users: i64,
+    pub total_bytes: i64,
+    pub used_bytes: i64,
+}
+
+impl StorageOverview {
+    pub fn usage_ratio(&self) -> Option<f64> {
+        if self.total_bytes > 0 {
+            Some(self.used_bytes as f64 / self.total_bytes as f64)
+        } else {
+            None
+        }
+    }
+}
+
 pub async fn ensure_storage_quota_row(pool: &PgPool, user_id: Uuid) -> Result<(), sqlx::Error> {
+    let started = Instant::now();
     sqlx::query!(
         r#"
         INSERT INTO storage_quotas (user_id)
@@ -17,6 +37,7 @@ pub async fn ensure_storage_quota_row(pool: &PgPool, user_id: Uuid) -> Result<()
     )
     .execute(pool)
     .await?;
+    observe_db_latency("storage.ensure_quota", started.elapsed());
 
     Ok(())
 }
@@ -24,6 +45,7 @@ pub async fn ensure_storage_quota_row(pool: &PgPool, user_id: Uuid) -> Result<()
 pub async fn get_storage_quota(pool: &PgPool, user_id: Uuid) -> Result<StorageQuota, sqlx::Error> {
     ensure_storage_quota_row(pool, user_id).await?;
 
+    let started = Instant::now();
     let row = sqlx::query!(
         r#"
         SELECT
@@ -36,6 +58,7 @@ pub async fn get_storage_quota(pool: &PgPool, user_id: Uuid) -> Result<StorageQu
     )
     .fetch_one(pool)
     .await?;
+    observe_db_latency("storage.get_quota", started.elapsed());
 
     Ok(StorageQuota {
         total_bytes: row.total_bytes,
@@ -47,6 +70,7 @@ pub async fn ensure_storage_quota_row_in_tx(
     tx: &mut Transaction<'_, Postgres>,
     user_id: Uuid,
 ) -> Result<(), sqlx::Error> {
+    let started = Instant::now();
     sqlx::query(
         r#"
         INSERT INTO storage_quotas (user_id)
@@ -57,6 +81,7 @@ pub async fn ensure_storage_quota_row_in_tx(
     .bind(user_id)
     .execute(&mut **tx)
     .await?;
+    observe_db_latency("storage.ensure_quota_tx", started.elapsed());
 
     Ok(())
 }
@@ -68,6 +93,7 @@ pub async fn try_apply_storage_delta(
 ) -> Result<bool, sqlx::Error> {
     ensure_storage_quota_row_in_tx(tx, user_id).await?;
 
+    let started = Instant::now();
     let row = sqlx::query(
         r#"
         UPDATE storage_quotas
@@ -83,11 +109,13 @@ pub async fn try_apply_storage_delta(
     .bind(delta_bytes)
     .fetch_optional(&mut **tx)
     .await?;
+    observe_db_latency("storage.apply_delta", started.elapsed());
 
     Ok(row.is_some())
 }
 
 pub async fn reconcile_all_storage_quotas(pool: &PgPool) -> Result<u64, sqlx::Error> {
+    let started = Instant::now();
     let result = sqlx::query(
         r#"
         UPDATE storage_quotas sq
@@ -106,6 +134,29 @@ pub async fn reconcile_all_storage_quotas(pool: &PgPool) -> Result<u64, sqlx::Er
     )
     .execute(pool)
     .await?;
+    observe_db_latency("storage.reconcile_all", started.elapsed());
 
     Ok(result.rows_affected())
+}
+
+pub async fn get_storage_overview(pool: &PgPool) -> Result<StorageOverview, sqlx::Error> {
+    let started = Instant::now();
+    let row = sqlx::query_as::<_, (i64, i64, i64)>(
+        r#"
+        SELECT
+            COUNT(*)::bigint AS users,
+            COALESCE(SUM(max_bytes), 0)::bigint AS total_bytes,
+            COALESCE(SUM(used_bytes), 0)::bigint AS used_bytes
+        FROM storage_quotas
+        "#,
+    )
+    .fetch_one(pool)
+    .await?;
+    observe_db_latency("storage.overview", started.elapsed());
+
+    Ok(StorageOverview {
+        users: row.0,
+        total_bytes: row.1,
+        used_bytes: row.2,
+    })
 }
