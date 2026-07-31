@@ -1,5 +1,5 @@
 import { useCallback } from 'react'
-import { downloadFileWithIntegrity, listFiles, listFolders, verifyBlobChecksum, type ApiFile, type ApiFolder } from '../../../api/files'
+import { downloadFileWithIntegrity, listFiles, listFolders, type ApiFile, type ApiFolder } from '../../../api/files'
 import {
     decryptFile,
     decryptFileStream,
@@ -38,8 +38,7 @@ export function useFolderDownload(privateKey: CryptoKey | null, setError: (error
             throw new Error('File encryption metadata is missing.')
         }
 
-        const { blob: encryptedBlob, checksum } = await downloadFileWithIntegrity(item.id)
-        await verifyBlobChecksum(encryptedBlob, checksum)
+        const { blob: encryptedBlob } = await downloadFileWithIntegrity(item.id)
         const fileKey = await unwrapFileKeyForUser(item.encrypted_key, privateKey)
         if (isChunkedFileNonce(item.encryption_nonce)) {
             return streamToBlob(decryptFileStream(encryptedBlob, fileKey, item.encryption_nonce), item.mime_type)

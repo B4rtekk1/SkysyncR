@@ -5,7 +5,6 @@ import {
     listFiles,
     listFileShares,
     updateFileContent,
-    verifyBlobChecksum,
     type ApiFile,
 } from '../../../api/files'
 import {
@@ -81,8 +80,7 @@ export function useFilePreview(
     }, [privateKey])
 
     const decryptDownloadedFile = useCallback(async (item: Item): Promise<Blob> => {
-        const { blob: encryptedBlob, checksum } = await downloadFileWithIntegrity(item.id)
-        await verifyBlobChecksum(encryptedBlob, checksum)
+        const { blob: encryptedBlob } = await downloadFileWithIntegrity(item.id)
         return decryptEncryptedBlob(item, encryptedBlob)
     }, [decryptEncryptedBlob])
 
@@ -140,9 +138,8 @@ export function useFilePreview(
             if (transferId) transferHistory?.updateDownloadTransfer(transferId, patch)
         }
         try {
-            const { blob: encryptedBlob, checksum } = await downloadFileWithIntegrity(item.id)
+            const { blob: encryptedBlob, integrity } = await downloadFileWithIntegrity(item.id)
             updateTransfer({ status: 'verifying' })
-            const integrity = await verifyBlobChecksum(encryptedBlob, checksum)
             updateTransfer({ status: 'decrypting', integrity })
             const blob = await decryptEncryptedBlob(item, encryptedBlob)
             const url = URL.createObjectURL(blob)

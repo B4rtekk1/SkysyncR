@@ -78,6 +78,7 @@ type DashboardModalsProps = {
         expiresAt?: string | null,
         oneTime?: boolean,
     ) => Promise<unknown>
+    onExpireFileLinks: (item: Item) => Promise<unknown>
 }
 
 function ModalFallback() {
@@ -168,6 +169,7 @@ export function DashboardModals({
     onCloseShare,
     onSetFileSharing,
     onSetFolderSharing,
+    onExpireFileLinks,
 }: DashboardModalsProps) {
     const [publicShareUrl, setPublicShareUrl] = useState<string | null>(null)
     const [publicShareUrlError, setPublicShareUrlError] = useState<string | null>(null)
@@ -311,6 +313,9 @@ export function DashboardModals({
                                 await onSetFolderSharing(shareItem, false)
                             }
                         }}
+                        onExpireFileLinks={'filename' in shareItem ? async () => {
+                            await onExpireFileLinks(shareItem)
+                        } : undefined}
                     />
                 </Suspense>
             )}

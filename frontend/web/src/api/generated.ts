@@ -200,6 +200,15 @@ export type FileAudit = {
   "created_at": string
 }
 
+export type PublicFileShareAccess = {
+  "id": string
+  "file_id": string
+  "share_token": string
+  "recipient_email": string | null
+  "user_agent": string | null
+  "accessed_at": string
+}
+
 export type Folder = {
   "id": string
   "name": string

@@ -6,7 +6,6 @@ import {
   downloadPublicFile,
   downloadPublicFolderFile,
   getPublicFolderManifest,
-  verifyBlobChecksum,
   type ApiFile,
   type ApiFolder,
   type PublicFileAccessDetails,
@@ -117,7 +116,6 @@ function PublicShare() {
       }
 
       const file = await downloadPublicFile(shareToken, accessDetails ?? {})
-      await verifyBlobChecksum(file.blob, file.checksum)
       if (!file.encryptionNonce) {
         throw new Error('This secure share link is missing encryption metadata.')
       }
@@ -175,7 +173,6 @@ function PublicShare() {
       async function openFileEntry(entry: PublicFolderDownloadEntry): Promise<Blob> {
         const fileKey = await importKey(entry.rawKey)
         const downloaded = await downloadPublicFolderFile(shareToken, entry.file.id, accessDetails ?? {})
-        await verifyBlobChecksum(downloaded.blob, downloaded.checksum)
         if (!downloaded.encryptionNonce) {
           throw new Error('This secure folder link is missing encryption metadata.')
         }

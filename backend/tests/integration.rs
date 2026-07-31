@@ -959,13 +959,19 @@ async fn public_file_share_download_consumes_limit_atomically() {
     .await
     .unwrap();
 
-    let download = consume_public_file_share_for_download(&pool, &share_token, None, None)
+    let download = consume_public_file_share_for_download(
+        &pool,
+        &share_token,
+        None,
+        None,
+        Some("integration-test-agent"),
+    )
         .await
         .unwrap()
         .expect("first public download should be allowed");
     assert_eq!(download.filename, "public.txt");
 
-    let blocked = consume_public_file_share_for_download(&pool, &share_token, None, None)
+    let blocked = consume_public_file_share_for_download(&pool, &share_token, None, None, None)
         .await
         .unwrap();
     assert!(blocked.is_none());
@@ -977,6 +983,17 @@ async fn public_file_share_download_consumes_limit_atomically() {
             .await
             .unwrap();
     assert_eq!(count, 1);
+
+    let event =
+        sqlx::query_as::<_, (String, Option<String>)>(
+            "SELECT share_token, user_agent FROM public_file_share_access_events WHERE file_id = $1",
+        )
+        .bind(file.id)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(event.0, share_token);
+    assert_eq!(event.1.as_deref(), Some("integration-test-agent"));
 }
 
 #[tokio::test]
@@ -1025,7 +1042,7 @@ async fn public_file_share_requires_password_and_recipient_email_when_configured
     .unwrap();
 
     assert!(
-        consume_public_file_share_for_download(&pool, &share_token, None, None)
+        consume_public_file_share_for_download(&pool, &share_token, None, None, None)
             .await
             .unwrap()
             .is_none()
@@ -1036,6 +1053,7 @@ async fn public_file_share_requires_password_and_recipient_email_when_configured
             &share_token,
             Some("wrong password"),
             Some("recipient@example.test"),
+            None,
         )
         .await
         .unwrap()
@@ -1047,6 +1065,7 @@ async fn public_file_share_requires_password_and_recipient_email_when_configured
             &share_token,
             Some("correct horse"),
             Some("other@example.test"),
+            None,
         )
         .await
         .unwrap()
@@ -1058,6 +1077,7 @@ async fn public_file_share_requires_password_and_recipient_email_when_configured
         &share_token,
         Some("correct horse"),
         Some("Recipient@Example.Test"),
+        Some("protected-test-agent"),
     )
     .await
     .unwrap()
@@ -1071,4 +1091,15 @@ async fn public_file_share_requires_password_and_recipient_email_when_configured
             .await
             .unwrap();
     assert_eq!(count, 1);
+
+    let event =
+        sqlx::query_as::<_, (Option<String>, Option<String>)>(
+            "SELECT recipient_email, user_agent FROM public_file_share_access_events WHERE file_id = $1",
+        )
+        .bind(file.id)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(event.0.as_deref(), Some("recipient@example.test"));
+    assert_eq!(event.1.as_deref(), Some("protected-test-agent"));
 }

@@ -24,9 +24,10 @@ use crate::db::files::{
     FileRecord, FileShareRecord, NewFileRecord, NewFileShare, ShareRecipientRecord,
     SharedFileRecord, UpdatedFileContent, add_user_file_favourite,
     consume_public_file_share_for_download, create_file_record, create_file_version_snapshot_in_tx,
-    delete_user_file_share, file_content_key_fingerprint_exists_in_tx, folder_belongs_to_user,
-    get_file_share_recipient, get_user_file_for_content_update_in_tx, get_user_file_for_download,
-    insert_file_audit_log, list_files_shared_with_user, list_user_file_audit_logs,
+    delete_user_file_share, expire_user_file_public_links,
+    file_content_key_fingerprint_exists_in_tx, folder_belongs_to_user, get_file_share_recipient,
+    get_user_file_for_content_update_in_tx, get_user_file_for_download, insert_file_audit_log,
+    list_files_shared_with_user, list_public_file_share_access_events, list_user_file_audit_logs,
     list_user_file_shares, list_user_file_versions, list_user_files, move_user_file,
     remove_user_file_favourite, rename_user_file, restore_user_file, restore_user_file_version,
     soft_delete_user_file, update_user_file_content, update_user_file_note, update_user_file_share,
@@ -889,6 +890,19 @@ pub async fn list_file_activity(
     Ok(Json(logs))
 }
 
+pub async fn list_public_file_share_access(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Path(file_id): Path<Uuid>,
+) -> Result<Json<Vec<crate::db::files::PublicFileShareAccessRecord>>, ApiError> {
+    ensure_user_file_exists(&state, auth.user_id, file_id).await?;
+    let events = list_public_file_share_access_events(&state.db_pool, auth.user_id, file_id)
+        .await
+        .map_err(|e| internal_error("list public share access", e))?;
+
+    Ok(Json(events))
+}
+
 pub async fn share_file(
     State(state): State<AppState>,
     auth: AuthUser,
@@ -955,6 +969,19 @@ pub async fn share_file(
     .await
     .map_err(|e| internal_error("share file", e))?
     .ok_or_else(|| ApiError::BadRequest("File not found".into()))?;
+
+    Ok(Json(file))
+}
+
+pub async fn expire_public_file_links(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Path(file_id): Path<Uuid>,
+) -> Result<Json<FileRecord>, ApiError> {
+    let file = expire_user_file_public_links(&state.db_pool, auth.user_id, file_id)
+        .await
+        .map_err(|e| internal_error("expire public file links", e))?
+        .ok_or_else(|| ApiError::BadRequest("File not found".into()))?;
 
     Ok(Json(file))
 }
@@ -1332,6 +1359,7 @@ pub async fn download_file(
 pub async fn download_public_file(
     State(state): State<AppState>,
     Extension(request_id): Extension<RequestId>,
+    headers: HeaderMap,
     Path(share_token): Path<String>,
     payload: Option<Json<PublicFileDownloadRequest>>,
 ) -> Result<Response, ApiError> {
@@ -1351,6 +1379,7 @@ pub async fn download_public_file(
         &share_token,
         password,
         recipient_email.as_deref(),
+        headers.get(USER_AGENT).and_then(|value| value.to_str().ok()),
     )
     .await
     .map_err(|e| internal_error("get public download file", e))?

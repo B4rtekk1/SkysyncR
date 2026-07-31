@@ -1,5 +1,6 @@
 import { authenticatedFetch, getValidAccessToken } from './auth'
 import { apiFetch } from './http'
+import { verifyBlobChecksum, type IntegrityVerificationResult } from './filesIntegrity'
 import type {
     File as ApiFile,
     FileAudit,
@@ -8,6 +9,7 @@ import type {
     FileVersion,
     Folder as ApiFolder,
     FolderPointRestoreResult,
+    PublicFileShareAccess,
     ShareRecipient as FileShareRecipient,
     SharedFile,
     StorageQuota,
@@ -23,13 +25,15 @@ import {
     folderPointRestoreResult,
     folders,
     parseApiErrorBody,
+    publicFileShareAccessEvents,
     readJson,
     shareRecipient,
     sharedFiles,
     storageQuota,
 } from './validators'
 
-const API_BASE = import.meta.env.VITE_API_BASE ?? 'http://localhost:3000/'
+const API_BASE = import.meta.env?.VITE_API_BASE ?? 'http://localhost:3000/'
+const DOWNLOAD_CHECKSUM_HEADER = 'x-skysyncr-sha256'
 
 async function parseErrorMessage(response: Response): Promise<string> {
     try {
@@ -61,9 +65,11 @@ export type {
     FileShareRecipient,
     FileVersion,
     FolderPointRestoreResult,
+    PublicFileShareAccess,
     SharedFile,
     StorageQuota,
 }
+export { verifyBlobChecksum, type IntegrityVerificationResult } from './filesIntegrity'
 
 export async function listFiles(folderId?: string | null): Promise<ApiFile[]> {
     const qs = folderId === null ? '?folder_id=root' : folderId ? `?folder_id=${encodeURIComponent(folderId)}` : '';
@@ -528,6 +534,22 @@ export async function shareFile(
     return readJson(res, file, 'File')
 }
 
+export async function listPublicFileShareAccess(fileId: string): Promise<PublicFileShareAccess[]> {
+    const res = await authenticatedFetch(`${API_BASE}files/${fileId}/share/access`, {
+        method: 'GET',
+    })
+    if (!res.ok) throw new Error(await parseErrorMessage(res))
+    return readJson(res, publicFileShareAccessEvents, 'PublicFileShareAccess[]')
+}
+
+export async function expirePublicFileLinks(fileId: string): Promise<ApiFile> {
+    const res = await authenticatedFetch(`${API_BASE}files/${fileId}/share/expire`, {
+        method: 'POST',
+    })
+    if (!res.ok) throw new Error(await parseErrorMessage(res))
+    return readJson(res, file, 'File')
+}
+
 export async function setFileFavourite(id: string, isFavourite: boolean): Promise<void> {
     const res = await authenticatedFetch(`${API_BASE}files/${id}/favorite`, {
         method: isFavourite ? 'PUT' : 'DELETE',
@@ -590,12 +612,13 @@ export async function downloadFile(id: string): Promise<Blob> {
         method: 'GET',
     })
     if (!res.ok) throw new Error(await parseErrorMessage(res))
-    return res.blob()
+    return (await readVerifiedDownload(res)).blob
 }
 
 export type VerifiedDownload = {
     blob: Blob
     checksum: string | null
+    integrity: IntegrityVerificationResult
 }
 
 export async function downloadFileWithIntegrity(id: string): Promise<VerifiedDownload> {
@@ -603,37 +626,7 @@ export async function downloadFileWithIntegrity(id: string): Promise<VerifiedDow
         method: 'GET',
     })
     if (!res.ok) throw new Error(await parseErrorMessage(res))
-    return {
-        blob: await res.blob(),
-        checksum: res.headers.get('x-skysyncr-sha256'),
-    }
-}
-
-export type IntegrityVerificationResult = {
-    status: 'verified' | 'missing'
-    expectedChecksum: string | null
-    actualChecksum: string | null
-}
-
-export async function verifyBlobChecksum(blob: Blob, expectedChecksum: string | null): Promise<IntegrityVerificationResult> {
-    if (!expectedChecksum) {
-        return {
-            status: 'missing',
-            expectedChecksum: null,
-            actualChecksum: null,
-        }
-    }
-
-    const actual = await sha256Hex(blob)
-    if (actual.toLowerCase() !== expectedChecksum.toLowerCase()) {
-        throw new Error('Downloaded file failed integrity verification.')
-    }
-
-    return {
-        status: 'verified',
-        expectedChecksum,
-        actualChecksum: actual,
-    }
+    return readVerifiedDownload(res)
 }
 
 export type PublicDownload = {
@@ -642,6 +635,7 @@ export type PublicDownload = {
     mimeType: string | null
     encryptionNonce: string | null
     checksum: string | null
+    integrity: IntegrityVerificationResult
 }
 
 export type PublicFolderManifest = {
@@ -688,15 +682,17 @@ export async function downloadPublicFile(
     })
     if (!res.ok) throw new Error(await parseErrorMessage(res))
 
+    const download = await readVerifiedDownload(res)
     return {
-        blob: await res.blob(),
+        blob: download.blob,
         filename:
             filenameFromBase64Header(res.headers.get('x-skysyncr-filename-b64')) ??
             filenameFromContentDisposition(res.headers.get('content-disposition')) ??
             'download.bin',
         mimeType: res.headers.get('x-skysyncr-mime-type'),
         encryptionNonce: res.headers.get('x-skysyncr-encryption-nonce'),
-        checksum: res.headers.get('x-skysyncr-sha256'),
+        checksum: download.checksum,
+        integrity: download.integrity,
     }
 }
 
@@ -748,15 +744,27 @@ export async function downloadPublicFolderFile(
     )
     if (!res.ok) throw new Error(await parseErrorMessage(res))
 
+    const download = await readVerifiedDownload(res)
     return {
-        blob: await res.blob(),
+        blob: download.blob,
         filename:
             filenameFromBase64Header(res.headers.get('x-skysyncr-filename-b64')) ??
             filenameFromContentDisposition(res.headers.get('content-disposition')) ??
             'download.bin',
         mimeType: res.headers.get('x-skysyncr-mime-type'),
         encryptionNonce: res.headers.get('x-skysyncr-encryption-nonce'),
-        checksum: res.headers.get('x-skysyncr-sha256'),
+        checksum: download.checksum,
+        integrity: download.integrity,
+    }
+}
+
+async function readVerifiedDownload(res: Response): Promise<VerifiedDownload> {
+    const blob = await res.blob()
+    const checksum = res.headers.get(DOWNLOAD_CHECKSUM_HEADER)
+    return {
+        blob,
+        checksum,
+        integrity: await verifyBlobChecksum(blob, checksum),
     }
 }
 
@@ -844,9 +852,4 @@ async function multipartBlob(
     const buffer = await new Response(value).arrayBuffer()
     signal?.throwIfAborted()
     return new Blob([buffer], { type: contentType })
-}
-
-async function sha256Hex(blob: Blob): Promise<string> {
-    const digest = await crypto.subtle.digest('SHA-256', await blob.arrayBuffer())
-    return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('')
 }

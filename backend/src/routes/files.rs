@@ -9,8 +9,9 @@ use tower_http::timeout::TimeoutLayer;
 use crate::handlers::files::{
     add_file_favourite, append_resumable_upload_chunk, cancel_resumable_upload,
     complete_resumable_upload, create_file_share, delete_file_share, download_file,
-    download_public_file, get_file_share_recipient_profile, list_file_activity, list_file_shares,
-    list_file_versions, list_files, list_shared_files_with_me, move_file, permanent_delete_file,
+    download_public_file, expire_public_file_links, get_file_share_recipient_profile,
+    list_file_activity, list_file_shares, list_file_versions, list_files,
+    list_public_file_share_access, list_shared_files_with_me, move_file, permanent_delete_file,
     remove_file_favourite, rename_file, restore_file, restore_file_version,
     resumable_upload_status, share_file, soft_delete_file, start_resumable_upload,
     update_file_content, update_file_note, upload_file,
@@ -47,9 +48,11 @@ pub fn files_routes(
             post(restore_file_version),
         )
         .route("/files/{id}/activity", get(list_file_activity))
+        .route("/files/{id}/share/access", get(list_public_file_share_access))
         .route("/files/{id}/note", put(update_file_note))
         .route("/files/{id}/move", put(move_file))
         .route("/files/{id}/share", put(share_file))
+        .route("/files/{id}/share/expire", post(expire_public_file_links))
         .route(
             "/files/{id}/shares/recipient",
             get(get_file_share_recipient_profile),

@@ -84,6 +84,16 @@ pub struct FileAuditRecord {
 }
 
 #[derive(FromRow, Serialize)]
+pub struct PublicFileShareAccessRecord {
+    pub id: Uuid,
+    pub file_id: Uuid,
+    pub share_token: String,
+    pub recipient_email: Option<String>,
+    pub user_agent: Option<String>,
+    pub accessed_at: DateTime<Utc>,
+}
+
+#[derive(FromRow, Serialize)]
 pub struct ShareRecipientRecord {
     pub email: String,
     pub public_key: String,

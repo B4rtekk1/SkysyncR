@@ -6,8 +6,8 @@ use super::audit_logs::{NewAuditLog, insert_user_audit_log};
 use super::file_records::SharedFileRow;
 pub use super::file_records::{
     DownloadFileRecord, FileAuditRecord, FilePurgeTarget, FileRecord, FileShareRecord,
-    FileVersionRecord, NewFileRecord, NewFileShare, ShareRecipientRecord, SharedFileRecord,
-    UpdateFileContentTarget,
+    FileVersionRecord, NewFileRecord, NewFileShare, PublicFileShareAccessRecord,
+    ShareRecipientRecord, SharedFileRecord, UpdateFileContentTarget,
 };
 
 #[derive(FromRow)]
@@ -195,6 +195,7 @@ pub async fn consume_public_file_share_for_download(
     share_token: &str,
     password: Option<&str>,
     recipient_email: Option<&str>,
+    user_agent: Option<&str>,
 ) -> Result<Option<DownloadFileRecord>, sqlx::Error> {
     let mut tx = pool.begin().await?;
     let row = sqlx::query_as::<_, PublicFileShareDownloadRow>(
@@ -256,6 +257,26 @@ pub async fn consume_public_file_share_for_download(
 
     sqlx::query(
         r#"
+        INSERT INTO public_file_share_access_events (
+            id,
+            file_id,
+            share_token,
+            recipient_email,
+            user_agent
+        )
+        VALUES ($1, $2, $3, $4, $5)
+        "#,
+    )
+    .bind(Uuid::new_v4())
+    .bind(row.id)
+    .bind(share_token)
+    .bind(recipient_email)
+    .bind(user_agent)
+    .execute(&mut *tx)
+    .await?;
+
+    sqlx::query(
+        r#"
         UPDATE files
         SET share_download_count = share_download_count + 1,
             is_public = CASE WHEN $2 THEN FALSE ELSE is_public END,
@@ -278,6 +299,34 @@ pub async fn consume_public_file_share_for_download(
         checksum: row.checksum,
         encryption_nonce: row.encryption_nonce,
     }))
+}
+
+pub async fn list_public_file_share_access_events(
+    pool: &PgPool,
+    user_id: Uuid,
+    file_id: Uuid,
+) -> Result<Vec<PublicFileShareAccessRecord>, sqlx::Error> {
+    sqlx::query_as::<_, PublicFileShareAccessRecord>(
+        r#"
+        SELECT
+            events.id,
+            events.file_id,
+            events.share_token,
+            events.recipient_email,
+            events.user_agent,
+            events.accessed_at
+        FROM public_file_share_access_events events
+        JOIN files ON files.id = events.file_id
+        WHERE events.file_id = $1
+          AND files.owner_id = $2
+        ORDER BY events.accessed_at DESC
+        LIMIT 100
+        "#,
+    )
+    .bind(file_id)
+    .bind(user_id)
+    .fetch_all(pool)
+    .await
 }
 
 pub async fn get_user_file_for_content_update_in_tx(
@@ -1400,6 +1449,63 @@ pub async fn update_user_file_share(
     .bind(update_share_password)
     .bind(share_password_hash)
     .bind(share_recipient_email)
+    .bind(file_id)
+    .bind(user_id)
+    .fetch_optional(pool)
+    .await
+}
+
+pub async fn expire_user_file_public_links(
+    pool: &PgPool,
+    user_id: Uuid,
+    file_id: Uuid,
+) -> Result<Option<FileRecord>, sqlx::Error> {
+    sqlx::query_as::<_, FileRecord>(
+        r#"
+        UPDATE files
+        SET is_public = FALSE,
+            share_token = NULL,
+            share_starts_at = NULL,
+            share_expires_at = NOW(),
+            share_download_limit = NULL,
+            share_one_time = FALSE,
+            share_password_hash = NULL,
+            share_recipient_email = NULL,
+            updated_at = NOW()
+        WHERE id = $1
+          AND owner_id = $2
+          AND is_deleted = FALSE
+        RETURNING
+            id,
+            filename,
+            storage_path,
+            mime_type,
+            size_bytes,
+            folder_id,
+            note,
+            is_deleted,
+            is_public,
+            share_token,
+            share_starts_at,
+            share_expires_at,
+            share_download_limit,
+            share_download_count,
+            share_one_time,
+            (share_password_hash IS NOT NULL) AS share_password_enabled,
+            share_recipient_email,
+            EXISTS (
+                SELECT 1
+                FROM favorites fav
+                WHERE fav.user_id = $2
+                  AND fav.file_id = files.id
+            ) AS is_favourite,
+            encrypted_key,
+            encryption_nonce,
+            created_at,
+            updated_at,
+            deleted_at
+        "#,
+    )
     .bind(file_id)
     .bind(user_id)
     .fetch_optional(pool)
