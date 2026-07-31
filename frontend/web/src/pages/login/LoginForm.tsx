@@ -33,6 +33,7 @@ function LoginForm() {
   const [email, setEmail] = useState(() => pendingVerificationEmail ?? '')
   const [password, setPassword] = useState('')
   const [remember, setRemember] = useState(true)
+  const [rememberUnlock, setRememberUnlock] = useState(false)
   const [loading, setLoading] = useState(false)
   const [resendStatus, setResendStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle')
   const [pendingResendStatus, setPendingResendStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle')
@@ -201,7 +202,9 @@ function LoginForm() {
         return
       }
 
-      await storeActivePrivateKey(user.id, privateKey, { persist: 'background' })
+      await storeActivePrivateKey(user.id, privateKey, {
+        persist: rememberUnlock ? 'background' : false,
+      })
       setUnlockedVaultSession({ user, privateKey })
 
       clearPendingVerificationEmail()
@@ -332,6 +335,18 @@ function LoginForm() {
                 onChange={(e) => setRemember(e.target.checked)}
             />
             <span>Remember this device</span>
+          </label>
+
+          <label className="checkbox checkbox--stacked">
+            <input
+                type="checkbox"
+                checked={rememberUnlock}
+                onChange={(e) => setRememberUnlock(e.target.checked)}
+            />
+            <span>
+              <strong>Remember unlock on this device</strong>
+              <small>Keep the non-exportable private key recoverable for up to 15 minutes of activity.</small>
+            </span>
           </label>
 
           {error && (

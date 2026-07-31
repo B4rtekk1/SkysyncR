@@ -64,8 +64,7 @@ function createOpenRequest(): IDBOpenDBRequest {
   return createRequest<IDBDatabase>() as IDBOpenDBRequest
 }
 
-function createFakeIndexedDb(): IDBFactory {
-  const values = new Map<IDBValidKey, unknown>()
+function createFakeIndexedDb(values: Map<IDBValidKey, unknown>): IDBFactory {
   const db = {
     createObjectStore() {
       return {}
@@ -136,11 +135,12 @@ function createFakeIndexedDb(): IDBFactory {
 
 const fakeWindow = new FakeWindow()
 const fakeDocument = new FakeDocument()
+const indexedDbValues = new Map<IDBValidKey, unknown>()
 
 Object.assign(globalThis, {
   window: fakeWindow,
   document: fakeDocument,
-  indexedDB: createFakeIndexedDb(),
+  indexedDB: createFakeIndexedDb(indexedDbValues),
   localStorage: new FakeStorage(),
   sessionStorage: new FakeStorage(),
   CustomEvent: globalThis.CustomEvent ?? FakeCustomEvent,
@@ -178,13 +178,27 @@ test('active private key remains available when the page is hidden', async () =>
   assert.equal(await loadActivePrivateKey('user-1'), privateKey)
 })
 
-test('active private key remains available after pagehide for reload restore', async () => {
+test('active private key remains available after pagehide while the page is alive', async () => {
   const privateKey = await createActivePrivateKey()
   await storeActivePrivateKey('user-1', privateKey)
 
   fakeWindow.dispatchEvent(new Event('pagehide'))
 
   assert.equal(await loadActivePrivateKey('user-1'), privateKey)
+})
+
+test('active private key is not persisted by default', async () => {
+  const privateKey = await createActivePrivateKey()
+  await storeActivePrivateKey('user-1', privateKey)
+
+  assert.equal(indexedDbValues.has('active-private-key:user-1'), false)
+})
+
+test('active private key is persisted only when unlock memory is requested', async () => {
+  const privateKey = await createActivePrivateKey()
+  await storeActivePrivateKey('user-1', privateKey, { persist: true })
+
+  assert.equal(indexedDbValues.has('active-private-key:user-1'), true)
 })
 
 test('active private key is cleared on logout', async () => {

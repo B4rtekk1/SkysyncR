@@ -32,13 +32,14 @@ This model covers SkysyncR browser-side vault encryption for private file keys, 
 
 ## Current Controls
 
-- IndexedDB stores only the password-encrypted private key.
+- By default, IndexedDB stores only the password-encrypted private key.
 - Decrypted private keys are imported with `extractable: false`.
-- Active private keys are held only in memory.
+- Active private keys are held only in memory by default.
+- Users can explicitly choose to remember an unlock on the current device, which stores the active non-extractable `CryptoKey` in IndexedDB for reload recovery.
 - Active private keys are cleared on logout.
 - Active private keys are cleared after 15 minutes of browser inactivity.
-- Active private keys are cleared when the page is hidden, unloaded, or frozen.
-- Legacy `active-private-key:*` IndexedDB entries are removed on unlock and cleanup.
+- Remembered active private keys are renewed by user activity and expire after at most 15 minutes without activity.
+- Legacy or unrequested `active-private-key:*` IndexedDB entries are removed during memory-only unlock and cleanup.
 - File content and metadata decryption require the active private key.
 
 ## Residual Risks

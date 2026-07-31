@@ -9,14 +9,15 @@ const ACTIVE_PRIVATE_KEY_CLEARED_EVENT = 'skysyncr:active-private-key-cleared'
 type ActivePrivateKeySession = {
   userId: string
   privateKey: CryptoKey
+  persistAcrossReloads: boolean
 }
 
-type PersistedActivePrivateKeySession = ActivePrivateKeySession & {
+type PersistedActivePrivateKeySession = Omit<ActivePrivateKeySession, 'persistAcrossReloads'> & {
   expiresAt: number
 }
 
 type StoreActivePrivateKeyOptions = {
-  persist?: 'await' | 'background'
+  persist?: boolean | 'await' | 'background'
 }
 
 let activePrivateKeySession: ActivePrivateKeySession | null = null
@@ -53,11 +54,11 @@ function notifyActivePrivateKeyCleared(userId: string | null) {
   )
 }
 
-function resetIdleTimeout({ persist = true }: { persist?: boolean } = {}) {
+function resetIdleTimeout() {
   clearIdleTimeout()
   if (!activePrivateKeySession || typeof window === 'undefined') return
 
-  if (persist) {
+  if (activePrivateKeySession.persistAcrossReloads) {
     void persistActivePrivateKeySession(activePrivateKeySession)
   }
 
@@ -115,6 +116,7 @@ async function loadPersistedActivePrivateKeySession(
   return {
     userId: stored.userId,
     privateKey: stored.privateKey,
+    persistAcrossReloads: true,
   }
 }
 
@@ -189,9 +191,16 @@ export async function storeActivePrivateKey(
     throw new Error('Active private keys must be imported as non-extractable.')
   }
 
-  activePrivateKeySession = { userId, privateKey }
+  const persistAcrossReloads = Boolean(options.persist)
+  activePrivateKeySession = { userId, privateKey, persistAcrossReloads }
   installLifecycleListeners()
-  resetIdleTimeout({ persist: false })
+  resetIdleTimeout()
+
+  if (!persistAcrossReloads) {
+    await clearPersistedActivePrivateKeys().catch(() => {
+    })
+    return
+  }
 
   const persistSession = persistActivePrivateKeySession(activePrivateKeySession).catch(() => {
   })

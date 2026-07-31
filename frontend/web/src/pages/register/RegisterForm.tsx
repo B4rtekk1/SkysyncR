@@ -29,6 +29,7 @@ function RegisterForm() {
   const [passwordFocused, setPasswordFocused] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
+  const [rememberUnlock, setRememberUnlock] = useState(false)
   const [recoveryKey, setRecoveryKey] = useState<string | null>(null)
   const [verificationEmail, setVerificationEmail] = useState('')
   const [recoveryKeyCopied, setRecoveryKeyCopied] = useState(false)
@@ -140,7 +141,9 @@ function RegisterForm() {
 
       await storeEncryptedPrivateKey(userId, encryptedPrivateKey)
       const activePrivateKey = await decryptPrivateKey(encryptedPrivateKey, password)
-      await storeActivePrivateKey(userId, activePrivateKey)
+      await storeActivePrivateKey(userId, activePrivateKey, {
+        persist: rememberUnlock ? 'background' : false,
+      })
 
       setRecoveryKey(nextRecoveryKey)
       setVerificationEmail(normalizedEmail)
@@ -366,6 +369,18 @@ function RegisterForm() {
                 <EyeIcon open={showConfirmPassword} />
               </button>
             </div>
+          </label>
+
+          <label className="checkbox checkbox--stacked">
+            <input
+                type="checkbox"
+                checked={rememberUnlock}
+                onChange={(e) => setRememberUnlock(e.target.checked)}
+            />
+            <span>
+              <strong>Remember unlock on this device</strong>
+              <small>Keep the non-exportable private key recoverable for up to 15 minutes of activity.</small>
+            </span>
           </label>
 
           {error && (

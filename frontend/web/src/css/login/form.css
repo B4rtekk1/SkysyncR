@@ -178,6 +178,32 @@
   accent-color: var(--signal);
 }
 
+.checkbox--stacked {
+  align-items: flex-start;
+}
+
+.checkbox--stacked input {
+  margin-top: 3px;
+  flex: 0 0 auto;
+}
+
+.checkbox--stacked span {
+  display: grid;
+  gap: 3px;
+}
+
+.checkbox--stacked strong {
+  color: var(--paper);
+  font-size: 0.86rem;
+  font-weight: 600;
+}
+
+.checkbox--stacked small {
+  color: var(--mist);
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+
 .recovery-key {
   margin: 0 0 12px;
   padding: 14px;
