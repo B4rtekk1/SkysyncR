@@ -52,6 +52,8 @@ pub struct SharedFileRecord {
 #[derive(FromRow, Serialize)]
 pub struct FileShareRecord {
     pub id: Uuid,
+    #[serde(skip_serializing)]
+    pub recipient_user_id: Uuid,
     pub email: String,
     pub display_name: Option<String>,
     pub public_key: String,

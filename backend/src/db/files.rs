@@ -790,6 +790,7 @@ pub async fn list_user_file_shares(
         r#"
         SELECT
             fs.id,
+            fs.recipient_user_id,
             recipient.email,
             recipient.display_name,
             recipient.public_key,
@@ -848,6 +849,7 @@ pub async fn upsert_user_file_share(
         )
         SELECT
             upserted.id,
+            upserted.recipient_user_id,
             recipient.email,
             recipient.display_name,
             recipient.public_key,

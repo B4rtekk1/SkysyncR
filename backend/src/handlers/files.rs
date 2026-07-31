@@ -32,6 +32,7 @@ use crate::db::files::{
     soft_delete_user_file, update_user_file_content, update_user_file_note, update_user_file_share,
     update_user_file_share_keys_in_tx, upsert_user_file_share, user_file_exists,
 };
+use crate::db::notifications::{NewNotification, create_notification};
 use crate::db::storage::try_apply_storage_delta;
 use crate::observability::RequestId;
 use crate::services::ransomware_detection::detect_and_alert_after_file_mutation;
@@ -1014,6 +1015,24 @@ pub async fn create_file_share(
     .await
     .map_err(|e| internal_error("create file share", e))?
     .ok_or_else(|| ApiError::BadRequest("User not found or cannot receive shares".into()))?;
+
+    if let Err(e) = create_notification(
+        &state.db_pool,
+        NewNotification {
+            user_id: share.recipient_user_id,
+            r#type: "share.file_created".into(),
+            payload: serde_json::json!({
+                "file_id": file_id,
+                "owner_id": auth.user_id,
+                "permission": share.permission,
+                "created_at": Utc::now(),
+            }),
+        },
+    )
+    .await
+    {
+        tracing::warn!(error = %e, file_id = %file_id, recipient_user_id = %share.recipient_user_id, "failed to create file share notification");
+    }
 
     Ok((StatusCode::CREATED, Json(share)))
 }

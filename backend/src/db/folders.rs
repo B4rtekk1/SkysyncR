@@ -22,6 +22,8 @@ where
 #[derive(FromRow, Serialize)]
 pub struct FolderShareRecord {
     pub id: Uuid,
+    #[serde(skip_serializing)]
+    pub recipient_user_id: Uuid,
     pub email: String,
     pub display_name: Option<String>,
     pub public_key: String,
@@ -686,6 +688,7 @@ pub async fn list_user_folder_shares(
         r#"
         SELECT
             fs.id,
+            fs.recipient_user_id,
             recipient.email,
             recipient.display_name,
             recipient.public_key,
@@ -744,6 +747,7 @@ pub async fn upsert_user_folder_share(
         )
         SELECT
             upserted.id,
+            upserted.recipient_user_id,
             recipient.email,
             recipient.display_name,
             recipient.public_key,

@@ -14,6 +14,7 @@ import type {
   GroupMember,
   GroupRole,
   GroupShareRecipient,
+  Notification,
   OperationLogResponse,
   RegisterResponse,
   RecoveryBlob,
@@ -245,6 +246,17 @@ export const operationLogResponse: Validator<OperationLogResponse> = (value, pat
   const item = object(value, path)
   return {
     operations: arrayOf(operationLogEntry)(prop(item, 'operations', path), `${path}.operations`),
+  }
+}
+
+export const notification: Validator<Notification> = (value, path) => {
+  const item = object(value, path)
+  return {
+    id: string(prop(item, 'id', path), `${path}.id`),
+    type: string(prop(item, 'type', path), `${path}.type`),
+    payload: object(prop(item, 'payload', path), `${path}.payload`),
+    is_read: boolean(prop(item, 'is_read', path), `${path}.is_read`),
+    created_at: string(prop(item, 'created_at', path), `${path}.created_at`),
   }
 }
 
@@ -488,3 +500,4 @@ export const groups = arrayOf(group)
 export const groupIncomingInvites = arrayOf(groupIncomingInvite)
 export const groupShareRecipients = arrayOf(groupShareRecipient)
 export const calendarEntries = arrayOf(calendarEntry)
+export const notifications = arrayOf(notification)

@@ -1,6 +1,7 @@
 import { type RefObject } from 'react'
 import ThemeToggle from '../../../components/ThemeToggle'
 import { SIDEBAR_SHOW_ICON } from '../icons'
+import { NotificationCenter } from './NotificationCenter'
 
 type DashboardTopbarProps = {
     sidebarHidden: boolean
@@ -80,6 +81,8 @@ export function DashboardTopbar({
                 </span>
 
                 <ThemeToggle className="shell__theme-toggle" />
+
+                <NotificationCenter />
 
                 <div className="shell__user" ref={menuRef}>
                     <button className="shell__avatar" onClick={onToggleMenu} aria-label="Account menu">
