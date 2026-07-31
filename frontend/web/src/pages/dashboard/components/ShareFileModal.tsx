@@ -39,6 +39,7 @@ type ShareFileModalProps = {
         oneTime?: boolean,
     ) => Promise<void>
     onDisableShare: () => Promise<void>
+    onExpireFileLinks?: (() => Promise<void>) | undefined
 }
 
 type SharePerson = {
@@ -72,6 +73,7 @@ export function ShareFileModal({
     onClose,
     onEnableShare,
     onDisableShare,
+    onExpireFileLinks,
 }: ShareFileModalProps) {
     const [people, setPeople] = useState<SharePerson[]>([])
     const [emailDraft, setEmailDraft] = useState('')
@@ -550,6 +552,11 @@ export function ShareFileModal({
                             <button className="btn btn--outline" type="button" onClick={() => void onDisableShare()} disabled={loading}>
                                 Stop sharing
                             </button>
+                            {onExpireFileLinks && (
+                                <button className="btn btn--outline" type="button" onClick={() => void onExpireFileLinks()} disabled={loading}>
+                                    Expire links
+                                </button>
+                            )}
                         </div>
                     </section>
 

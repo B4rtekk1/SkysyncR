@@ -300,6 +300,7 @@ function Dashboard() {
         handleRename,
         handleShare,
         setFileSharing,
+        expireFileLinks,
         toggleFavourite,
     } = useFileActions({
         setItems,
@@ -956,6 +957,7 @@ function Dashboard() {
                 onCloseShare={() => setShareItem(null)}
                 onSetFileSharing={setFileSharing}
                 onSetFolderSharing={setFolderSharing}
+                onExpireFileLinks={expireFileLinks}
             />
         </div>
     )

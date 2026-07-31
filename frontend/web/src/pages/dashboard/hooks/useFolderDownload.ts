@@ -91,10 +91,11 @@ export function useFolderDownload(privateKey: CryptoKey | null, setError: (error
 
             if (estimate.totalBytes > FALLBACK_ZIP_DOWNLOAD_LIMIT_BYTES) {
                 if (!canStreamZipToFile()) {
-                    throw new Error(
+                    setError(
                         `Folder is too large to download safely here. Estimated ZIP size is ${formatBytes(estimate.totalBytes)} across ${estimate.fileCount} files. ` +
                         `Current browser path supports up to ${formatBytes(FALLBACK_ZIP_DOWNLOAD_LIMIT_BYTES)} without streaming file-save support.`,
                     )
+                    return
                 }
 
                 streamingSupported = true
@@ -103,10 +104,11 @@ export function useFolderDownload(privateKey: CryptoKey | null, setError: (error
             }
 
             if (estimate.totalBytes > limit) {
-                throw new Error(
+                setError(
                     `Folder is too large to download safely here. Estimated ZIP size is ${formatBytes(estimate.totalBytes)} across ${estimate.fileCount} files. ` +
                     `Current browser path supports up to ${formatBytes(limit)}${streamingSupported ? '' : ' without streaming file-save support'}.`,
                 )
+                return
             }
 
             if (estimate.totalBytes >= LARGE_ZIP_CONFIRM_BYTES) {

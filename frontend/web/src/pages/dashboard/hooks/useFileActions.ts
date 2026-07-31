@@ -1,5 +1,6 @@
 import { useCallback, type Dispatch, type SetStateAction } from 'react'
 import {
+    expirePublicFileLinks,
     permanentlyDeleteFile,
     renameFile,
     restoreFile,
@@ -215,6 +216,27 @@ export function useFileActions({
         [setError, setItems, setShareItem, setShareLoading, setStorageItems],
     )
 
+    const expireFileLinks = useCallback(
+        async (item: Item) => {
+            setShareLoading(true)
+            setError(null)
+            try {
+                const expired = await expirePublicFileLinks(item.id)
+                const visibleExpired = { ...expired, filename: item.filename, mime_type: item.mime_type, note: item.note }
+                setItems((prev) => prev.map((current) => (current.id === item.id ? visibleExpired : current)))
+                setStorageItems((prev) => prev.map((current) => (current.id === item.id ? visibleExpired : current)))
+                setShareItem(visibleExpired)
+                return visibleExpired
+            } catch (e) {
+                setError(e instanceof Error ? e.message : 'Could not expire links for that file.')
+                throw e
+            } finally {
+                setShareLoading(false)
+            }
+        },
+        [setError, setItems, setShareItem, setShareLoading, setStorageItems],
+    )
+
     const toggleFavourite = useCallback(
         async (id: string) => {
             const nextIsFavourite = !favouriteIds.has(id)
@@ -267,6 +289,7 @@ export function useFileActions({
         handleRename,
         handleShare,
         setFileSharing,
+        expireFileLinks,
         toggleFavourite,
     }
 }
