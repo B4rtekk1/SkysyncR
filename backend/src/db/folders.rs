@@ -86,6 +86,17 @@ struct PublicFolderShareAccessRow {
     share_recipient_email: Option<String>,
 }
 
+#[derive(FromRow, Serialize)]
+pub struct PublicFolderShareAccessRecord {
+    pub id: Uuid,
+    pub folder_id: Uuid,
+    pub file_id: Option<Uuid>,
+    pub share_token: String,
+    pub recipient_email: Option<String>,
+    pub user_agent: Option<String>,
+    pub accessed_at: DateTime<Utc>,
+}
+
 #[derive(Serialize)]
 pub struct FolderPointRestoreResult {
     pub restored_at: DateTime<Utc>,
@@ -541,6 +552,7 @@ pub async fn get_public_folder_file_for_download(
     file_id: Uuid,
     password: Option<&str>,
     recipient_email: Option<&str>,
+    user_agent: Option<&str>,
 ) -> Result<Option<DownloadFileRecord>, sqlx::Error> {
     let mut tx = pool.begin().await?;
     let share_row = sqlx::query_as::<_, PublicFolderShareAccessRow>(
@@ -609,6 +621,28 @@ pub async fn get_public_folder_file_for_download(
     if file.is_some() {
         sqlx::query(
             r#"
+            INSERT INTO public_folder_share_access_events (
+                id,
+                folder_id,
+                file_id,
+                share_token,
+                recipient_email,
+                user_agent
+            )
+            VALUES ($1, $2, $3, $4, $5, $6)
+            "#,
+        )
+        .bind(Uuid::new_v4())
+        .bind(share_row.id)
+        .bind(file_id)
+        .bind(share_token)
+        .bind(recipient_email)
+        .bind(user_agent)
+        .execute(&mut *tx)
+        .await?;
+
+        sqlx::query(
+            r#"
             UPDATE folders
             SET share_download_count = share_download_count + 1,
                 is_public = CASE WHEN $2 THEN FALSE ELSE is_public END,
@@ -625,6 +659,35 @@ pub async fn get_public_folder_file_for_download(
 
     tx.commit().await?;
     Ok(file)
+}
+
+pub async fn list_public_folder_share_access_events(
+    pool: &PgPool,
+    user_id: Uuid,
+    folder_id: Uuid,
+) -> Result<Vec<PublicFolderShareAccessRecord>, sqlx::Error> {
+    sqlx::query_as::<_, PublicFolderShareAccessRecord>(
+        r#"
+        SELECT
+            events.id,
+            events.folder_id,
+            events.file_id,
+            events.share_token,
+            events.recipient_email,
+            events.user_agent,
+            events.accessed_at
+        FROM public_folder_share_access_events events
+        JOIN folders ON folders.id = events.folder_id
+        WHERE events.folder_id = $1
+          AND folders.owner_id = $2
+        ORDER BY events.accessed_at DESC
+        LIMIT 100
+        "#,
+    )
+    .bind(folder_id)
+    .bind(user_id)
+    .fetch_all(pool)
+    .await
 }
 
 fn public_folder_share_row_matches(

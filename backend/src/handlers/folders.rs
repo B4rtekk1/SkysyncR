@@ -4,7 +4,7 @@ use axum::{
     extract::{Extension, Path, Query, State},
     http::{
         HeaderMap, HeaderValue, StatusCode,
-        header::{CONTENT_DISPOSITION, CONTENT_TYPE},
+        header::{CONTENT_DISPOSITION, CONTENT_TYPE, USER_AGENT},
     },
     response::{IntoResponse, Response},
 };
@@ -23,11 +23,11 @@ use crate::db::folders::{
     NewFolderRecord, NewFolderShare, add_user_folder_favourite, create_folder_record,
     delete_user_folder_share, folder_belongs_to_user, folder_is_descendant_of,
     get_folder_share_recipient, get_public_folder_file_for_download, get_public_folder_tree,
-    list_public_folder_tree_files, list_user_favourite_folders, list_user_folder_shares,
-    list_user_folders, move_user_folder, public_folder_share_access_allowed,
-    remove_user_folder_favourite, rename_user_folder, restore_user_folder,
-    restore_user_folder_to_point, soft_delete_user_folder, update_user_folder_share,
-    upsert_user_folder_share, user_folder_exists,
+    list_public_folder_share_access_events, list_public_folder_tree_files,
+    list_user_favourite_folders, list_user_folder_shares, list_user_folders, move_user_folder,
+    public_folder_share_access_allowed, remove_user_folder_favourite, rename_user_folder,
+    restore_user_folder, restore_user_folder_to_point, soft_delete_user_folder,
+    update_user_folder_share, upsert_user_folder_share, user_folder_exists,
 };
 use crate::db::notifications::NewNotification;
 use crate::observability::RequestId;
@@ -280,6 +280,7 @@ pub async fn get_public_folder_manifest(
 pub async fn download_public_folder_file(
     State(state): State<AppState>,
     Extension(request_id): Extension<RequestId>,
+    headers: HeaderMap,
     Path((share_token, file_id)): Path<(String, Uuid)>,
     payload: Option<Json<PublicFolderAccessRequest>>,
 ) -> Result<Response, ApiError> {
@@ -291,6 +292,9 @@ pub async fn download_public_folder_file(
         file_id,
         password,
         recipient_email.as_deref(),
+        headers
+            .get(USER_AGENT)
+            .and_then(|value| value.to_str().ok()),
     )
     .await
     .map_err(|e| internal_error("get public folder download file", e))?
@@ -352,6 +356,19 @@ pub async fn download_public_folder_file(
     );
 
     Ok((headers, Body::from_stream(ReaderStream::new(download))).into_response())
+}
+
+pub async fn list_public_folder_share_access(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Path(folder_id): Path<Uuid>,
+) -> Result<Json<Vec<crate::db::folders::PublicFolderShareAccessRecord>>, ApiError> {
+    ensure_user_folder_exists(&state, auth.user_id, folder_id).await?;
+    let events = list_public_folder_share_access_events(&state.db_pool, auth.user_id, folder_id)
+        .await
+        .map_err(|e| internal_error("list public folder share access", e))?;
+
+    Ok(Json(events))
 }
 
 pub async fn get_folder_share_recipient_profile(

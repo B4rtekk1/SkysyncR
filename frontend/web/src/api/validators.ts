@@ -3,6 +3,7 @@ import type {
   CurrentUser,
   File,
   FileAudit,
+  PublicFolderShareAccess,
   PublicFileShareAccess,
   FileShare,
   FileSharePermission,
@@ -314,6 +315,19 @@ export const publicFileShareAccess: Validator<PublicFileShareAccess> = (value, p
   }
 }
 
+export const publicFolderShareAccess: Validator<PublicFolderShareAccess> = (value, path) => {
+  const item = object(value, path)
+  return {
+    id: string(prop(item, 'id', path), `${path}.id`),
+    folder_id: string(prop(item, 'folder_id', path), `${path}.folder_id`),
+    file_id: nullableString(prop(item, 'file_id', path), `${path}.file_id`),
+    share_token: string(prop(item, 'share_token', path), `${path}.share_token`),
+    recipient_email: nullableString(prop(item, 'recipient_email', path), `${path}.recipient_email`),
+    user_agent: nullableString(prop(item, 'user_agent', path), `${path}.user_agent`),
+    accessed_at: string(prop(item, 'accessed_at', path), `${path}.accessed_at`),
+  }
+}
+
 export const shareRecipient: Validator<ShareRecipient> = (value, path) => {
   const item = object(value, path)
   return {
@@ -508,6 +522,7 @@ export const fileShares = arrayOf(fileShare)
 export const fileVersions = arrayOf(fileVersion)
 export const fileActivity = arrayOf(fileAudit)
 export const publicFileShareAccessEvents = arrayOf(publicFileShareAccess)
+export const publicFolderShareAccessEvents = arrayOf(publicFolderShareAccess)
 export const tags = arrayOf(tag)
 export const fileTags = arrayOf(fileTag)
 export const folders = arrayOf(folder)

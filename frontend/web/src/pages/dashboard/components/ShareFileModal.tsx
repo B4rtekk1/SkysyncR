@@ -9,8 +9,12 @@ import {
     getFileShareRecipient,
     listFolderShares,
     listFileShares,
+    listPublicFolderShareAccess,
+    listPublicFileShareAccess,
     type FileSharePermission,
     type FileSharePerson,
+    type PublicFileShareAccess,
+    type PublicFolderShareAccess,
 } from '../../../api/files'
 import { listGroupShareRecipients } from '../../../api/groups'
 import { unwrapFileKeyForUser, wrapFileKeyForUser } from '../../../crypto/fileEncryption'
@@ -48,6 +52,8 @@ type SharePerson = {
     permission: FileSharePermission
 }
 
+type ShareAccessEvent = PublicFileShareAccess | PublicFolderShareAccess
+
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 function toDatetimeLocalValue(date: Date): string {
@@ -60,6 +66,16 @@ function parseDatetimeLocalValue(value: string): Date | null {
     if (!trimmed) return null
     const date = new Date(trimmed)
     return Number.isNaN(date.getTime()) ? null : date
+}
+
+function formatAccessDate(value: string): string {
+    const date = new Date(value)
+    if (Number.isNaN(date.getTime())) return value
+    return date.toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })
+}
+
+function eventFileId(event: ShareAccessEvent): string | null {
+    return 'folder_id' in event ? event.file_id : event.file_id
 }
 
 export function ShareFileModal({
@@ -98,6 +114,8 @@ export function ShareFileModal({
     const [error, setError] = useState<string | null>(null)
     const [peopleLoading, setPeopleLoading] = useState(false)
     const [peopleSaving, setPeopleSaving] = useState(false)
+    const [accessEvents, setAccessEvents] = useState<ShareAccessEvent[]>([])
+    const [accessLoading, setAccessLoading] = useState(false)
     const [selectedGroupId, setSelectedGroupId] = useState('')
     const [groupSharing, setGroupSharing] = useState(false)
     const [showLinkSettings, setShowLinkSettings] = useState(false)
@@ -205,6 +223,28 @@ export function ShareFileModal({
             active = false
         }
     }, [isFileShare, item.id])
+
+    useEffect(() => {
+        let active = true
+        async function loadAccessEvents() {
+            setAccessLoading(true)
+            try {
+                const events = isFileShare
+                    ? await listPublicFileShareAccess(item.id)
+                    : await listPublicFolderShareAccess(item.id)
+                if (active) setAccessEvents(events)
+            } catch (e) {
+                if (active) setError(e instanceof Error ? e.message : 'Could not load access report.')
+            } finally {
+                if (active) setAccessLoading(false)
+            }
+        }
+
+        void loadAccessEvents()
+        return () => {
+            active = false
+        }
+    }, [isFileShare, item.id, item.share_download_count])
 
     async function copyShareUrl() {
         if (!shareUrl) return
@@ -578,6 +618,32 @@ export function ShareFileModal({
                                 <span className="spinner" />
                             ) : (
                                 <span className="share-modal__qr-empty">No active link</span>
+                            )}
+                        </div>
+                    </section>
+
+                    <section className="share-modal__panel share-modal__panel--access">
+                        <div className="share-modal__section-head">
+                            <h3>Access report</h3>
+                            <span>{accessLoading ? '...' : accessEvents.length}</span>
+                        </div>
+                        <div className="share-modal__access-list">
+                            {accessLoading ? (
+                                <p className="share-modal__empty">Loading access report...</p>
+                            ) : accessEvents.length === 0 ? (
+                                <p className="share-modal__empty">No public downloads yet.</p>
+                            ) : (
+                                accessEvents.slice(0, 6).map((event) => (
+                                    <div className="share-modal__access-event" key={event.id}>
+                                        <span>{formatAccessDate(event.accessed_at)}</span>
+                                        <strong>{event.recipient_email ?? 'Anonymous link'}</strong>
+                                        <small>
+                                            {itemKind === 'folder' && eventFileId(event)
+                                                ? `File ${eventFileId(event)?.slice(0, 8)}`
+                                                : event.user_agent ?? 'No client details'}
+                                        </small>
+                                    </div>
+                                ))
                             )}
                         </div>
                     </section>

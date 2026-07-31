@@ -4,9 +4,9 @@ use axum::routing::{delete, get, patch, post, put};
 use crate::handlers::folders::{
     add_folder_favourite, create_folder, create_folder_share, delete_folder_share,
     download_public_folder_file, get_folder_share_recipient_profile, get_public_folder_manifest,
-    list_folder_shares, list_folders, move_folder, permanent_delete_folder,
-    remove_folder_favourite, rename_folder, restore_folder, restore_folder_point, share_folder,
-    soft_delete_folder,
+    list_folder_shares, list_folders, list_public_folder_share_access, move_folder,
+    permanent_delete_folder, remove_folder_favourite, rename_folder, restore_folder,
+    restore_folder_point, share_folder, soft_delete_folder,
 };
 use crate::state::AppState;
 
@@ -27,6 +27,10 @@ pub fn folders_routes() -> Router<AppState> {
         )
         .route("/folders/{id}/move", put(move_folder))
         .route("/folders/{id}/share", put(share_folder))
+        .route(
+            "/folders/{id}/share/access",
+            get(list_public_folder_share_access),
+        )
         .route(
             "/folders/{id}/shares/recipient",
             get(get_folder_share_recipient_profile),

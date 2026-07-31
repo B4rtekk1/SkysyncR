@@ -9,6 +9,7 @@ import type {
     FileVersion,
     Folder as ApiFolder,
     FolderPointRestoreResult,
+    PublicFolderShareAccess,
     PublicFileShareAccess,
     ShareRecipient as FileShareRecipient,
     SharedFile,
@@ -25,6 +26,7 @@ import {
     folderPointRestoreResult,
     folders,
     parseApiErrorBody,
+    publicFolderShareAccessEvents,
     publicFileShareAccessEvents,
     readJson,
     shareRecipient,
@@ -65,6 +67,7 @@ export type {
     FileShareRecipient,
     FileVersion,
     FolderPointRestoreResult,
+    PublicFolderShareAccess,
     PublicFileShareAccess,
     SharedFile,
     StorageQuota,
@@ -540,6 +543,14 @@ export async function listPublicFileShareAccess(fileId: string): Promise<PublicF
     })
     if (!res.ok) throw new Error(await parseErrorMessage(res))
     return readJson(res, publicFileShareAccessEvents, 'PublicFileShareAccess[]')
+}
+
+export async function listPublicFolderShareAccess(folderId: string): Promise<PublicFolderShareAccess[]> {
+    const res = await authenticatedFetch(`${API_BASE}folders/${folderId}/share/access`, {
+        method: 'GET',
+    })
+    if (!res.ok) throw new Error(await parseErrorMessage(res))
+    return readJson(res, publicFolderShareAccessEvents, 'PublicFolderShareAccess[]')
 }
 
 export async function expirePublicFileLinks(fileId: string): Promise<ApiFile> {

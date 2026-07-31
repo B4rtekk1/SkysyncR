@@ -214,6 +214,16 @@ export type PublicFileShareAccess = {
   "accessed_at": string
 }
 
+export type PublicFolderShareAccess = {
+  "id": string
+  "folder_id": string
+  "file_id": string | null
+  "share_token": string
+  "recipient_email": string | null
+  "user_agent": string | null
+  "accessed_at": string
+}
+
 export type Folder = {
   "id": string
   "name": string

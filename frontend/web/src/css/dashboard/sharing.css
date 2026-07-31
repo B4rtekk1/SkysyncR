@@ -100,7 +100,7 @@
     min-height: 0;
     display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(210px, 250px);
-    grid-template-rows: auto auto;
+    grid-template-rows: auto auto auto;
     gap: 12px;
     overflow: auto;
     padding: 14px;
@@ -126,9 +126,14 @@
 
 .share-modal__panel--people {
     grid-column: 1 / -1;
-    grid-row: 2;
+    grid-row: 3;
     display: flex;
     flex-direction: column;
+}
+
+.share-modal__panel--access {
+    grid-column: 1 / -1;
+    grid-row: 2;
 }
 
 .share-modal__section-head {
@@ -501,6 +506,45 @@
     margin-top: 4px;
 }
 
+.share-modal__access-list {
+    display: grid;
+    gap: 8px;
+    max-height: 180px;
+    overflow: auto;
+}
+
+.share-modal__access-event {
+    display: grid;
+    grid-template-columns: minmax(150px, 0.45fr) minmax(140px, 0.35fr) minmax(0, 1fr);
+    align-items: center;
+    gap: 10px;
+    border: 1px solid color-mix(in srgb, var(--line) 72%, transparent);
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--panel-2) 42%, transparent);
+    padding: 9px 10px;
+}
+
+.share-modal__access-event span,
+.share-modal__access-event strong,
+.share-modal__access-event small {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.share-modal__access-event span,
+.share-modal__access-event small {
+    color: var(--mist);
+    font-size: 0.76rem;
+}
+
+.share-modal__access-event strong {
+    color: var(--paper);
+    font-size: 0.82rem;
+    font-weight: 600;
+}
+
 .share-modal__qr {
     position: relative;
     display: grid;
@@ -593,7 +637,8 @@
     }
 
     .share-modal__panel--link,
-    .share-modal__panel--people {
+    .share-modal__panel--people,
+    .share-modal__panel--access {
         grid-column: auto;
         grid-row: auto;
         overflow: visible;
@@ -648,6 +693,11 @@
 
     .share-modal__person {
         grid-template-columns: minmax(0, 1fr) auto;
+    }
+
+    .share-modal__access-event {
+        grid-template-columns: 1fr;
+        gap: 4px;
     }
 
     .share-modal__person .share-permission {

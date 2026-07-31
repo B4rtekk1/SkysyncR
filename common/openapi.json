@@ -862,6 +862,31 @@
         }
       }
     },
+    "/folders/{folderId}/share/access": {
+      "get": {
+        "operationId": "listPublicFolderShareAccess",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/FolderId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Public folder share access events",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PublicFolderShareAccess"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/folders/{folderId}/favorite": {
       "put": {
         "operationId": "addFolderFavourite",
@@ -2861,6 +2886,48 @@
           "file_id": {
             "type": "string",
             "format": "uuid"
+          },
+          "share_token": {
+            "type": "string"
+          },
+          "recipient_email": {
+            "type": "string",
+            "nullable": true
+          },
+          "user_agent": {
+            "type": "string",
+            "nullable": true
+          },
+          "accessed_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "PublicFolderShareAccess": {
+        "type": "object",
+        "required": [
+          "id",
+          "folder_id",
+          "file_id",
+          "share_token",
+          "recipient_email",
+          "user_agent",
+          "accessed_at"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "folder_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "file_id": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
           },
           "share_token": {
             "type": "string"
