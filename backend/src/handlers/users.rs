@@ -5,7 +5,7 @@ use crate::crypto::totp::{
     decrypt_secret, encrypt_secret, generate_secret, otpauth_url, secret_base32, verify_code,
 };
 use crate::db::audit_logs::{NewAuditLog, insert_user_audit_log, list_user_operation_logs};
-use crate::db::notifications::{NewNotification, create_notification};
+use crate::db::notifications::NewNotification;
 use crate::db::refresh_tokens::{
     RefreshTokenAuth, RefreshTokenMetadata, ValidRefreshToken, authenticate_refresh_token,
     create_refresh_token, insert_refresh_token_activity, list_active_user_sessions,
@@ -23,6 +23,7 @@ use crate::models::users::{
     LoginTotpRequest, RefreshResponse, RegisterRequest, RegisterResponse, TotpCodeRequest,
     TotpSetupResponse, TotpStatusResponse, UpdateUserSettingsRequest, UserSettingsResponse,
 };
+use crate::services::notifications::create_and_publish_notification;
 use crate::state::AppState;
 use crate::utils::errors::{ApiError, internal_error, map_db_error};
 use crate::utils::validation::{
@@ -108,8 +109,8 @@ async fn notify_new_login(
     device_label: Option<&str>,
     ip_address: Option<&str>,
 ) {
-    if let Err(e) = create_notification(
-        &state.db_pool,
+    if let Err(e) = create_and_publish_notification(
+        state,
         NewNotification {
             user_id,
             r#type: "security.new_login".into(),

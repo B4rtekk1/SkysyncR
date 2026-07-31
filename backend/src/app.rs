@@ -6,6 +6,7 @@ use crate::routes::notifications::notifications_routes;
 use crate::routes::storage::storage_routes;
 use crate::routes::tags::tags_routes;
 use crate::routes::users::{auth_limited_routes, users_routes};
+use crate::services::notifications::NotificationBroadcaster;
 use crate::services::storage_consistency::spawn_storage_consistency_worker;
 use crate::services::trash::spawn_trash_purge_worker;
 use crate::state::{AppConfig, AppState};
@@ -147,6 +148,7 @@ pub async fn run_server() {
     let state = AppState {
         db_pool: pool.clone(),
         config: config.clone(),
+        notification_broadcaster: NotificationBroadcaster::new(1024),
     };
 
     let auth_routes =

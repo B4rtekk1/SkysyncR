@@ -2,8 +2,11 @@ use axum::{
     Json,
     extract::{Path, Query, State},
     http::StatusCode,
+    response::sse::{Event, KeepAlive, Sse},
 };
 use serde::Deserialize;
+use std::{convert::Infallible, time::Duration};
+use tokio_stream::{Stream, StreamExt, wrappers::BroadcastStream};
 use uuid::Uuid;
 
 use crate::auth::AuthUser;
@@ -82,6 +85,43 @@ pub async fn create_due_reminders(
     let notifications = create_due_reminder_notifications(&state.db_pool, auth.user_id)
         .await
         .map_err(|e| internal_error("create reminder notifications", e))?;
+    for notification in &notifications {
+        state
+            .notification_broadcaster
+            .publish(auth.user_id, notification.clone());
+    }
 
     Ok(Json(notifications))
+}
+
+pub async fn stream_notifications(
+    State(state): State<AppState>,
+    auth: AuthUser,
+) -> Sse<impl Stream<Item = Result<Event, Infallible>>> {
+    let receiver = state.notification_broadcaster.subscribe();
+    let user_id = auth.user_id;
+    let stream = BroadcastStream::new(receiver).filter_map(move |event| match event {
+        Ok(event) if event.user_id == user_id => {
+            match Event::default()
+                .event("notification")
+                .json_data(event.notification)
+            {
+                Ok(event) => Some(Ok(event)),
+                Err(err) => {
+                    tracing::warn!(error = %err, "failed to serialize notification event");
+                    None
+                }
+            }
+        }
+        Ok(_) => None,
+        Err(tokio_stream::wrappers::errors::BroadcastStreamRecvError::Lagged(_)) => {
+            Some(Ok(Event::default().event("sync").data("missed")))
+        }
+    });
+
+    Sse::new(stream).keep_alive(
+        KeepAlive::new()
+            .interval(Duration::from_secs(25))
+            .text("keep-alive"),
+    )
 }

@@ -1,10 +1,10 @@
 use chrono::{DateTime, Utc};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sqlx::{FromRow, PgPool};
 use uuid::Uuid;
 
-#[derive(FromRow, Serialize)]
+#[derive(Clone, FromRow, Deserialize, Serialize)]
 pub struct NotificationRecord {
     pub id: Uuid,
     pub r#type: String,

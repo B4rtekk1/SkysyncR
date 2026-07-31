@@ -33,9 +33,10 @@ use crate::db::files::{
     soft_delete_user_file, update_user_file_content, update_user_file_note, update_user_file_share,
     update_user_file_share_keys_in_tx, upsert_user_file_share, user_file_exists,
 };
-use crate::db::notifications::{NewNotification, create_notification};
+use crate::db::notifications::NewNotification;
 use crate::db::storage::try_apply_storage_delta;
 use crate::observability::RequestId;
+use crate::services::notifications::create_and_publish_notification;
 use crate::services::ransomware_detection::detect_and_alert_after_file_mutation;
 use crate::services::trash::permanently_delete_user_file;
 use crate::state::AppState;
@@ -372,6 +373,7 @@ pub async fn complete_resumable_upload(
         device_label_from_headers(&headers).as_deref(),
     )
     .await;
+    notify_upload_completed(&state, auth.user_id, &record).await;
 
     Ok((StatusCode::CREATED, Json(record)))
 }
@@ -549,6 +551,7 @@ pub async fn upload_file(
         device_label_from_headers(&headers).as_deref(),
     )
     .await;
+    notify_upload_completed(&state, auth.user_id, &record).await;
 
     Ok((StatusCode::CREATED, Json(record)))
 }
@@ -1043,8 +1046,8 @@ pub async fn create_file_share(
     .map_err(|e| internal_error("create file share", e))?
     .ok_or_else(|| ApiError::BadRequest("User not found or cannot receive shares".into()))?;
 
-    if let Err(e) = create_notification(
-        &state.db_pool,
+    if let Err(e) = create_and_publish_notification(
+        &state,
         NewNotification {
             user_id: share.recipient_user_id,
             r#type: "share.file_created".into(),
@@ -1379,7 +1382,9 @@ pub async fn download_public_file(
         &share_token,
         password,
         recipient_email.as_deref(),
-        headers.get(USER_AGENT).and_then(|value| value.to_str().ok()),
+        headers
+            .get(USER_AGENT)
+            .and_then(|value| value.to_str().ok()),
     )
     .await
     .map_err(|e| internal_error("get public download file", e))?
@@ -1879,16 +1884,46 @@ async fn log_file_audit(
         return;
     }
 
-    if matches!(action, "file.delete" | "file.rename" | "file.update")
-        && let Err(err) =
-            detect_and_alert_after_file_mutation(&state.db_pool, user_id, device_label).await
+    if matches!(action, "file.delete" | "file.rename" | "file.update") {
+        match detect_and_alert_after_file_mutation(&state.db_pool, user_id, device_label).await {
+            Ok(Some(notification)) => state
+                .notification_broadcaster
+                .publish(user_id, notification),
+            Ok(None) => {}
+            Err(err) => {
+                tracing::warn!(
+                    error = %err,
+                    user_id = %user_id,
+                    file_id = %file_id,
+                    action,
+                    "failed to evaluate ransomware activity"
+                );
+            }
+        }
+    }
+}
+
+async fn notify_upload_completed(state: &AppState, user_id: Uuid, file: &FileRecord) {
+    if let Err(err) = create_and_publish_notification(
+        state,
+        NewNotification {
+            user_id,
+            r#type: "transfer.upload_completed".into(),
+            payload: serde_json::json!({
+                "file_id": file.id,
+                "filename": file.filename,
+                "size_bytes": file.size_bytes,
+                "created_at": Utc::now(),
+            }),
+        },
+    )
+    .await
     {
         tracing::warn!(
             error = %err,
             user_id = %user_id,
-            file_id = %file_id,
-            action,
-            "failed to evaluate ransomware activity"
+            file_id = %file.id,
+            "failed to create upload completion notification"
         );
     }
 }

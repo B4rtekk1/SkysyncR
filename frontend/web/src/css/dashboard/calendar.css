@@ -428,7 +428,7 @@
     text-transform: uppercase;
 }
 
-.calendar-panel__day {
+.calendar-panel__day{
     position: relative;
     display: grid;
     min-height: 96px;

@@ -2,7 +2,9 @@ use serde_json::json;
 use sqlx::PgPool;
 use uuid::Uuid;
 
-use crate::db::notifications::{NewNotification, create_ransomware_alert_notification_if_absent};
+use crate::db::notifications::{
+    NewNotification, NotificationRecord, create_ransomware_alert_notification_if_absent,
+};
 use crate::db::ransomware_detection::{
     SuspiciousFileActivitySummary, summarize_recent_file_mutations,
 };
@@ -71,12 +73,12 @@ pub async fn detect_and_alert_after_file_mutation(
     pool: &PgPool,
     user_id: Uuid,
     device_label: Option<&str>,
-) -> Result<(), sqlx::Error> {
+) -> Result<Option<NotificationRecord>, sqlx::Error> {
     let summary =
         summarize_recent_file_mutations(pool, user_id, device_label, WINDOW_MINUTES).await?;
     let signals = classify_suspicious_file_activity(&summary);
     if signals.is_empty() {
-        return Ok(());
+        return Ok(None);
     }
 
     let signal_names: Vec<&str> = signals.iter().map(RansomwareSignal::as_str).collect();
@@ -94,7 +96,7 @@ pub async fn detect_and_alert_after_file_mutation(
         "message": "Detected a burst of file deletes, renames, or encrypted content overwrites that may indicate ransomware activity."
     });
 
-    create_ransomware_alert_notification_if_absent(
+    let notification = create_ransomware_alert_notification_if_absent(
         pool,
         NewNotification {
             user_id: summary.user_id,
@@ -106,7 +108,7 @@ pub async fn detect_and_alert_after_file_mutation(
     )
     .await?;
 
-    Ok(())
+    Ok(notification)
 }
 
 #[cfg(test)]

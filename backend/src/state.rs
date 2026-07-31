@@ -2,10 +2,13 @@ use sha2::{Digest, Sha256};
 use sqlx::PgPool;
 use std::path::PathBuf;
 
+use crate::services::notifications::NotificationBroadcaster;
+
 #[derive(Clone)]
 pub struct AppState {
     pub db_pool: PgPool,
     pub config: AppConfig,
+    pub notification_broadcaster: NotificationBroadcaster,
 }
 
 #[derive(Clone)]

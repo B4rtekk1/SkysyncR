@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
     createDueReminderNotifications,
     listNotifications,
     markAllNotificationsRead,
     markNotificationRead,
+    subscribeToNotificationStream,
     type Notification,
 } from '../../../api/notifications'
 
@@ -85,11 +86,25 @@ function notificationSummary(notification: Notification): NotificationSummary {
         }
     }
 
+    if (notification.type === 'transfer.upload_completed') {
+        const filename = payloadString(payload, 'filename') ?? 'File'
+        return {
+            title: 'Upload complete',
+            body: `${filename} finished syncing.`,
+            tone: 'info',
+        }
+    }
+
     return {
         title: notification.type.replaceAll('.', ' '),
         body: payloadString(payload, 'message') ?? 'Open the related area to review details.',
         tone: 'info',
     }
+}
+
+function mergeNotification(current: Notification[], notification: Notification): Notification[] {
+    const withoutDuplicate = current.filter((item) => item.id !== notification.id)
+    return [notification, ...withoutDuplicate].slice(0, 50)
 }
 
 export function NotificationCenter() {
@@ -100,7 +115,7 @@ export function NotificationCenter() {
     const panelRef = useRef<HTMLDivElement>(null)
     const unreadCount = useMemo(() => items.filter((item) => !item.is_read).length, [items])
 
-    async function refresh() {
+    const refresh = useCallback(async () => {
         try {
             const next = await listNotifications({ limit: 50 })
             setItems(next)
@@ -110,7 +125,7 @@ export function NotificationCenter() {
         } finally {
             setLoading(false)
         }
-    }
+    }, [])
 
     useEffect(() => {
         let active = true
@@ -125,12 +140,56 @@ export function NotificationCenter() {
         void load()
         const timer = window.setInterval(() => {
             void refresh()
-        }, 60_000)
+        }, 5 * 60_000)
         return () => {
             active = false
             window.clearInterval(timer)
         }
-    }, [])
+    }, [refresh])
+
+    useEffect(() => {
+        const controller = new AbortController()
+        let stopped = false
+        let retryTimer: number | undefined
+
+        async function connect(delayMs = 0) {
+            if (delayMs > 0) {
+                await new Promise<void>((resolve) => {
+                    retryTimer = window.setTimeout(resolve, delayMs)
+                })
+            }
+            if (stopped || controller.signal.aborted) return
+
+            try {
+                await subscribeToNotificationStream({
+                    signal: controller.signal,
+                    onNotification: (notification) => {
+                        setItems((current) => mergeNotification(current, notification))
+                        setError(null)
+                        setLoading(false)
+                    },
+                    onSync: () => {
+                        void refresh()
+                    },
+                })
+            } catch (e) {
+                if (!controller.signal.aborted) {
+                    setError(e instanceof Error ? e.message : 'Real-time notifications disconnected.')
+                }
+            }
+
+            if (!stopped && !controller.signal.aborted) {
+                void connect(5_000)
+            }
+        }
+
+        void connect()
+        return () => {
+            stopped = true
+            controller.abort()
+            if (retryTimer) window.clearTimeout(retryTimer)
+        }
+    }, [refresh])
 
     useEffect(() => {
         if (!open) return

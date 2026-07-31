@@ -54,3 +54,72 @@ export async function markAllNotificationsRead(): Promise<void> {
   })
   if (!res.ok) throw new Error(await parseErrorMessage(res))
 }
+
+function parseSseMessage(raw: string): { event: string; data: string } | null {
+  let event = 'message'
+  const data: string[] = []
+
+  for (const line of raw.split('\n')) {
+    const clean = line.endsWith('\r') ? line.slice(0, -1) : line
+    if (!clean || clean.startsWith(':')) continue
+
+    const separator = clean.indexOf(':')
+    const field = separator === -1 ? clean : clean.slice(0, separator)
+    const value = separator === -1 ? '' : clean.slice(separator + 1).replace(/^ /, '')
+
+    if (field === 'event') event = value
+    if (field === 'data') data.push(value)
+  }
+
+  if (data.length === 0) return null
+  return { event, data: data.join('\n') }
+}
+
+type NotificationStreamHandlers = {
+  signal: AbortSignal
+  onNotification: (notification: Notification) => void
+  onSync: () => void
+}
+
+export async function subscribeToNotificationStream({
+  signal,
+  onNotification,
+  onSync,
+}: NotificationStreamHandlers): Promise<void> {
+  const res = await authenticatedFetch(`${API_BASE}notifications/stream`, {
+    method: 'GET',
+    cache: 'no-store',
+    headers: { Accept: 'text/event-stream' },
+    signal,
+  })
+  if (!res.ok) throw new Error(await parseErrorMessage(res))
+  if (!res.body) throw new Error('Notification stream is unavailable.')
+
+  const reader = res.body.pipeThrough(new TextDecoderStream()).getReader()
+  let buffer = ''
+
+  try {
+    while (!signal.aborted) {
+      const { value, done } = await reader.read()
+      if (done) break
+      buffer += value
+
+      const chunks = buffer.split(/\n\n|\r\n\r\n/)
+      buffer = chunks.pop() ?? ''
+
+      for (const chunk of chunks) {
+        const message = parseSseMessage(chunk)
+        if (!message) continue
+        if (message.event === 'sync') {
+          onSync()
+          continue
+        }
+        if (message.event === 'notification') {
+          onNotification(notification(JSON.parse(message.data), 'NotificationStream'))
+        }
+      }
+    }
+  } finally {
+    reader.releaseLock()
+  }
+}

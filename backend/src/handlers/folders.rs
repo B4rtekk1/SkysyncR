@@ -29,8 +29,9 @@ use crate::db::folders::{
     restore_user_folder_to_point, soft_delete_user_folder, update_user_folder_share,
     upsert_user_folder_share, user_folder_exists,
 };
-use crate::db::notifications::{NewNotification, create_notification};
+use crate::db::notifications::NewNotification;
 use crate::observability::RequestId;
+use crate::services::notifications::create_and_publish_notification;
 use crate::services::trash::permanently_delete_user_folder;
 use crate::state::AppState;
 use crate::utils::errors::{ApiError, internal_error};
@@ -405,8 +406,8 @@ pub async fn create_folder_share(
     .map_err(|e| internal_error("create folder share", e))?
     .ok_or_else(|| ApiError::BadRequest("User not found or cannot receive shares".into()))?;
 
-    if let Err(e) = create_notification(
-        &state.db_pool,
+    if let Err(e) = create_and_publish_notification(
+        &state,
         NewNotification {
             user_id: share.recipient_user_id,
             r#type: "share.folder_created".into(),

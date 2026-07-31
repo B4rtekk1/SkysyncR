@@ -1874,6 +1874,24 @@
         }
       }
     },
+    "/notifications/stream": {
+      "get": {
+        "operationId": "streamNotifications",
+        "responses": {
+          "200": {
+            "description": "Server-sent notification stream",
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string",
+                  "description": "SSE events named notification contain Notification JSON. Sync events indicate the client should reload notifications."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/notifications/read-all": {
       "put": {
         "operationId": "markAllNotificationsRead",
