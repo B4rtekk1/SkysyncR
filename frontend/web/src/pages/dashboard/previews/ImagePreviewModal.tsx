@@ -47,6 +47,7 @@ export function ImagePreviewModal({
     const [loadedImageUrl, setLoadedImageUrl] = useState<string | null>(null)
     const [editError, setEditError] = useState<string | null>(null)
     const [hasConflict, setHasConflict] = useState(false)
+    const [conflictText, setConflictText] = useState<string | null>(null)
     const [autosaveStatus, setAutosaveStatus] = useState<AutosaveStatus>('idle')
     const [appliedStartEditingKey, setAppliedStartEditingKey] = useState<string | null>(null)
     const saveInFlightRef = useRef(false)
@@ -63,6 +64,7 @@ export function ImagePreviewModal({
         setEditDraft(preview.text ?? '')
         setEditError(null)
         setHasConflict(false)
+        setConflictText(null)
         setAutosaveStatus('idle')
         setIsEditingText(true)
     }
@@ -88,6 +90,7 @@ export function ImagePreviewModal({
         setEditDraft(preview.text ?? '')
         setEditError(null)
         setHasConflict(false)
+        setConflictText(null)
         setAutosaveStatus('idle')
         setIsEditingText(false)
     }
@@ -112,16 +115,20 @@ export function ImagePreviewModal({
         }
         setEditError(null)
         setHasConflict(false)
+        setConflictText(null)
         setAutosaveStatus('saving')
         try {
             await onSaveText(preview.item, textToSave, { force })
             setAutosaveStatus('saved')
+            setHasConflict(false)
+            setConflictText(null)
             if (closeAfterSave) {
                 setIsEditingText(false)
             }
         } catch (e) {
             if (e instanceof FileContentConflictError) {
                 setHasConflict(true)
+                setConflictText(e.latestText)
             }
             setEditError(e instanceof Error ? e.message : 'Could not save that file.')
             setAutosaveStatus('error')
@@ -209,6 +216,7 @@ export function ImagePreviewModal({
                                     setEditDraft(preview.text ?? '')
                                     setEditError(null)
                                     setHasConflict(false)
+                                    setConflictText(null)
                                     setIsEditingText(true)
                                 }}
                                 aria-label={`Edit ${preview.item.filename}`}
@@ -289,6 +297,7 @@ export function ImagePreviewModal({
                             <TextFileEditor
                                 canHighlightPython={canHighlightPython}
                                 canRenderMarkdown={canRenderMarkdown}
+                                conflictText={conflictText}
                                 highlightLanguage={highlightLanguage}
                                 error={editError}
                                 autosaveStatus={autosaveStatus}
@@ -297,6 +306,7 @@ export function ImagePreviewModal({
                                 onChange={(value) => {
                                     setEditDraft(value)
                                     setHasConflict(false)
+                                    setConflictText(null)
                                     setAutosaveStatus('pending')
                                 }}
                                 onForceSave={() => void saveEdit({ closeAfterSave: false, force: true })}

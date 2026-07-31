@@ -448,6 +448,7 @@ export function TextFilePreview({
 export function TextFileEditor({
     autosaveStatus,
     canRenderMarkdown,
+    conflictText,
     highlightLanguage,
     error,
     onChange,
@@ -461,6 +462,7 @@ export function TextFileEditor({
     autosaveStatus?: 'idle' | 'pending' | 'saving' | 'saved' | 'error'
     canHighlightPython: boolean
     canRenderMarkdown: boolean
+    conflictText?: string | null
     highlightLanguage: CodeHighlightLanguage | null
     error: string | null
     onChange: (text: string) => void
@@ -660,13 +662,31 @@ export function TextFileEditor({
             <CodeTypeDiagnostics diagnostics={typeDiagnostics} language={highlightLanguage} />
             {error && <p className="image-preview__editor-error">{error}</p>}
             {showConflictActions && (
-                <div className="image-preview__conflict-actions">
-                    <button type="button" onClick={onReload} disabled={saving}>
-                        Reload changed file
-                    </button>
-                    <button type="button" onClick={onForceSave} disabled={saving}>
-                        Force save as latest version
-                    </button>
+                <div className="image-preview__conflict-panel" role="alert">
+                    <div className="image-preview__conflict-head">
+                        <strong>Save conflict</strong>
+                        <span>The file changed after you opened it.</span>
+                    </div>
+                    {conflictText !== undefined && conflictText !== null && (
+                        <div className="image-preview__conflict-compare">
+                            <section>
+                                <h3>Your draft</h3>
+                                <pre>{text || 'This file is empty.'}</pre>
+                            </section>
+                            <section>
+                                <h3>Latest saved version</h3>
+                                <pre>{conflictText || 'This file is empty.'}</pre>
+                            </section>
+                        </div>
+                    )}
+                    <div className="image-preview__conflict-actions">
+                        <button type="button" onClick={onReload} disabled={saving}>
+                            Reload changed file
+                        </button>
+                        <button type="button" onClick={onForceSave} disabled={saving}>
+                            Force save as latest version
+                        </button>
+                    </div>
                 </div>
             )}
         </div>

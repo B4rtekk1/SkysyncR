@@ -1,5 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { downloadFileWithIntegrity, listFileShares, updateFileContent, verifyBlobChecksum, type ApiFile } from '../../../api/files'
+import {
+    downloadFileWithIntegrity,
+    FileContentConflictError,
+    listFiles,
+    listFileShares,
+    updateFileContent,
+    verifyBlobChecksum,
+    type ApiFile,
+} from '../../../api/files'
 import {
     decryptFile,
     decryptFileStream,
@@ -222,17 +230,41 @@ export function useFilePreview(
             })),
         )
         const encryptedFile = encryptFileStream(new Blob([text], { type: item.mime_type || 'text/plain' }), fileKey)
-        const updated = await updateFileContent({
-            id: item.id,
-            encryptedFile,
-            originalFilename: item.filename,
-            wrappedKey: wrappedOwnerKey,
-            encryptionNonce: encryptedFileFormatNonce(),
-            contentKeyFingerprint: await fileContentKeyFingerprint(fileKey),
-            baseUpdatedAt: item.updated_at,
-            force: Boolean(options.force),
-            shareKeys,
-        })
+        let updated: ApiFile
+        try {
+            updated = await updateFileContent({
+                id: item.id,
+                encryptedFile,
+                originalFilename: item.filename,
+                wrappedKey: wrappedOwnerKey,
+                encryptionNonce: encryptedFileFormatNonce(),
+                contentKeyFingerprint: await fileContentKeyFingerprint(fileKey),
+                baseUpdatedAt: item.updated_at,
+                force: Boolean(options.force),
+                shareKeys,
+            })
+        } catch (e) {
+            if (e instanceof FileContentConflictError) {
+                const latestFile = (await listFiles(item.folder_id)).find((file) => file.id === item.id)
+                if (latestFile) {
+                    const latestText = await decryptDownloadedFile(latestFile).then((blob) => blob.text())
+                    onFileUpdated(latestFile)
+                    setFilePreview((current) => {
+                        if (!current || current.item.id !== item.id || current.kind !== 'text') return current
+
+                        return {
+                            ...current,
+                            item: latestFile,
+                            text: latestText,
+                            loading: false,
+                            startEditing: false,
+                        }
+                    })
+                    throw new FileContentConflictError(e.message, { file: latestFile, text: latestText })
+                }
+            }
+            throw e
+        }
 
         const visibleUpdated = {
             ...updated,

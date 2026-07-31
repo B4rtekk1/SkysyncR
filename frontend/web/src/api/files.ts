@@ -41,9 +41,14 @@ async function parseErrorMessage(response: Response): Promise<string> {
 }
 
 export class FileContentConflictError extends Error {
-    constructor(message: string) {
+    latestFile: ApiFile | null
+    latestText: string | null
+
+    constructor(message: string, latest?: { file: ApiFile; text: string }) {
         super(message)
         this.name = 'FileContentConflictError'
+        this.latestFile = latest?.file ?? null
+        this.latestText = latest?.text ?? null
     }
 }
 
