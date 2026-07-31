@@ -192,6 +192,24 @@
         }
       }
     },
+    "/users/export": {
+      "get": {
+        "operationId": "exportUserData",
+        "responses": {
+          "200": {
+            "description": "User data export archive",
+            "content": {
+              "application/x-tar": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/users/change-password": {
       "post": {
         "operationId": "changePassword",

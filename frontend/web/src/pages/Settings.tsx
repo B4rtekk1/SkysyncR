@@ -8,6 +8,7 @@ import { getDeviceLabel, setDeviceLabel } from '../api/http'
 import {
     ApiRequestError,
     changePassword,
+    downloadUserDataExport,
     getOperationLog,
     getSessions,
     getTotpStatus,
@@ -149,6 +150,7 @@ const operationLabels: Record<string, string> = {
     'user.session.revoke': 'Revoked session',
     'user.settings.update': 'Updated settings',
     'user.password.change': 'Changed password',
+    'user.data_export.download': 'Downloaded data export',
 }
 
 function safeLogFilenamePart(value: string): string {
@@ -215,6 +217,8 @@ function SettingsModalContent({ currentUser, onClose, onSave }: SettingsModalPro
     const [operationLog, setOperationLog] = useState<OperationLogResponse | null>(null)
     const [operationLogLoading, setOperationLogLoading] = useState(false)
     const [operationLogError, setOperationLogError] = useState<string | null>(null)
+    const [dataExportLoading, setDataExportLoading] = useState(false)
+    const [dataExportError, setDataExportError] = useState<string | null>(null)
     const [totpStatus, setTotpStatus] = useState<{ enabled: boolean; pending: boolean } | null>(null)
     const [totpSetup, setTotpSetup] = useState<{ secret: string; otpauth_url: string } | null>(null)
     const [totpCode, setTotpCode] = useState('')
@@ -548,6 +552,21 @@ function SettingsModalContent({ currentUser, onClose, onSave }: SettingsModalPro
         downloadJsonFile(`skysyncr-operation-log-${userPart}-${datePart}.json`, payload)
     }
 
+    async function downloadDataExport() {
+        if (!currentUser) return
+
+        setDataExportLoading(true)
+        setDataExportError(null)
+        try {
+            await downloadUserDataExport()
+            void loadOperationLog()
+        } catch (error) {
+            setDataExportError(error instanceof Error ? error.message : 'Could not prepare data export.')
+        } finally {
+            setDataExportLoading(false)
+        }
+    }
+
     function formatSessionTime(value: string): string {
         const date = new Date(value)
         if (Number.isNaN(date.getTime())) return 'Unknown time'
@@ -816,6 +835,30 @@ function SettingsModalContent({ currentUser, onClose, onSave }: SettingsModalPro
                                 ))}
                             </div>
                             <p className="settings-muted">System follows your operating system appearance.</p>
+                        </section>
+
+                        <section className="settings-panel settings-panel--wide settings-panel--data-export">
+                            <div className="settings-panel__head">
+                                <div>
+                                    <p className="settings-kicker">Privacy</p>
+                                    <h2>User data export</h2>
+                                </div>
+                                <div className="settings-panel__actions">
+                                    <button
+                                        className="btn btn--outline settings-log-download"
+                                        type="button"
+                                        disabled={dataExportLoading}
+                                        onClick={() => void downloadDataExport()}
+                                    >
+                                        {DOWNLOAD_ICON}
+                                        <span>{dataExportLoading ? 'Preparing...' : 'Download export'}</span>
+                                    </button>
+                                </div>
+                            </div>
+                            <p className="settings-muted">
+                                Includes encrypted files, metadata, share recipients, and recovery instructions.
+                            </p>
+                            {dataExportError && <p className="settings-error">{dataExportError}</p>}
                         </section>
 
                         <section className="settings-panel settings-panel--wide" id="settings-security">

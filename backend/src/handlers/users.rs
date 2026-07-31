@@ -33,12 +33,19 @@ use axum::{
     Json,
     extract::{Path, State},
     http::{HeaderMap, HeaderName, HeaderValue, header},
+    body::Body,
     response::{IntoResponse, Response},
 };
+use base64::{Engine as _, engine::general_purpose};
 use bcrypt::{DEFAULT_COST, hash, verify};
 use chrono::Utc;
 use serde::Deserialize;
 use serde::Serialize;
+use sqlx::Row;
+use std::path::{Path as FsPath, PathBuf};
+use tokio::fs;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio_util::io::ReaderStream;
 use uuid::Uuid;
 
 use crate::crypto::email::send_verification_email;
@@ -71,6 +78,38 @@ pub struct SessionsResponse {
 pub struct OperationLogResponse {
     pub operations: Vec<crate::db::audit_logs::OperationLogRecord>,
 }
+
+struct ExportFilePayload {
+    id: Uuid,
+    filename: String,
+    storage_path: String,
+}
+
+struct TarEntry {
+    path: String,
+    size: u64,
+    source: TarEntrySource,
+}
+
+enum TarEntrySource {
+    Bytes(Vec<u8>),
+    File(PathBuf),
+}
+
+const EXPORT_FORMAT_VERSION: u32 = 1;
+const EXPORT_RECOVERY_INSTRUCTIONS: &str = r#"SkysyncR user data export recovery instructions
+
+This archive contains your server-side data export. Files in encrypted-files/ are the original encrypted blobs stored by SkysyncR; the server cannot decrypt them.
+
+To recover data:
+1. Open manifest.json and find the file entry by id or filename.
+2. Use that entry's encrypted_key and encryption_nonce values. They are base64-encoded.
+3. Unlock your private key using your SkysyncR password or account recovery flow.
+4. Unwrap the file key locally with your private key, then decrypt the encrypted blob from encrypted-files/.
+5. For files or folders shared with other users, shares.*.encrypted_key contains that recipient's wrapped key and can only be unwrapped by that recipient's private key.
+
+The manifest also includes public share settings, private file and folder share recipients, folder hierarchy metadata, and the encrypted private-key recovery blob when one exists.
+"#;
 
 #[derive(Deserialize)]
 pub struct UpdateSessionTrustRequest {
@@ -346,6 +385,92 @@ pub async fn current_user(
         sync_on_metered: profile.sync_on_metered,
         trash_retention_days: profile.trash_retention_days,
     }))
+}
+
+pub async fn export_user_data(
+    State(state): State<AppState>,
+    auth: AuthUser,
+) -> Result<Response, ApiError> {
+    let export_id = Uuid::new_v4();
+    let (manifest, files) = build_user_export_manifest(&state, auth.user_id, export_id).await?;
+    let manifest_bytes = serde_json::to_vec_pretty(&manifest)
+        .map_err(|e| internal_error("serialize user export manifest", e))?;
+
+    let export_filename = format!("skysyncr-export-{}-{export_id}.tar", auth.user_id);
+    let export_path = user_export_path(&state.config.upload_dir, auth.user_id, export_id);
+    if let Some(parent) = export_path.parent() {
+        fs::create_dir_all(parent)
+            .await
+            .map_err(|e| internal_error("create user export directory", e))?;
+    }
+
+    let mut entries = Vec::with_capacity(files.len() + 2);
+    entries.push(TarEntry {
+        path: "manifest.json".into(),
+        size: manifest_bytes.len() as u64,
+        source: TarEntrySource::Bytes(manifest_bytes),
+    });
+    entries.push(TarEntry {
+        path: "recovery-instructions.txt".into(),
+        size: EXPORT_RECOVERY_INSTRUCTIONS.len() as u64,
+        source: TarEntrySource::Bytes(EXPORT_RECOVERY_INSTRUCTIONS.as_bytes().to_vec()),
+    });
+    for file in files {
+        let source_path = PathBuf::from(&file.storage_path);
+        let size = fs::metadata(&source_path)
+            .await
+            .map_err(|e| internal_error("read export file metadata", e))?
+            .len();
+        entries.push(TarEntry {
+            path: format!(
+                "encrypted-files/{}-{}",
+                file.id,
+                sanitize_export_path_component(&file.filename)
+            ),
+            size,
+            source: TarEntrySource::File(source_path),
+        });
+    }
+
+    write_tar_archive(&export_path, entries).await?;
+    let archive_size = fs::metadata(&export_path)
+        .await
+        .map_err(|e| internal_error("read user export archive metadata", e))?
+        .len();
+    let archive = fs::File::open(&export_path)
+        .await
+        .map_err(|e| internal_error("open user export archive", e))?;
+
+    log_user_operation(
+        &state,
+        auth.user_id,
+        "user.data_export.download",
+        None,
+        serde_json::json!({ "export_id": export_id, "archive_size_bytes": archive_size }),
+    )
+    .await;
+
+    let cleanup_path = export_path.clone();
+    tokio::spawn(async move {
+        tokio::time::sleep(std::time::Duration::from_secs(30 * 60)).await;
+        let _ = fs::remove_file(cleanup_path).await;
+    });
+
+    let mut headers = HeaderMap::new();
+    headers.insert(
+        header::CONTENT_TYPE,
+        HeaderValue::from_static("application/x-tar"),
+    );
+    if let Ok(value) = HeaderValue::from_str(&archive_size.to_string()) {
+        headers.insert(header::CONTENT_LENGTH, value);
+    }
+    headers.insert(
+        header::CONTENT_DISPOSITION,
+        HeaderValue::from_str(&format!("attachment; filename=\"{export_filename}\""))
+            .unwrap_or_else(|_| HeaderValue::from_static("attachment")),
+    );
+
+    Ok((headers, Body::from_stream(ReaderStream::new(archive))).into_response())
 }
 
 pub async fn update_user_settings(
@@ -1334,6 +1459,418 @@ pub async fn resend_verification_email(
     Ok("If this account needs verification, a new link has been sent")
 }
 
+async fn build_user_export_manifest(
+    state: &AppState,
+    user_id: Uuid,
+    export_id: Uuid,
+) -> Result<(serde_json::Value, Vec<ExportFilePayload>), ApiError> {
+    let profile = sqlx::query(
+        r#"
+        SELECT
+            id,
+            email,
+            display_name,
+            avatar_url,
+            public_key,
+            email_verified,
+            default_view,
+            layout_mode,
+            upload_protection,
+            compact_metadata,
+            device_lock,
+            sync_on_metered,
+            trash_retention_days,
+            encrypted_private_key_recovery,
+            created_at,
+            updated_at,
+            last_login_at
+        FROM users
+        WHERE id = $1
+        "#,
+    )
+    .bind(user_id)
+    .fetch_optional(&state.db_pool)
+    .await
+    .map_err(|e| internal_error("load user export profile", e))?
+    .ok_or_else(|| ApiError::Unauthorized("User not found".into()))?;
+
+    let file_rows = sqlx::query(
+        r#"
+        SELECT
+            id,
+            filename,
+            storage_path,
+            mime_type,
+            size_bytes,
+            encrypted_key,
+            encryption_nonce,
+            content_key_fingerprint,
+            checksum,
+            folder_id,
+            note,
+            is_deleted,
+            is_public,
+            share_token,
+            share_starts_at,
+            share_expires_at,
+            share_download_limit,
+            share_download_count,
+            share_one_time,
+            (share_password_hash IS NOT NULL) AS share_password_enabled,
+            share_recipient_email,
+            created_at,
+            updated_at,
+            deleted_at
+        FROM files
+        WHERE owner_id = $1
+        ORDER BY created_at ASC
+        "#,
+    )
+    .bind(user_id)
+    .fetch_all(&state.db_pool)
+    .await
+    .map_err(|e| internal_error("load user export files", e))?;
+
+    let mut files = Vec::with_capacity(file_rows.len());
+    let mut file_manifest = Vec::with_capacity(file_rows.len());
+    for row in file_rows {
+        let id: Uuid = row.get("id");
+        let filename: String = row.get("filename");
+        let storage_path: String = row.get("storage_path");
+        let encrypted_key: Vec<u8> = row.get("encrypted_key");
+        let encryption_nonce: Vec<u8> = row.get("encryption_nonce");
+        files.push(ExportFilePayload {
+            id,
+            filename: filename.clone(),
+            storage_path,
+        });
+        file_manifest.push(serde_json::json!({
+            "id": id,
+            "filename": filename,
+            "archive_path": format!("encrypted-files/{}-{}", id, sanitize_export_path_component(row.get::<String, _>("filename").as_str())),
+            "mime_type": row.get::<Option<String>, _>("mime_type"),
+            "size_bytes": row.get::<i64, _>("size_bytes"),
+            "encrypted_key": general_purpose::STANDARD.encode(encrypted_key),
+            "encryption_nonce": general_purpose::STANDARD.encode(encryption_nonce),
+            "content_key_fingerprint": row.get::<Option<String>, _>("content_key_fingerprint"),
+            "checksum_sha256": row.get::<Option<String>, _>("checksum"),
+            "folder_id": row.get::<Option<Uuid>, _>("folder_id"),
+            "note": row.get::<Option<String>, _>("note"),
+            "is_deleted": row.get::<bool, _>("is_deleted"),
+            "deleted_at": row.get::<Option<chrono::DateTime<Utc>>, _>("deleted_at"),
+            "created_at": row.get::<chrono::DateTime<Utc>, _>("created_at"),
+            "updated_at": row.get::<chrono::DateTime<Utc>, _>("updated_at"),
+            "public_share": {
+                "is_public": row.get::<bool, _>("is_public"),
+                "share_token": row.get::<Option<String>, _>("share_token"),
+                "starts_at": row.get::<Option<chrono::DateTime<Utc>>, _>("share_starts_at"),
+                "expires_at": row.get::<Option<chrono::DateTime<Utc>>, _>("share_expires_at"),
+                "download_limit": row.get::<Option<i32>, _>("share_download_limit"),
+                "download_count": row.get::<i32, _>("share_download_count"),
+                "one_time": row.get::<bool, _>("share_one_time"),
+                "password_enabled": row.get::<bool, _>("share_password_enabled"),
+                "recipient_email": row.get::<Option<String>, _>("share_recipient_email"),
+            }
+        }));
+    }
+
+    let folders = export_query_json(
+        &state.db_pool,
+        user_id,
+        r#"
+        SELECT COALESCE(jsonb_agg(to_jsonb(folder_row) ORDER BY folder_row.created_at), '[]'::jsonb)
+        FROM (
+            SELECT
+                id,
+                name,
+                description,
+                parent_folder_id,
+                encode(encrypted_key, 'base64') AS encrypted_key,
+                is_deleted,
+                deleted_at,
+                is_public,
+                share_token,
+                share_starts_at,
+                share_expires_at,
+                share_download_limit,
+                share_download_count,
+                share_one_time,
+                (share_password_hash IS NOT NULL) AS share_password_enabled,
+                share_recipient_email,
+                created_at,
+                updated_at
+            FROM folders
+            WHERE owner_id = $1
+        ) folder_row
+        "#,
+    )
+    .await?;
+    let file_shares = export_query_json(
+        &state.db_pool,
+        user_id,
+        r#"
+        SELECT COALESCE(jsonb_agg(to_jsonb(share_row) ORDER BY share_row.created_at), '[]'::jsonb)
+        FROM (
+            SELECT
+                fs.id,
+                fs.file_id,
+                fs.recipient_user_id,
+                recipient.email AS recipient_email,
+                recipient.display_name AS recipient_display_name,
+                fs.permission,
+                encode(fs.encrypted_key, 'base64') AS encrypted_key,
+                fs.created_at,
+                fs.updated_at
+            FROM file_shares fs
+            JOIN users recipient ON recipient.id = fs.recipient_user_id
+            WHERE fs.owner_id = $1
+        ) share_row
+        "#,
+    )
+    .await?;
+    let folder_shares = export_query_json(
+        &state.db_pool,
+        user_id,
+        r#"
+        SELECT COALESCE(jsonb_agg(to_jsonb(share_row) ORDER BY share_row.created_at), '[]'::jsonb)
+        FROM (
+            SELECT
+                fs.id,
+                fs.folder_id,
+                fs.recipient_user_id,
+                recipient.email AS recipient_email,
+                recipient.display_name AS recipient_display_name,
+                fs.permission,
+                encode(fs.encrypted_key, 'base64') AS encrypted_key,
+                fs.created_at,
+                fs.updated_at
+            FROM folder_shares fs
+            JOIN users recipient ON recipient.id = fs.recipient_user_id
+            WHERE fs.owner_id = $1
+        ) share_row
+        "#,
+    )
+    .await?;
+    let tags = export_query_json(
+        &state.db_pool,
+        user_id,
+        r#"
+        SELECT COALESCE(jsonb_agg(to_jsonb(tag_row) ORDER BY tag_row.name), '[]'::jsonb)
+        FROM (
+            SELECT id, name, color
+            FROM tags
+            WHERE owner_id = $1
+        ) tag_row
+        "#,
+    )
+    .await?;
+    let file_tags = export_query_json(
+        &state.db_pool,
+        user_id,
+        r#"
+        SELECT COALESCE(jsonb_agg(to_jsonb(file_tag_row) ORDER BY file_tag_row.file_id), '[]'::jsonb)
+        FROM (
+            SELECT ft.file_id, ft.tag_id
+            FROM file_tags ft
+            JOIN files f ON f.id = ft.file_id
+            JOIN tags t ON t.id = ft.tag_id
+            WHERE f.owner_id = $1
+              AND t.owner_id = $1
+        ) file_tag_row
+        "#,
+    )
+    .await?;
+
+    let manifest = serde_json::json!({
+        "format": "skysyncr-user-data-export",
+        "format_version": EXPORT_FORMAT_VERSION,
+        "export_id": export_id,
+        "exported_at": Utc::now(),
+        "recovery_instructions_path": "recovery-instructions.txt",
+        "user": {
+            "id": profile.get::<Uuid, _>("id"),
+            "email": profile.get::<String, _>("email"),
+            "display_name": profile.get::<Option<String>, _>("display_name"),
+            "avatar_url": profile.get::<Option<String>, _>("avatar_url"),
+            "public_key": profile.get::<Option<String>, _>("public_key"),
+            "email_verified": profile.get::<bool, _>("email_verified"),
+            "settings": {
+                "default_view": profile.get::<String, _>("default_view"),
+                "layout_mode": profile.get::<String, _>("layout_mode"),
+                "upload_protection": profile.get::<bool, _>("upload_protection"),
+                "compact_metadata": profile.get::<bool, _>("compact_metadata"),
+                "device_lock": profile.get::<bool, _>("device_lock"),
+                "sync_on_metered": profile.get::<bool, _>("sync_on_metered"),
+                "trash_retention_days": profile.get::<i32, _>("trash_retention_days"),
+            },
+            "encrypted_private_key_recovery": profile.get::<String, _>("encrypted_private_key_recovery"),
+            "created_at": profile.get::<chrono::DateTime<Utc>, _>("created_at"),
+            "updated_at": profile.get::<chrono::DateTime<Utc>, _>("updated_at"),
+            "last_login_at": profile.get::<Option<chrono::DateTime<Utc>>, _>("last_login_at"),
+        },
+        "files": file_manifest,
+        "folders": folders,
+        "shares": {
+            "files": file_shares,
+            "folders": folder_shares,
+        },
+        "tags": tags,
+        "file_tags": file_tags,
+    });
+
+    Ok((manifest, files))
+}
+
+async fn export_query_json(
+    pool: &sqlx::PgPool,
+    user_id: Uuid,
+    sql: &'static str,
+) -> Result<serde_json::Value, ApiError> {
+    sqlx::query_scalar::<_, serde_json::Value>(sql)
+        .bind(user_id)
+        .fetch_one(pool)
+        .await
+        .map_err(|e| internal_error("load user export section", e))
+}
+
+fn user_export_path(upload_dir: &FsPath, user_id: Uuid, export_id: Uuid) -> PathBuf {
+    upload_dir
+        .join(user_id.to_string())
+        .join("exports")
+        .join(format!("{export_id}.tar"))
+}
+
+async fn write_tar_archive(path: &FsPath, entries: Vec<TarEntry>) -> Result<(), ApiError> {
+    let mut archive = fs::File::create(path)
+        .await
+        .map_err(|e| internal_error("create user export archive", e))?;
+    let mut buffer = vec![0_u8; 1024 * 1024];
+
+    for entry in entries {
+        archive
+            .write_all(&tar_header(&entry.path, entry.size)?)
+            .await
+            .map_err(|e| internal_error("write user export tar header", e))?;
+
+        match entry.source {
+            TarEntrySource::Bytes(bytes) => {
+                archive
+                    .write_all(&bytes)
+                    .await
+                    .map_err(|e| internal_error("write user export manifest", e))?;
+            }
+            TarEntrySource::File(source_path) => {
+                let mut source = fs::File::open(&source_path)
+                    .await
+                    .map_err(|e| internal_error("open user export source file", e))?;
+                loop {
+                    let read = source
+                        .read(&mut buffer)
+                        .await
+                        .map_err(|e| internal_error("read user export source file", e))?;
+                    if read == 0 {
+                        break;
+                    }
+                    archive
+                        .write_all(&buffer[..read])
+                        .await
+                        .map_err(|e| internal_error("write user export file", e))?;
+                }
+            }
+        }
+
+        let padding = (512 - (entry.size % 512)) % 512;
+        if padding > 0 {
+            archive
+                .write_all(&vec![0_u8; padding as usize])
+                .await
+                .map_err(|e| internal_error("write user export tar padding", e))?;
+        }
+    }
+
+    archive
+        .write_all(&[0_u8; 1024])
+        .await
+        .map_err(|e| internal_error("finish user export archive", e))?;
+    archive
+        .flush()
+        .await
+        .map_err(|e| internal_error("flush user export archive", e))?;
+    Ok(())
+}
+
+fn tar_header(path: &str, size: u64) -> Result<[u8; 512], ApiError> {
+    let (name, prefix) = split_tar_path(path)?;
+    if name.len() > 100 || prefix.len() > 155 {
+        return Err(ApiError::BadRequest("Export path is too long".into()));
+    }
+
+    let mut header = [0_u8; 512];
+    write_tar_bytes(&mut header[0..100], name.as_bytes());
+    write_tar_octal(&mut header[100..108], 0o644);
+    write_tar_octal(&mut header[108..116], 0);
+    write_tar_octal(&mut header[116..124], 0);
+    write_tar_octal(&mut header[124..136], size);
+    write_tar_octal(&mut header[136..148], Utc::now().timestamp().max(0) as u64);
+    for byte in &mut header[148..156] {
+        *byte = b' ';
+    }
+    header[156] = b'0';
+    write_tar_bytes(&mut header[257..263], b"ustar\0");
+    write_tar_bytes(&mut header[263..265], b"00");
+    write_tar_bytes(&mut header[345..500], prefix.as_bytes());
+
+    let checksum: u32 = header.iter().map(|byte| u32::from(*byte)).sum();
+    let checksum_value = format!("{checksum:06o}\0 ");
+    write_tar_bytes(&mut header[148..156], checksum_value.as_bytes());
+    Ok(header)
+}
+
+fn split_tar_path(path: &str) -> Result<(&str, &str), ApiError> {
+    if path.len() <= 100 {
+        return Ok((path, ""));
+    }
+
+    let Some(split_at) = path.rfind('/') else {
+        return Err(ApiError::BadRequest("Export path is too long".into()));
+    };
+    let prefix = &path[..split_at];
+    let name = &path[split_at + 1..];
+
+    if name.is_empty() || name.len() > 100 || prefix.len() > 155 {
+        return Err(ApiError::BadRequest("Export path is too long".into()));
+    }
+
+    Ok((name, prefix))
+}
+
+fn write_tar_octal(field: &mut [u8], value: u64) {
+    let width = field.len();
+    let encoded = format!("{value:0width$o}\0", width = width - 1);
+    write_tar_bytes(field, encoded.as_bytes());
+}
+
+fn write_tar_bytes(field: &mut [u8], bytes: &[u8]) {
+    let len = field.len().min(bytes.len());
+    field[..len].copy_from_slice(&bytes[..len]);
+}
+
+fn sanitize_export_path_component(value: &str) -> String {
+    let mut sanitized: String = value
+        .chars()
+        .map(|ch| match ch {
+            'a'..='z' | 'A'..='Z' | '0'..='9' | '.' | '_' | '-' => ch,
+            _ => '_',
+        })
+        .take(56)
+        .collect();
+
+    if sanitized.trim_matches('_').is_empty() {
+        sanitized = "encrypted-file.bin".into();
+    }
+    sanitized
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1363,5 +1900,21 @@ mod tests {
         assert!(!refresh.contains("Path=/users"));
         assert!(!persistence.contains("Path=/users"));
         assert!(!cleared.contains("Path=/users"));
+    }
+
+    #[test]
+    fn tar_header_supports_export_file_paths_with_prefix() {
+        let path = "encrypted-files/00000000-0000-0000-0000-000000000000-very-long-exported-file-name-with-safe-suffix.bin";
+        let header = tar_header(path, 128).expect("tar header");
+
+        assert_eq!(
+            std::str::from_utf8(&header[345..360]).expect("prefix"),
+            "encrypted-files"
+        );
+        assert!(
+            std::str::from_utf8(&header[0..100])
+                .expect("name")
+                .starts_with("00000000-0000-0000-0000-000000000000-very-long")
+        );
     }
 }

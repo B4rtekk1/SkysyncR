@@ -269,6 +269,29 @@ export async function getOperationLog(): Promise<OperationLogResponse> {
   return readJson(res, operationLogResponse, 'OperationLogResponse')
 }
 
+export async function downloadUserDataExport(): Promise<void> {
+  const res = await authenticatedFetch(`${url}users/export`, {
+    method: 'GET',
+  })
+
+  if (!res.ok) {
+    await throwApiError(res, 'Could not prepare data export')
+  }
+
+  const blob = await res.blob()
+  const disposition = res.headers.get('content-disposition') ?? ''
+  const filenameMatch = /filename="([^"]+)"/.exec(disposition)
+  const filename = filenameMatch?.[1] ?? `skysyncr-user-export-${new Date().toISOString().slice(0, 10)}.tar`
+  const href = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = href
+  link.download = filename
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  URL.revokeObjectURL(href)
+}
+
 export async function revokeSession(sessionId: string): Promise<void> {
   const res = await authenticatedFetch(`${url}users/sessions/${sessionId}`, {
     method: 'DELETE',
