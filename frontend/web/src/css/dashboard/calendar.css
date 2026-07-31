@@ -628,11 +628,6 @@
     background: var(--panel-2);
 }
 
-.calendar-panel__event--deadline {
-    border-color: rgba(255, 176, 76, 0.26);
-    box-shadow: inset 3px 0 0 rgba(255, 176, 76, 0.62);
-}
-
 .calendar-panel__event strong {
     display: block;
     min-width: 0;

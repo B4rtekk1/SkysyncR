@@ -36,16 +36,6 @@
     color: var(--paper);
 }
 
-.groups-panel__count {
-    flex-shrink: 0;
-    border: 1px solid var(--line);
-    border-radius: 999px;
-    padding: 5px 9px;
-    font-family: var(--font-mono), monospace;
-    font-size: 0.68rem;
-    color: var(--mist);
-}
-
 .groups-panel__back {
     border: none;
     background: transparent;
@@ -250,13 +240,6 @@
     color: #dc2626;
 }
 
-.groups-invite {
-    display: grid;
-    grid-template-columns: minmax(220px, 1fr) 140px auto;
-    align-items: end;
-    gap: 10px;
-}
-
 .groups-invite__field {
     display: flex;
     flex-direction: column;
@@ -317,9 +300,6 @@
         var(--panel-2);
 }
 
-.groups-invite__submit {
-    height: 40px;
-}
 
 .groups-invite__error {
     margin: 10px 0 0;

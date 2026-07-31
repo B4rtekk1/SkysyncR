@@ -142,26 +142,6 @@
   transition: opacity 0.25s ease, transform 0.25s ease;
 }
 
-.eye-icon.is-open .eye-icon__layer--open {
-  opacity: 1;
-  transform: scale(1) rotate(0deg);
-}
-
-.eye-icon.is-open .eye-icon__layer--closed {
-  opacity: 0;
-  transform: scale(0.6) rotate(12deg);
-}
-
-.eye-icon.is-closed .eye-icon__layer--open {
-  opacity: 0;
-  transform: scale(0.6) rotate(-12deg);
-}
-
-.eye-icon.is-closed .eye-icon__layer--closed {
-  opacity: 1;
-  transform: scale(1) rotate(0deg);
-}
-
 .checkbox {
   display: flex;
   align-items: center;

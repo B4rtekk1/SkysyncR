@@ -51,10 +51,6 @@
     letter-spacing: 0;
 }
 
-.groups-panel__subtitle {
-    max-width: 520px;
-    font-size: 0.9rem;
-}
 
 .groups-panel__back {
     min-height: 32px;
@@ -194,14 +190,6 @@ html[data-theme='light'] .groups-list__mark {
 
 .groups-role--viewer {
     border-color: rgba(148, 163, 184, 0.2);
-}
-
-.groups-role--editor {
-    border-color: rgba(var(--signal-rgb), 0.25);
-}
-
-.groups-role--admin {
-    border-color: rgba(245, 158, 11, 0.28);
 }
 
 .groups-summary {

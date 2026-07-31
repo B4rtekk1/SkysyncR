@@ -31,9 +31,7 @@
 
 .file-card__action--download,
 .file-card__action--rename,
-.file-card__action--preview,
 .file-card__action--share,
-.file-card__action--note,
 .file-card__action--info,
 .file-card__action--more,
 .file-card__action--confirm,
@@ -49,22 +47,13 @@
     color: var(--mist);
 }
 
-.file-card__action--preview {
-    border-color: color-mix(in srgb, var(--line) 78%, var(--file-accent) 22%);
-    background: var(--panel-2);
-    color: color-mix(in srgb, var(--file-accent) 68%, var(--paper));
-}
 
 .file-card__action--download:hover,
 .file-card__action--download:focus-visible,
 .file-card__action--rename:hover,
 .file-card__action--rename:focus-visible,
-.file-card__action--preview:hover,
-.file-card__action--preview:focus-visible,
 .file-card__action--share:hover,
 .file-card__action--share:focus-visible,
-.file-card__action--note:hover,
-.file-card__action--note:focus-visible,
 .file-card__action--info:hover,
 .file-card__action--info:focus-visible,
 .file-card__action--info.is-active,
@@ -92,10 +81,6 @@
     background: rgba(var(--signal-rgb), 0.08);
 }
 
-.file-card__action--note.is-active {
-    color: var(--amber);
-    background: rgba(255, 176, 76, 0.08);
-}
 
 .file-card__more {
     position: relative;
@@ -366,9 +351,7 @@
 
     .file-card__action--download,
     .file-card__action--rename,
-    .file-card__action--preview,
     .file-card__action--share,
-    .file-card__action--note,
     .file-card__action--info,
     .file-card__action--more,
     .file-card__action--confirm,
