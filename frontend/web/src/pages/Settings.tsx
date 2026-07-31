@@ -109,6 +109,12 @@ const settingsNavItems = [
     { href: '#settings-audit', label: 'Audit log', icon: AUDIT_SETTINGS_ICON },
 ]
 
+function clearSettingsHash() {
+    if (!window.location.hash.startsWith('#settings-')) return
+
+    window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}`)
+}
+
 const sessionActionLabels: Record<string, string> = {
     login: 'Signed in',
     refresh: 'Session refreshed',
@@ -211,12 +217,15 @@ function SettingsModalContent({ currentUser, onClose, onSave }: SettingsModalPro
         setClosing((alreadyClosing) => {
             if (alreadyClosing) return true
 
+            clearSettingsHash()
             window.setTimeout(onClose, SETTINGS_ANIMATION_MS)
             return true
         })
     }, [onClose])
 
     useModalA11y({ dialogRef, onClose: requestClose })
+
+    useEffect(() => clearSettingsHash, [])
 
     const loadSessions = useCallback(async () => {
         if (!currentUser) return
@@ -606,6 +615,14 @@ function SettingsModalContent({ currentUser, onClose, onSave }: SettingsModalPro
                                     void savePassword()
                                 }}
                             >
+                                <input
+                                    type="text"
+                                    name="username"
+                                    autoComplete="username"
+                                    value={currentUser?.email ?? ''}
+                                    readOnly
+                                    hidden
+                                />
                                 <label className="settings-field">
                                     <span>Current password</span>
                                     <input

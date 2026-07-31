@@ -84,18 +84,26 @@ export function useFolderDownload(privateKey: CryptoKey | null, setError: (error
         try {
             setError(null)
             const folderName = safeZipName(folder.name, 'folder')
-            const streamingWritable = canStreamZipToFile()
-                ? await openZipWritableFile(`${folderName}.zip`)
-                : null
-            if (canStreamZipToFile() && !streamingWritable) return
-
             const entries = await collectFolderEntries(folder.id, folderName, new Set())
-            const streamingSupported = Boolean(streamingWritable)
-            const estimate = estimateZipDownload(entries, streamingSupported)
-            const limit = streamingSupported ? STREAMING_ZIP_DOWNLOAD_LIMIT_BYTES : FALLBACK_ZIP_DOWNLOAD_LIMIT_BYTES
+            let streamingWritable: WritableStream<Uint8Array> | null = null
+            let streamingSupported = false
+            let estimate = estimateZipDownload(entries, false)
+            let limit = FALLBACK_ZIP_DOWNLOAD_LIMIT_BYTES
+
+            if (estimate.totalBytes > FALLBACK_ZIP_DOWNLOAD_LIMIT_BYTES) {
+                if (!canStreamZipToFile()) {
+                    throw new Error(
+                        `Folder is too large to download safely here. Estimated ZIP size is ${formatBytes(estimate.totalBytes)} across ${estimate.fileCount} files. ` +
+                        `Current browser path supports up to ${formatBytes(FALLBACK_ZIP_DOWNLOAD_LIMIT_BYTES)} without streaming file-save support.`,
+                    )
+                }
+
+                streamingSupported = true
+                estimate = estimateZipDownload(entries, true)
+                limit = STREAMING_ZIP_DOWNLOAD_LIMIT_BYTES
+            }
 
             if (estimate.totalBytes > limit) {
-                await streamingWritable?.abort()
                 throw new Error(
                     `Folder is too large to download safely here. Estimated ZIP size is ${formatBytes(estimate.totalBytes)} across ${estimate.fileCount} files. ` +
                     `Current browser path supports up to ${formatBytes(limit)}${streamingSupported ? '' : ' without streaming file-save support'}.`,
@@ -110,9 +118,13 @@ export function useFolderDownload(privateKey: CryptoKey | null, setError: (error
                     'Continue?',
                 )
                 if (!confirmed) {
-                    await streamingWritable?.abort()
                     return
                 }
+            }
+
+            if (streamingSupported) {
+                streamingWritable = await openZipWritableFile(`${folderName}.zip`)
+                if (!streamingWritable) return
             }
 
             const zipEntries: ZipStreamEntry[] = entries.map((entry) => ({
