@@ -14,6 +14,9 @@ const SheetPreview = lazy(() => import('./SheetPreview').then((module) => ({ def
 const VideoPreviewPlayer = lazy(() =>
     import('./VideoPreviewPlayer').then((module) => ({ default: module.VideoPreviewPlayer })),
 )
+const AudioPreviewPlayer = lazy(() =>
+    import('./AudioPreviewPlayer').then((module) => ({ default: module.AudioPreviewPlayer })),
+)
 const AUTOSAVE_DELAY_MS = 1200
 const loadedPreviewImageUrls = new Set<string>()
 
@@ -276,6 +279,11 @@ export function ImagePreviewModal({
                     {preview.url && preview.kind === 'video' && (
                         <Suspense fallback={<PreviewFallback label="Loading video preview..." />}>
                             <VideoPreviewPlayer item={preview.item} url={preview.url} />
+                        </Suspense>
+                    )}
+                    {preview.url && preview.kind === 'audio' && (
+                        <Suspense fallback={<PreviewFallback label="Loading audio preview..." />}>
+                            <AudioPreviewPlayer item={preview.item} url={preview.url} />
                         </Suspense>
                     )}
                     {preview.url && preview.kind === 'pdf' && (

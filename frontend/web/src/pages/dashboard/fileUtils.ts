@@ -102,7 +102,12 @@ export function kindFromFile(filename: string, mime: string | null): FileKind {
 
     if (normalizedMime.startsWith('image/') || ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'avif'].includes(ext)) return 'image'
     if (normalizedMime.startsWith('video/') || ['mp4', 'mov', 'mkv', 'avi', 'webm'].includes(ext)) return 'video'
-    if (normalizedMime.startsWith('audio/') || ['mp3', 'wav', 'ogg', 'flac', 'm4a'].includes(ext)) return 'audio'
+    if (
+        normalizedMime.startsWith('audio/') ||
+        ['mp3', 'mpeg', 'wav', 'ogg', 'oga', 'opus', 'flac', 'm4a', 'aac', 'weba', 'wma'].includes(ext)
+    ) {
+        return 'audio'
+    }
     if (normalizedMime === 'application/pdf' || ext === 'pdf') return 'pdf'
     if (
         normalizedMime.includes('spreadsheet') ||

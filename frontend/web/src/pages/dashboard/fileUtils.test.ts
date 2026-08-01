@@ -17,6 +17,14 @@ test('kindFromFile prefers MIME families for common media files', () => {
   assert.equal(kindFromFile('download.bin', 'image/png'), 'image')
   assert.equal(kindFromFile('download.bin', 'video/mp4'), 'video')
   assert.equal(kindFromFile('download.bin', 'audio/mpeg'), 'audio')
+  assert.equal(kindFromFile('download.bin', 'audio/ogg; codecs=opus'), 'audio')
+})
+
+test('kindFromFile recognizes common audio extensions', () => {
+  assert.equal(kindFromFile('track.mp3', null), 'audio')
+  assert.equal(kindFromFile('voice.m4a', null), 'audio')
+  assert.equal(kindFromFile('recording.opus', null), 'audio')
+  assert.equal(kindFromFile('archive.weba', null), 'audio')
 })
 
 test('kindFromFile recognizes office, archive and code extensions', () => {

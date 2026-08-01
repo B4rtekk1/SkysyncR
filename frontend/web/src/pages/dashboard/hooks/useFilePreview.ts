@@ -42,6 +42,7 @@ function previewKindFromFile(filename: string, mime: string | null): FilePreview
     const kind: FileKind = kindFromFile(filename, mime)
     if (kind === 'image') return 'image'
     if (kind === 'video') return 'video'
+    if (kind === 'audio') return 'audio'
     if (kind === 'pdf') return 'pdf'
     if (kind === 'presentation') return 'presentation'
     if (kind === 'sheet') return 'sheet'
@@ -180,6 +181,7 @@ export function useFilePreview(
             if (
                 previewKind === 'image' ||
                 previewKind === 'video' ||
+                previewKind === 'audio' ||
                 previewKind === 'pdf' ||
                 previewKind === 'presentation' ||
                 previewKind === 'sheet' ||
