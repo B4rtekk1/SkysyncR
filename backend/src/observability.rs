@@ -1,5 +1,5 @@
 use axum::body::Body;
-use axum::extract::{ConnectInfo, Request, State};
+use axum::extract::{ConnectInfo, MatchedPath, Request, State};
 use axum::http::{HeaderName, HeaderValue, StatusCode, header};
 use axum::middleware::Next;
 use axum::response::{IntoResponse, Response};
@@ -59,7 +59,11 @@ pub async fn request_observability(mut request: Request, next: Next) -> Response
     let started = Instant::now();
     let request_id = request_id(&request);
     let method = request.method().clone();
-    let path = request.uri().path().to_string();
+    let path = request
+        .extensions()
+        .get::<MatchedPath>()
+        .map(|matched_path| route_name(matched_path.as_str()))
+        .unwrap_or_else(|| sanitized_request_path(request.uri().path()));
     let request_bytes = content_length(request.headers());
     let user_agent = header_value(request.headers(), header::USER_AGENT);
     let client_ip = request
@@ -664,6 +668,34 @@ fn header_value(headers: &axum::http::HeaderMap, name: HeaderName) -> Option<Str
         .map(|value| value.chars().take(256).collect())
 }
 
+fn sanitized_request_path(path: &str) -> String {
+    let segments: Vec<&str> = path
+        .split('/')
+        .filter(|segment| !segment.is_empty())
+        .collect();
+
+    match segments.as_slice() {
+        ["share", _, "download"] => "/share/:token/download".into(),
+        ["share", "folders", _] => "/share/folders/:token".into(),
+        ["share", "folders", _, "files", _, "download"] => {
+            "/share/folders/:token/files/:file_id/download".into()
+        }
+        _ => path.to_string(),
+    }
+}
+
+fn route_name(path: &str) -> String {
+    path.split('/')
+        .map(|segment| {
+            segment
+                .strip_prefix('{')
+                .and_then(|segment| segment.strip_suffix('}'))
+                .map_or_else(|| segment.to_string(), |parameter| format!(":{parameter}"))
+        })
+        .collect::<Vec<_>>()
+        .join("/")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -694,6 +726,26 @@ mod tests {
         assert_eq!(
             header_value(&headers, header::USER_AGENT).unwrap().len(),
             256
+        );
+    }
+
+    #[test]
+    fn sanitized_request_path_hides_public_share_tokens() {
+        assert_eq!(
+            sanitized_request_path("/share/secret-token/download"),
+            "/share/:token/download"
+        );
+        assert_eq!(
+            sanitized_request_path("/share/folders/secret-token/files/file-id/download"),
+            "/share/folders/:token/files/:file_id/download"
+        );
+    }
+
+    #[test]
+    fn route_name_uses_colon_parameters() {
+        assert_eq!(
+            route_name("/share/{token}/download"),
+            "/share/:token/download"
         );
     }
 }

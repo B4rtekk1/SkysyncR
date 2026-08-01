@@ -1523,7 +1523,6 @@ pub async fn download_public_file(
     tracing::info!(
         request_id = %request_id.0,
         transfer_direction = "public_download",
-        share_token = %share_token,
         bytes = file.size_bytes,
         "file_transfer"
     );

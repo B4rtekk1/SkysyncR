@@ -419,7 +419,6 @@ pub async fn download_public_folder_file(
     tracing::info!(
         request_id = %request_id.0,
         transfer_direction = "public_folder_download",
-        share_token = %share_token,
         file_id = %file_id,
         bytes = file.size_bytes,
         "file_transfer"
