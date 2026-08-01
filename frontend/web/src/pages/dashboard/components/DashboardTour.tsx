@@ -111,7 +111,7 @@ export function DashboardTour({ userId }: { userId: string }) {
                 <div className="dashboard-tour__header">
                     <span className="dashboard-tour__eyebrow">{step.eyebrow}</span>
                     <button className="dashboard-tour__close app-close-button" type="button" onClick={closeTour} aria-label="Close tutorial">
-                        ×
+                        <span aria-hidden="true">×</span>
                     </button>
                 </div>
                 <h2 id="dashboard-tour-title">{step.title}</h2>

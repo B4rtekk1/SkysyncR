@@ -139,9 +139,6 @@ function Landing() {
                 Sign in
               </Link>
             </div>
-            <p className="trust-line">
-              No card required · your private key stays with you
-            </p>
           </div>
 
           <div className={`hero__signature ${loaded ? 'is-in' : ''}`}>
