@@ -415,8 +415,7 @@
 }
 
 .notifications__trigger:hover,
-.notifications__trigger:focus-visible,
-.notifications__trigger.has-unread {
+.notifications__trigger:focus-visible {
     border-color: var(--signal);
     color: var(--signal);
     outline: none;
