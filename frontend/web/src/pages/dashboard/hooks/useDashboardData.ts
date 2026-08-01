@@ -124,7 +124,15 @@ export function useDashboardData({ view, activeFolderId, privateKey, userId }: U
                 let fileData: ApiFile[]
                 let folderData: ApiFolder[] = []
 
-                if (view === 'all') {
+                if (view === 'recent') {
+                    const [files, foldersData, sharedFiles] = await Promise.all([
+                        listFiles(),
+                        listFolders(),
+                        listSharedFilesWithMe(),
+                    ])
+                    fileData = [...files, ...sharedFiles]
+                    folderData = foldersData
+                } else if (view === 'all') {
                     const [files, foldersData] = await Promise.all([
                         listFiles(activeFolderId),
                         listFolders(activeFolderId ?? undefined),
@@ -147,7 +155,7 @@ export function useDashboardData({ view, activeFolderId, privateKey, userId }: U
                 }
 
                 if (active) {
-                    if (view === 'all' || view === 'favourites') {
+                    if (view === 'all' || view === 'favourites' || view === 'recent') {
                         void loadTagsForFiles(fileData).then(({ tagData, fileTagsByFileId }) => {
                             if (active) {
                                 setTags(tagData)
@@ -177,13 +185,14 @@ export function useDashboardData({ view, activeFolderId, privateKey, userId }: U
                         view === 'all'
                             ? visibleFileData.filter((file) => file.folder_id === activeFolderId)
                             : visibleFileData
-                    if (view !== 'shared') scheduleMetadataMigration(fileData, privateKey)
+                    if (view !== 'shared') scheduleMetadataMigration(fileData.filter((file) => !('permissions' in file)), privateKey)
                     setItems(applySavedOrder(scopedFileData, view))
                     setFolders(visibleFolderData)
                     setOfflineSnapshot(null)
-                    if (view === 'all' || view === 'favourites') {
-                        setStorageItems(visibleFileData as ApiFile[])
-                        setFavouriteIds(new Set(fileData.filter((file) => file.is_favourite).map((file) => file.id)))
+                    if (view === 'all' || view === 'favourites' || view === 'recent') {
+                        const ownedVisibleFiles = visibleFileData.filter((file): file is ApiFile => !('permissions' in file))
+                        setStorageItems(ownedVisibleFiles)
+                        setFavouriteIds(new Set(fileData.filter((file) => !('permissions' in file) && file.is_favourite).map((file) => file.id)))
                         setFolderFavouriteIds(new Set(folderData.filter((folder) => folder.is_favourite).map((folder) => folder.id)))
                     }
                 }

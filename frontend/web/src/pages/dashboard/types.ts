@@ -1,5 +1,5 @@
 import type { ApiFile, ApiFolder, SharedFile } from '../../api/files'
-export type ViewKey = 'all' | 'favourites' | 'shared' | 'groups' | 'calendar' | 'security' | 'trash'
+export type ViewKey = 'recent' | 'all' | 'favourites' | 'shared' | 'groups' | 'calendar' | 'security' | 'trash'
 export type LayoutMode = 'grid' | 'list'
 export type FileSortKey =
     | 'manual'

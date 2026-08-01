@@ -174,7 +174,7 @@ function Dashboard() {
         toggleFilterMenu,
     } = useDashboardMenus({ filePreviewOpen: Boolean(filePreview) })
     const visibleFolders = useMemo(() => {
-        if (view !== 'all' && view !== 'favourites') return []
+        if (view !== 'all' && view !== 'favourites' && view !== 'recent') return []
         return folders
             .filter((folder) => (view === 'favourites' ? folderFavouriteIds.has(folder.id) : true))
             .filter((folder) =>

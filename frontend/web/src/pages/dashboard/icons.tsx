@@ -1,6 +1,13 @@
 import React from 'react'
 import type { ViewKey } from './types'
 export const NAV_ICONS: Record<ViewKey, React.ReactElement> = {
+    recent: (
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M12 5.2v6.5l4 2.3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+            <path d="M5.4 7.4A8.2 8.2 0 1 1 4 12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+            <path d="M4.7 4.7v3.4h3.4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+    ),
     all: (
         <svg width="17" height="17" viewBox="0 0 24 24" fill="none" aria-hidden="true">
             <path d="M4 6.5h6l2 2.5h8v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V7.5a1 1 0 0 1 1-1Z" stroke="currentColor" strokeWidth="1.4" />

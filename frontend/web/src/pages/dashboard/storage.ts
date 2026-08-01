@@ -233,7 +233,7 @@ export function applySavedOrder<T extends Item>(data: T[], view: ViewKey): T[] {
 
 export const NAV_ORDER_STORAGE_KEY = 'nav_order'
 export const ACTIVE_VIEW_STORAGE_KEY = 'active_view'
-export const DEFAULT_NAV_ORDER: ViewKey[] = ['all', 'favourites', 'shared', 'groups', 'calendar', 'security', 'trash']
+export const DEFAULT_NAV_ORDER: ViewKey[] = ['recent', 'all', 'favourites', 'shared', 'groups', 'calendar', 'security', 'trash']
 export const SIDEBAR_WIDTH_STORAGE_KEY = 'sidebar_width'
 export const SIDEBAR_HIDDEN_STORAGE_KEY = 'sidebar_hidden'
 export const MIN_SIDEBAR_WIDTH = 72
@@ -287,9 +287,9 @@ export function saveNavOrder(order: ViewKey[]) {
 export function loadActiveView(): ViewKey {
     try {
         const raw = localStorage.getItem(ACTIVE_VIEW_STORAGE_KEY)
-        return DEFAULT_NAV_ORDER.includes(raw as ViewKey) ? (raw as ViewKey) : 'all'
+        return DEFAULT_NAV_ORDER.includes(raw as ViewKey) ? (raw as ViewKey) : 'recent'
     } catch {
-        return 'all'
+        return 'recent'
     }
 }
 
@@ -302,6 +302,7 @@ export function saveActiveView(view: ViewKey) {
 }
 
 export const NAV_LABELS: Record<ViewKey, string> = {
+    recent: 'Recent and important',
     all: 'All files',
     favourites: 'Favourites',
     shared: 'Shared with me',

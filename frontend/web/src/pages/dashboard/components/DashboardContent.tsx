@@ -8,6 +8,7 @@ import { DashboardToolbar } from './DashboardToolbar'
 import { EmptyPane } from './EmptyPane'
 import { FolderBreadcrumbs } from './FolderBreadcrumbs'
 import { GroupsPanel } from './GroupsPanel'
+import { RecentImportantPanel } from './RecentImportantPanel'
 import { SecurityCenterPanel } from './SecurityCenterPanel'
 import { TransferQueuePanel } from './TransferQueuePanel'
 import type { TransferHistoryEntry } from './TransferQueuePanel'
@@ -181,6 +182,7 @@ type DashboardContentProps = {
 
 function titleForView(view: ViewKey) {
     const titles: Record<ViewKey, string> = {
+        recent: 'Recent and important',
         all: 'All files',
         favourites: 'Favourites',
         shared: 'Shared with me',
@@ -373,7 +375,8 @@ export function DashboardContent({
     const bulkActionsAvailable = view === 'all' || view === 'favourites' || view === 'trash'
     const bulkActionsVisible = bulkActionsAvailable && selectedCount > 0
     const subtitle =
-        view === 'groups' || view === 'calendar'
+        view === 'recent'
+        || view === 'groups' || view === 'calendar'
         || view === 'security'
             ? null
             : loading
@@ -445,7 +448,7 @@ export function DashboardContent({
                     {subtitle && <p className="shell__subtitle">{subtitle}</p>}
                 </div>
 
-                {view !== 'security' && (
+                {view !== 'security' && view !== 'recent' && (
                     <DashboardToolbar
                         view={view}
                         sortMenuRef={sortMenuRef}
@@ -665,6 +668,36 @@ export function DashboardContent({
 
             {loading && <p className="shell__loading">Loading...</p>}
 
+            {!loading && view === 'recent' && (
+                <RecentImportantPanel
+                    items={renderedItems}
+                    files={storageItems}
+                    folders={visibleFolders}
+                    incomingGroupInvites={incomingGroupInvites}
+                    pendingIds={pendingIds}
+                    uploadTransfers={uploadTransfers}
+                    favouriteIds={favouriteIds}
+                    tags={tags}
+                    fileTagsByFileId={fileTagsByFileId}
+                    onDelete={onDelete}
+                    onRestoreVersion={onRestoreVersion}
+                    onPreview={onPreview}
+                    onDownload={onDownload}
+                    onRename={onRename}
+                    onShare={onShare}
+                    onNote={onNote}
+                    onMoveFile={onMoveFile}
+                    onToggleFavourite={onToggleFavourite}
+                    onCreateTag={onCreateTag}
+                    onAddTagToFile={onAddTagToFile}
+                    onRemoveTagFromFile={onRemoveTagFromFile}
+                    onAcceptInvite={onAcceptInvite}
+                    onDeclineInvite={onDeclineInvite}
+                    onBlockFileLink={onBlockFileLink}
+                    onBlockFolderLink={onBlockFolderLink}
+                />
+            )}
+
             {!loading && view === 'shared' && isEmpty && (
                 <EmptyPane
                     title={query ? 'No shared files match your search' : hasActiveFilter ? 'No shared files match your filters' : 'Nothing shared yet'}
@@ -772,7 +805,7 @@ export function DashboardContent({
                 />
             )}
 
-            {!loading && (visibleFolders.length > 0 || renderedItems.length > 0) && (
+            {!loading && view !== 'recent' && (visibleFolders.length > 0 || renderedItems.length > 0) && (
                 <DashboardFileGrid
                     visibleFolders={visibleFolders}
                     renderedItems={renderedItems}
