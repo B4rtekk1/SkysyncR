@@ -376,7 +376,7 @@ export function useFileUpload({
                     return
                 }
 
-                if (!onlineRef.current || navigator.onLine === false) {
+                if (!onlineRef.current || !navigator.onLine) {
                     updateTransfer(job.id, { status: 'queued', error: 'Waiting for network connection.' })
                     return
                 }

@@ -117,16 +117,19 @@ export async function openZipWritableFile(filename: string): Promise<WritableStr
     const picker = (window as WindowWithSaveFilePicker).showSaveFilePicker
     if (!picker) return null
 
-    try {
-        const handle = await picker({
-            suggestedName: filename,
-            types: [{ description: 'ZIP archive', accept: { 'application/zip': ['.zip'] } }],
-        })
-        return handle.createWritable()
-    } catch (error) {
-        if (error instanceof DOMException && error.name === 'AbortError') return null
-        throw error
-    }
+    const result = await picker({
+        suggestedName: filename,
+        types: [{ description: 'ZIP archive', accept: { 'application/zip': ['.zip'] } }],
+    }).then(
+        (handle) => ({ handle }),
+        (error: unknown) => {
+            if (error instanceof DOMException && error.name === 'AbortError') return { handle: null }
+            return { error }
+        },
+    )
+
+    if ('error' in result) throw result.error
+    return result.handle ? result.handle.createWritable() : null
 }
 
 export function estimateZipDownload(
@@ -228,14 +231,17 @@ async function writeZipStream(writable: WritableStream<Uint8Array>, entries: Zip
     const writer = writable.getWriter()
     const centralDirectory: Uint8Array[] = []
     let offset = 0
+    let failed = false
+    let failure: unknown
+
+    for (const entry of entries) {
+        assertZipUint32(entry.size)
+    }
 
     try {
         for (const entry of entries) {
             const name = normalizeZipPath(entry.path)
             if (!name) continue
-            if (entry.size > UINT32_MAX) {
-                throw new Error('A single file is too large for this ZIP format.')
-            }
 
             const filename = encoder.encode(name)
             const { date, time } = dosDateTime(entry.modifiedAt ?? new Date())
@@ -257,9 +263,7 @@ async function writeZipStream(writable: WritableStream<Uint8Array>, entries: Zip
                     crc = crc32Update(crc, value)
                     size += value.byteLength
                     offset += value.byteLength
-                    if (size > UINT32_MAX) {
-                        throw new Error('A single file is too large for this ZIP format.')
-                    }
+                    assertZipUint32(size)
                     await writer.write(value)
                 }
             } finally {
@@ -284,8 +288,18 @@ async function writeZipStream(writable: WritableStream<Uint8Array>, entries: Zip
         await writer.write(endOfCentralDirectory(centralDirectory.length, centralDirectorySize, centralDirectoryOffset))
         await writer.close()
     } catch (error) {
-        await writer.abort(error)
-        throw error
+        failed = true
+        failure = error
+    } finally {
+        if (failed) await writer.abort(failure)
+    }
+
+    if (failed) throw failure
+}
+
+function assertZipUint32(value: number): void {
+    if (value > UINT32_MAX) {
+        throw new Error('A single file is too large for this ZIP format.')
     }
 }
 
