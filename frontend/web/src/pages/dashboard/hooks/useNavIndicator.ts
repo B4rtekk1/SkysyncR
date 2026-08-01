@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { NavIndicator, ViewKey } from '../types'
 
 export function useNavIndicator(
@@ -57,17 +57,32 @@ export function useNavIndicator(
         })
     }, [updateNavIndicator])
 
-    useEffect(() => {
+    useLayoutEffect(() => {
         scheduleNavIndicatorUpdate()
+        const nav = navListRef.current
+        const activeItem = navItemRefs.current[view]
+        const resizeObserver =
+            !sidebarHidden && typeof ResizeObserver !== 'undefined'
+                ? new ResizeObserver(scheduleNavIndicatorUpdate)
+                : null
+
+        if (resizeObserver) {
+            if (nav) resizeObserver.observe(nav)
+            if (activeItem) resizeObserver.observe(activeItem)
+        }
+
+        const settleTimeout = window.setTimeout(scheduleNavIndicatorUpdate, 240)
         window.addEventListener('resize', scheduleNavIndicatorUpdate)
         return () => {
+            resizeObserver?.disconnect()
+            window.clearTimeout(settleTimeout)
             window.removeEventListener('resize', scheduleNavIndicatorUpdate)
             if (frameRef.current !== null) {
                 cancelAnimationFrame(frameRef.current)
                 frameRef.current = null
             }
         }
-    }, [navOrder, scheduleNavIndicatorUpdate, sidebarWidth])
+    }, [navOrder, scheduleNavIndicatorUpdate, sidebarHidden, sidebarWidth, view])
 
     useEffect(() => {
         let pullFrame: number | undefined
