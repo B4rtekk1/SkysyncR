@@ -3,7 +3,6 @@ use axum::extract::{ConnectInfo, MatchedPath, Request, State};
 use axum::http::{HeaderName, HeaderValue, StatusCode, header};
 use axum::middleware::Next;
 use axum::response::{IntoResponse, Response};
-use serde::Serialize;
 use std::collections::BTreeMap;
 use std::net::SocketAddr;
 use std::sync::{Mutex, OnceLock};
@@ -11,6 +10,7 @@ use std::time::{Duration, Instant};
 use tracing_subscriber::EnvFilter;
 use uuid::Uuid;
 
+use crate::auth::AuthUser;
 use crate::db::storage::{StorageOverview, get_storage_overview};
 use crate::state::AppState;
 
@@ -150,7 +150,7 @@ pub fn observe_db_latency(operation: &'static str, elapsed: Duration) {
     metrics().record_db_latency(operation, latency_ms);
 }
 
-pub async fn metrics_endpoint(State(state): State<AppState>) -> Response {
+pub async fn metrics_endpoint(_auth: AuthUser, State(state): State<AppState>) -> Response {
     let db_latency = probe_database_latency(&state).await;
     let storage_overview = match get_storage_overview(&state.db_pool).await {
         Ok(overview) => Some(overview),
@@ -179,14 +179,7 @@ pub async fn metrics_endpoint(State(state): State<AppState>) -> Response {
 
 pub async fn healthz(State(state): State<AppState>) -> impl IntoResponse {
     let db_latency = probe_database_latency(&state).await;
-    let storage = get_storage_overview(&state.db_pool).await.ok();
-    if let Some(overview) = storage.as_ref() {
-        emit_storage_alert(&state, overview);
-    }
-
-    let alerts = active_alerts(&state, db_latency, storage.as_ref());
-    let status = if db_latency.is_some() && alerts.iter().all(|alert| alert.severity != "critical")
-    {
+    let status = if db_latency.is_some() {
         StatusCode::OK
     } else {
         StatusCode::SERVICE_UNAVAILABLE
@@ -194,21 +187,11 @@ pub async fn healthz(State(state): State<AppState>) -> impl IntoResponse {
 
     (
         status,
-        axum::Json(HealthResponse {
-            status: if status == StatusCode::OK {
-                "ok"
-            } else {
-                "degraded"
-            },
-            database: DatabaseHealth {
-                reachable: db_latency.is_some(),
-                latency_ms: db_latency,
-                pool_size: state.db_pool.size(),
-                pool_idle: state.db_pool.num_idle() as u32,
-            },
-            storage: storage.map(StorageHealth::from),
-            alerts,
-        }),
+        if status == StatusCode::OK {
+            "ok\n"
+        } else {
+            "degraded\n"
+        },
     )
 }
 
@@ -255,43 +238,6 @@ fn emit_storage_alert(state: &AppState, overview: &StorageOverview) {
             "storage usage exceeded alert threshold"
         );
     }
-}
-
-fn active_alerts(
-    state: &AppState,
-    db_latency: Option<f64>,
-    storage: Option<&StorageOverview>,
-) -> Vec<OperationalAlert> {
-    let mut alerts = Vec::new();
-
-    match db_latency {
-        Some(latency_ms) if latency_ms > state.config.db_latency_alert_ms as f64 => {
-            alerts.push(OperationalAlert {
-                name: "database_latency_high",
-                severity: "warning",
-                message: "Database health probe latency is above threshold",
-            });
-        }
-        None => alerts.push(OperationalAlert {
-            name: "database_unreachable",
-            severity: "critical",
-            message: "Database health probe failed",
-        }),
-        _ => {}
-    }
-
-    if let Some(overview) = storage
-        && let Some(ratio) = overview.usage_ratio()
-        && ratio >= state.config.storage_usage_alert_ratio
-    {
-        alerts.push(OperationalAlert {
-            name: "storage_usage_high",
-            severity: "warning",
-            message: "Storage usage is above threshold",
-        });
-    }
-
-    alerts
 }
 
 fn metrics() -> &'static Metrics {
@@ -565,48 +511,6 @@ impl LatencyMetric {
         self.sum += latency_ms;
         self.max = self.max.max(latency_ms);
     }
-}
-
-#[derive(Serialize)]
-struct HealthResponse {
-    status: &'static str,
-    database: DatabaseHealth,
-    storage: Option<StorageHealth>,
-    alerts: Vec<OperationalAlert>,
-}
-
-#[derive(Serialize)]
-struct DatabaseHealth {
-    reachable: bool,
-    latency_ms: Option<f64>,
-    pool_size: u32,
-    pool_idle: u32,
-}
-
-#[derive(Serialize)]
-struct StorageHealth {
-    users: i64,
-    total_bytes: i64,
-    used_bytes: i64,
-    usage_ratio: Option<f64>,
-}
-
-impl From<StorageOverview> for StorageHealth {
-    fn from(value: StorageOverview) -> Self {
-        Self {
-            users: value.users,
-            total_bytes: value.total_bytes,
-            used_bytes: value.used_bytes,
-            usage_ratio: value.usage_ratio(),
-        }
-    }
-}
-
-#[derive(Serialize)]
-struct OperationalAlert {
-    name: &'static str,
-    severity: &'static str,
-    message: &'static str,
 }
 
 fn push_metric(out: &mut String, name: &str, labels: &[(&str, &str)], value: f64) {
