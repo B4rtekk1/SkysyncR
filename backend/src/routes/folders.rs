@@ -1,5 +1,7 @@
 use axum::Router;
 use axum::routing::{delete, get, patch, post, put};
+use tower_governor::GovernorLayer;
+use tower_governor::governor::GovernorConfigBuilder;
 
 use crate::handlers::folders::{
     add_folder_favourite, create_folder, create_folder_group_share, create_folder_share,
@@ -12,15 +14,24 @@ use crate::handlers::folders::{
 use crate::state::AppState;
 
 pub fn folders_routes() -> Router<AppState> {
+    let public_download_governor = GovernorConfigBuilder::default()
+        .per_second(5)
+        .burst_size(10)
+        .finish()
+        .expect("valid public download rate limit");
+
+    let public_download_routes = Router::new()
+        .route(
+            "/share/folders/{token}/files/{file_id}/download",
+            get(download_public_folder_file).post(download_public_folder_file),
+        )
+        .layer(GovernorLayer::new(public_download_governor));
+
     Router::new()
         .route("/folders", get(list_folders).post(create_folder))
         .route(
             "/share/folders/{token}",
             get(get_public_folder_manifest).post(get_public_folder_manifest),
-        )
-        .route(
-            "/share/folders/{token}/files/{file_id}/download",
-            get(download_public_folder_file).post(download_public_folder_file),
         )
         .route(
             "/folders/{id}",
@@ -63,4 +74,5 @@ pub fn folders_routes() -> Router<AppState> {
             "/folders/{id}/favorite",
             put(add_folder_favourite).delete(remove_folder_favourite),
         )
+        .merge(public_download_routes)
 }

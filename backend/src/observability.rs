@@ -17,6 +17,8 @@ use crate::state::AppState;
 const REQUEST_ID_HEADER: HeaderName = HeaderName::from_static("x-request-id");
 const DEFAULT_LOG_FILTER: &str = "skysyncr=info,tower_http=info,sqlx=warn";
 const METRICS_CONTENT_TYPE: &str = "text/plain; version=0.0.4; charset=utf-8";
+const MAX_HTTP_METRIC_KEYS: usize = 1024;
+const HTTP_METRICS_OVERFLOW_PATH: &str = "/__other__";
 
 pub fn init_tracing() {
     let env_filter =
@@ -307,12 +309,15 @@ struct Metrics {
 
 impl Metrics {
     fn record_http_request(&self, method: &str, path: &str, status: u16, latency_ms: f64) {
-        let key = HttpKey {
+        let mut key = HttpKey {
             method: method.to_string(),
             path: path.to_string(),
             status_class: format!("{}xx", status / 100),
         };
         let mut requests = self.http_requests.lock().expect("metrics mutex poisoned");
+        if !requests.contains_key(&key) && requests.len() >= MAX_HTTP_METRIC_KEYS - 1 {
+            key.path = HTTP_METRICS_OVERFLOW_PATH.to_string();
+        }
         requests.entry(key).or_default().observe(latency_ms);
     }
 
@@ -680,7 +685,7 @@ fn sanitized_request_path(path: &str) -> String {
         ["share", "folders", _, "files", _, "download"] => {
             "/share/folders/:token/files/:file_id/download".into()
         }
-        _ => path.to_string(),
+        _ => "/__unmatched__".into(),
     }
 }
 
@@ -746,6 +751,23 @@ mod tests {
         assert_eq!(
             route_name("/share/{token}/download"),
             "/share/:token/download"
+        );
+    }
+
+    #[test]
+    fn http_metrics_have_a_bounded_number_of_keys() {
+        let metrics = Metrics::default();
+
+        for index in 0..(MAX_HTTP_METRIC_KEYS + 100) {
+            metrics.record_http_request("GET", &format!("/unknown/{index}"), 404, 1.0);
+        }
+
+        let requests = metrics.http_requests.lock().unwrap();
+        assert_eq!(requests.len(), MAX_HTTP_METRIC_KEYS);
+        assert!(
+            requests
+                .keys()
+                .any(|key| key.path == HTTP_METRICS_OVERFLOW_PATH)
         );
     }
 }

@@ -3,6 +3,8 @@ use axum::extract::DefaultBodyLimit;
 use axum::routing::{delete, get, post, put};
 use std::time::Duration;
 use tower::limit::ConcurrencyLimitLayer;
+use tower_governor::GovernorLayer;
+use tower_governor::governor::GovernorConfigBuilder;
 use tower_http::limit::RequestBodyLimitLayer;
 use tower_http::timeout::TimeoutLayer;
 
@@ -25,6 +27,19 @@ pub fn files_routes(
 ) -> Router<AppState> {
     let request_limit = max_file_size_bytes.saturating_add(1024 * 1024);
 
+    let public_download_governor = GovernorConfigBuilder::default()
+        .per_second(5)
+        .burst_size(10)
+        .finish()
+        .expect("valid public download rate limit");
+
+    let public_download_routes = Router::new()
+        .route(
+            "/share/{token}/download",
+            get(download_public_file).post(download_public_file),
+        )
+        .layer(GovernorLayer::new(public_download_governor));
+
     Router::new()
         .route("/files", get(list_files).post(upload_file))
         .route("/files/uploads", post(start_resumable_upload))
@@ -36,10 +51,6 @@ pub fn files_routes(
                 .delete(cancel_resumable_upload),
         )
         .route("/files/shared-with-me", get(list_shared_files_with_me))
-        .route(
-            "/share/{token}/download",
-            get(download_public_file).post(download_public_file),
-        )
         .route("/files/{id}/download", get(download_file))
         .route("/files/{id}/content", put(update_file_content))
         .route("/files/{id}/versions", get(list_file_versions))
@@ -79,4 +90,5 @@ pub fn files_routes(
             Duration::from_secs(transfer_timeout_seconds),
         ))
         .layer(ConcurrencyLimitLayer::new(max_concurrent_transfers))
+        .merge(public_download_routes)
 }
