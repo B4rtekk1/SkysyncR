@@ -7,10 +7,6 @@ function AuthNav() {
         <Link
           to="/"
           className="auth-nav__logo"
-          onClick={(event) => {
-            event.preventDefault()
-            window.location.reload()
-          }}
         >
           SkysyncR
         </Link>

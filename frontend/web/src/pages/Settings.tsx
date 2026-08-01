@@ -928,7 +928,7 @@ function SettingsModalContent({ currentUser, onClose, onSave }: SettingsModalPro
                                 </div>
                                 <div className="settings-panel__actions">
                                     <button className="btn btn--outline" type="button" onClick={() => void lockVaultNow()}>
-                                        Zablokuj teraz
+                                        Lock now
                                     </button>
                                 </div>
                             </div>
@@ -966,7 +966,11 @@ function SettingsModalContent({ currentUser, onClose, onSave }: SettingsModalPro
                                         max={365}
                                         value={settings.trashRetentionDays}
                                         onChange={(e) => updateTrashRetentionDays(e.target.value)}
-                                        onWheel={(e) => e.stopPropagation()}
+                                        onWheel={(e) => {
+                                            e.preventDefault()
+                                            e.stopPropagation()
+                                            updateTrashRetentionDays(String(settings.trashRetentionDays + (e.deltaY < 0 ? 1 : -1)))
+                                        }}
                                         aria-label="Trash retention days"
                                     />
                                 </label>
@@ -1040,7 +1044,7 @@ function SettingsModalContent({ currentUser, onClose, onSave }: SettingsModalPro
                                             e.currentTarget.blur()
                                         }
                                     }}
-                                    placeholder="Laptop służbowy"
+                                    placeholder="Work laptop"
                                 />
                             </label>
                             <div className="settings-session-list">
