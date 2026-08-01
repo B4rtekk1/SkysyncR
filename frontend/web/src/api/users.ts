@@ -67,6 +67,19 @@ export type ReauthenticationPayload = {
   totp_code?: string | null
 }
 
+function parseTotpStatus(value: unknown): TotpStatus {
+  if (
+    typeof value !== 'object' ||
+    value === null ||
+    typeof (value as { enabled?: unknown }).enabled !== 'boolean' ||
+    typeof (value as { pending?: unknown }).pending !== 'boolean'
+  ) {
+    throw new Error('Invalid TOTP status response')
+  }
+
+  return value as TotpStatus
+}
+
 async function readErrorMessage(res: Response, fallback: string): Promise<string> {
   const contentType = res.headers.get('content-type') ?? ''
 
@@ -143,9 +156,7 @@ export async function loginWithTotp(challengeId: string, code: string): Promise<
 export async function getTotpStatus(): Promise<TotpStatus> {
   const res = await authenticatedFetch(`${url}users/totp`)
   if (!res.ok) await throwApiError(res, 'Could not load two-factor authentication status')
-  const value: unknown = await res.json()
-  if (typeof value !== 'object' || value === null || typeof (value as TotpStatus).enabled !== 'boolean' || typeof (value as TotpStatus).pending !== 'boolean') throw new Error('Invalid TOTP status response')
-  return value as TotpStatus
+  return parseTotpStatus(await res.json())
 }
 
 export async function setupTotp(): Promise<TotpSetup> {
@@ -159,13 +170,13 @@ export async function setupTotp(): Promise<TotpSetup> {
 export async function confirmTotp(code: string): Promise<TotpStatus> {
   const res = await authenticatedFetch(`${url}users/totp/confirm`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code }) })
   if (!res.ok) await throwApiError(res, 'Could not enable two-factor authentication')
-  return res.json() as Promise<TotpStatus>
+  return parseTotpStatus(await res.json())
 }
 
 export async function disableTotp(code: string): Promise<TotpStatus> {
   const res = await authenticatedFetch(`${url}users/totp`, { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code }) })
   if (!res.ok) await throwApiError(res, 'Could not disable two-factor authentication')
-  return res.json() as Promise<TotpStatus>
+  return parseTotpStatus(await res.json())
 }
 
 export async function verifyUser(token: string): Promise<void> {

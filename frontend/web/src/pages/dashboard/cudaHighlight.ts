@@ -1,3 +1,5 @@
+import { readQuotedString } from './readQuotedString'
+
 export type CudaHighlightTokenType =
     | 'builtin'
     | 'class-name'
@@ -146,33 +148,10 @@ const CUDA_QUALIFIERS = new Set([
 ])
 
 const NUMBER_PATTERN =
-    /^(?:0[xX][\da-fA-F_]+(?:[uUlL]*)|0[bB][01_]+(?:[uUlL]*)|(?:\d[\d_]*\.?[\d_]*|\.\d[\d_]*)(?:[eE][+-]?[\d_]+)?[fFlLuU]*)/
+    /^(?:0[xX][\da-fA-F_]+[uUlL]*|0[bB][01_]+[uUlL]*|(?:\d[\d_]*\.?[\d_]*|\.\d[\d_]*)(?:[eE][+-]?[\d_]+)?[fFlLuU]*)/
 const IDENTIFIER_PATTERN = /^[A-Za-z_]\w*/
 const OPERATOR_PATTERN =
     /^(?:::|->\*|->|==|!=|<=|>=|\+\+|--|&&|\|\||<<=|>>=|<<|>>|\+=|-=|\*=|\/=|%=|&=|\|=|\^=|##|[+\-*/%@=<>!?:&|^~#.,;()[\]{}])/
-
-function readString(source: string, start: number) {
-    const quote = source[start]
-    if (quote !== "'" && quote !== '"') {
-        return 0
-    }
-
-    let index = start + 1
-    while (index < source.length) {
-        if (source[index] === '\\') {
-            index += 2
-            continue
-        }
-
-        if (source[index] === quote) {
-            return index + 1 - start
-        }
-
-        index += 1
-    }
-
-    return source.length - start
-}
 
 function pushToken(tokens: CudaHighlightToken[], type: CudaHighlightTokenType, text: string) {
     if (text.length === 0) {
@@ -220,7 +199,7 @@ function tokenizeCuda(source: string, initialState: CudaHighlightState, mode: Cu
             continue
         }
 
-        const stringLength = readString(source, index)
+        const stringLength = readQuotedString(source, index)
         if (stringLength > 0) {
             pushToken(tokens, 'string', source.slice(index, index + stringLength))
             index += stringLength

@@ -180,8 +180,8 @@ export function matchesFileFilters(item: Item, filters: FileFilters, fileTags: F
         if (Number.isFinite(modifiedTo) && modifiedAt > modifiedTo) return false
     }
     const normalizedNoteQuery = filters.noteQuery.trim().toLowerCase()
-    if (normalizedNoteQuery && !(item.note ?? '').toLowerCase().includes(normalizedNoteQuery)) return false
-    return true
+    return !(normalizedNoteQuery && !(item.note ?? '').toLowerCase().includes(normalizedNoteQuery));
+
 }
 
 function compareStrings(a: string, b: string) {
