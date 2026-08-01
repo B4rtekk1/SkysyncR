@@ -133,7 +133,7 @@ export function DashboardToolbar({
     }, [addMenuOpen])
 
     return (
-        <div className="shell__content-actions">
+        <div className="shell__content-actions" data-tour="toolbar">
             {view !== 'groups' && view !== 'calendar' && (
                 <div className="sort-dropdown" ref={sortMenuRef}>
                     <button

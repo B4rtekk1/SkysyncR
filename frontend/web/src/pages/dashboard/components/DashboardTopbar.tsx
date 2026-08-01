@@ -43,7 +43,7 @@ export function DashboardTopbar({
                     {SIDEBAR_SHOW_ICON}
                 </button>
             )}
-            <label className="shell__search">
+            <label className="shell__search" data-tour="search">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                     <circle cx="10.5" cy="10.5" r="6.5" stroke="currentColor" strokeWidth="1.6" />
                     <path d="M20 20l-4.35-4.35" stroke="currentColor" strokeWidth="1.6" />
@@ -84,7 +84,7 @@ export function DashboardTopbar({
 
                 <NotificationCenter />
 
-                <div className="shell__user" ref={menuRef}>
+                <div className="shell__user" ref={menuRef} data-tour="account">
                     <button className="shell__avatar" onClick={onToggleMenu} aria-label="Account menu">
                         {avatarUrl ? <img src={avatarUrl} alt="" /> : displayName.charAt(0).toUpperCase()}
                     </button>

@@ -412,14 +412,21 @@
     border: none;
     border-radius: 7px;
     background: transparent;
-    color: var(--mist);
+    color: #ef4444;
     cursor: pointer;
+    transition: color 0.18s ease, transform 0.18s ease;
 }
 
 .file-card__info-head button:hover,
 .file-card__info-head button:focus-visible {
     color: #ef4444;
-    background: rgba(239, 68, 68, 0.08);
+    background: transparent;
+    transform: rotate(90deg) scale(1.12);
+}
+
+.file-card__info-head button:focus-visible {
+    outline: 2px solid #ef4444;
+    outline-offset: 2px;
 }
 
 .file-card__info-list {

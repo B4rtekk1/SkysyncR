@@ -180,6 +180,7 @@ export function FolderCard({
             } ${
                 selected ? 'is-selected' : ''
             } ${isFileDropTarget ? 'is-folder-drop-target' : ''}`}
+            data-tour="folder-card"
             style={{ '--file-index': index } as CSSProperties}
             role="button"
             tabIndex={0}

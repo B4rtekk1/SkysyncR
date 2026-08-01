@@ -166,6 +166,61 @@ html.is-theme-fading .shell__theme-toggle svg {
   }
 }
 
+/* Subtle reminder for the notification bell when unread items are waiting. */
+.notifications__trigger.has-unread svg {
+  transform-origin: 50% 12%;
+  animation: notification-bell-ring 3.6s ease-in-out infinite;
+}
+
+.notifications__trigger:hover svg,
+.notifications__trigger:focus-visible svg {
+  transform-origin: 50% 12%;
+  animation: notification-bell-hover 0.65s ease-in-out;
+}
+
+@keyframes notification-bell-ring {
+  0%,
+  76%,
+  100% {
+    transform: rotate(0deg);
+  }
+
+  80% {
+    transform: rotate(10deg);
+  }
+
+  84% {
+    transform: rotate(-10deg);
+  }
+
+  88% {
+    transform: rotate(7deg);
+  }
+
+  92% {
+    transform: rotate(-5deg);
+  }
+}
+
+@keyframes notification-bell-hover {
+  0%,
+  100% {
+    transform: rotate(0deg);
+  }
+
+  25% {
+    transform: rotate(12deg);
+  }
+
+  50% {
+    transform: rotate(-12deg);
+  }
+
+  75% {
+    transform: rotate(7deg);
+  }
+}
+
 :focus-visible {
   outline: 2px solid var(--signal);
   outline-offset: 3px;
@@ -178,5 +233,163 @@ html.is-theme-fading .shell__theme-toggle svg {
     animation-iteration-count: 1 !important;
     transition-duration: 0.001ms !important;
     scroll-behavior: auto !important;
+  }
+}
+
+.dashboard-tour {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  pointer-events: none;
+}
+
+.dashboard-tour__backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(8, 12, 24, 0.58);
+  pointer-events: auto;
+}
+
+.dashboard-tour__spotlight {
+  position: fixed;
+  z-index: 1;
+  border: 1px solid rgba(255, 255, 255, 0.82);
+  border-radius: 14px;
+  box-shadow: 0 0 0 9999px rgba(8, 12, 24, 0.58), 0 0 0 5px rgba(117, 215, 190, 0.22);
+  pointer-events: none;
+  transition: all 180ms ease;
+}
+
+.dashboard-tour__card {
+  position: absolute;
+  z-index: 2;
+  top: 50%;
+  left: 50%;
+  width: min(420px, calc(100vw - 32px));
+  padding: 24px;
+  transform: translate(-50%, -50%);
+  color: var(--paper);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.35);
+  pointer-events: auto;
+}
+
+.dashboard-tour__header,
+.dashboard-tour__footer,
+.dashboard-tour__actions {
+  display: flex;
+  align-items: center;
+}
+
+.dashboard-tour__header,
+.dashboard-tour__footer {
+  justify-content: space-between;
+}
+
+.dashboard-tour__eyebrow {
+  color: var(--signal, #75d7be);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.dashboard-tour__close {
+  width: 30px;
+  height: 30px;
+  color: var(--mist);
+  background: transparent;
+  border: 0;
+  border-radius: 8px;
+  font-size: 1.4rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.dashboard-tour__close:hover {
+  color: var(--paper);
+  background: var(--panel-2);
+}
+
+.dashboard-tour__card h2 {
+  margin: 20px 0 8px;
+  font-size: 1.35rem;
+}
+
+.dashboard-tour__card p {
+  margin: 0 0 24px;
+  color: var(--mist);
+  font-size: 0.95rem;
+  line-height: 1.6;
+}
+
+.dashboard-tour__dots {
+  display: flex;
+  gap: 6px;
+}
+
+.dashboard-tour__dots span {
+  width: 6px;
+  height: 6px;
+  background: var(--mist);
+  border-radius: 50%;
+}
+
+.dashboard-tour__dots span.is-active {
+  width: 20px;
+  background: var(--signal, #75d7be);
+  border-radius: 6px;
+}
+
+.dashboard-tour__actions {
+  gap: 8px;
+}
+
+.dashboard-tour__skip,
+.dashboard-tour__back,
+.dashboard-tour__next {
+  padding: 9px 13px;
+  border-radius: 9px;
+  font: inherit;
+  font-size: 0.82rem;
+  cursor: pointer;
+}
+
+.dashboard-tour__skip,
+.dashboard-tour__back {
+  color: var(--mist);
+  background: transparent;
+  border: 1px solid transparent;
+}
+
+.dashboard-tour__skip:hover,
+.dashboard-tour__back:hover {
+  border-color: var(--line);
+}
+
+.dashboard-tour__next {
+  color: #08121b;
+  background: var(--signal, #75d7be);
+  border: 1px solid var(--signal, #75d7be);
+  font-weight: 700;
+}
+
+@media (max-width: 640px) {
+  .dashboard-tour__card {
+    top: auto;
+    bottom: 16px;
+    transform: translateX(-50%);
+  }
+
+  .dashboard-tour__footer {
+    align-items: flex-end;
+    gap: 12px;
+  }
+
+  .dashboard-tour__actions {
+    flex-wrap: wrap;
+    justify-content: flex-end;
   }
 }

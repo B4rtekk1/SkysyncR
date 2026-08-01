@@ -18,6 +18,7 @@ import { DashboardContent } from './dashboard/components/DashboardContent'
 import { DashboardModals } from './dashboard/components/DashboardModals'
 import { DashboardSidebar } from './dashboard/components/DashboardSidebar'
 import { DashboardTopbar } from './dashboard/components/DashboardTopbar'
+import { DashboardTour } from './dashboard/components/DashboardTour'
 import {
     loadActiveView,
     saveActiveView,
@@ -1198,6 +1199,7 @@ function Dashboard() {
                 onSetFolderSharing={setFolderSharing}
                 onExpireFileLinks={expireFileLinks}
             />
+            <DashboardTour userId={currentUser.id} />
         </div>
     )
 }

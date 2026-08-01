@@ -5,6 +5,7 @@ import React, {
     type RefObject,
 } from 'react'
 import { Link } from '../../../router'
+import { preloadSettingsModal } from './DashboardModals'
 import type { StorageQuota } from '../../../api/files'
 import {
     DRAG_HANDLE_ICON,
@@ -80,7 +81,7 @@ export function DashboardSidebar({
     onOpenSettings,
 }: DashboardSidebarProps) {
     return (
-        <aside className="shell__sidebar" aria-hidden={sidebarHidden}>
+        <aside className="shell__sidebar" aria-hidden={sidebarHidden} data-tour="sidebar">
             <Link
                 to="/dashboard"
                 className="shell__logo"
@@ -175,7 +176,13 @@ export function DashboardSidebar({
             </nav>
 
             <nav className="shell__navlist shell__navlist--footer">
-                <button className="shell__navitem" type="button" onClick={onOpenSettings}>
+                <button
+                    className="shell__navitem"
+                    type="button"
+                    onMouseEnter={preloadSettingsModal}
+                    onFocus={preloadSettingsModal}
+                    onClick={onOpenSettings}
+                >
                     <span className="shell__navicon">{SETTINGS_ICON}</span>
                     <span className="shell__sidebar-label">Settings</span>
                 </button>
