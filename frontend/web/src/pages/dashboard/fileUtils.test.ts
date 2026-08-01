@@ -23,6 +23,7 @@ test('kindFromFile recognizes office, archive and code extensions', () => {
   assert.equal(kindFromFile('budget.xlsx', null), 'sheet')
   assert.equal(kindFromFile('deck.pptx', null), 'presentation')
   assert.equal(kindFromFile('letter.docx', null), 'document')
+  assert.equal(kindFromFile('download', 'application/msword'), 'document')
   assert.equal(kindFromFile('backup.tar', null), 'archive')
   assert.equal(kindFromFile('config.yaml', null), 'code')
   assert.equal(kindFromFile('main.c', null), 'code')

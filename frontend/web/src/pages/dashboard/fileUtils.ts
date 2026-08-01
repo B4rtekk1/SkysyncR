@@ -121,7 +121,13 @@ export function kindFromFile(filename: string, mime: string | null): FileKind {
         return CODE_EXTENSIONS.includes(ext) ? 'code' : 'text'
     }
     if (CODE_EXTENSIONS.includes(ext)) return 'code'
-    if (['doc', 'docx', 'odt'].includes(ext) || normalizedMime.includes('wordprocessingml')) return 'document'
+    if (
+        ['doc', 'docx', 'odt'].includes(ext) ||
+        normalizedMime === 'application/msword' ||
+        normalizedMime.includes('wordprocessingml')
+    ) {
+        return 'document'
+    }
     return 'file'
 }
 

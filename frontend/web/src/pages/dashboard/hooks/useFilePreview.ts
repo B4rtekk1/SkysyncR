@@ -45,6 +45,7 @@ function previewKindFromFile(filename: string, mime: string | null): FilePreview
     if (kind === 'pdf') return 'pdf'
     if (kind === 'presentation') return 'presentation'
     if (kind === 'sheet') return 'sheet'
+    if (kind === 'document') return 'document'
     if (kind === 'text' || kind === 'code') return 'text'
     return null
 }
@@ -181,7 +182,8 @@ export function useFilePreview(
                 previewKind === 'video' ||
                 previewKind === 'pdf' ||
                 previewKind === 'presentation' ||
-                previewKind === 'sheet'
+                previewKind === 'sheet' ||
+                previewKind === 'document'
             ) {
                 const url = URL.createObjectURL(previewBlob)
 

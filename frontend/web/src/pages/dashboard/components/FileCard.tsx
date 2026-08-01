@@ -125,7 +125,7 @@ export function FileCard({
     const canMove = Boolean(onMove && !shared && view === 'all' && !pending)
     const canTag = Boolean((onAddTag || onRemoveTag || onCreateTag) && !shared && view !== 'trash' && !pending)
     const canDownload = Boolean(onDownload && view !== 'trash')
-    const canPreview = Boolean(onPreview && ['image', 'video', 'pdf', 'sheet', 'text', 'code'].includes(kind) && view !== 'trash' && !pending && !isRenaming)
+    const canPreview = Boolean(onPreview && ['image', 'video', 'pdf', 'sheet', 'document', 'text', 'code'].includes(kind) && view !== 'trash' && !pending && !isRenaming)
     const visibleTags = tags.slice(0, 2)
     const hiddenTagCount = Math.max(tags.length - visibleTags.length, 0)
     const hasAction = Boolean(
