@@ -844,7 +844,7 @@ function SettingsModalContent({ currentUser, onClose, onSave }: SettingsModalPro
                                     <h2>File density</h2>
                                 </div>
                             </div>
-                            <div className="settings-segment" role="group" aria-label="File layout">
+                            <div className={`settings-segment settings-segment--layout settings-segment--${settings.layoutMode}`} role="group" aria-label="File layout">
                                 <button
                                     className={settings.layoutMode === 'grid' ? 'is-active' : ''}
                                     type="button"
@@ -880,7 +880,7 @@ function SettingsModalContent({ currentUser, onClose, onSave }: SettingsModalPro
                                 </div>
                                 <span className="settings-badge">{theme}</span>
                             </div>
-                            <div className="settings-segment settings-segment--theme" role="group" aria-label="Theme preference">
+                            <div className={`settings-segment settings-segment--theme settings-segment--theme-${themePreference}`} role="group" aria-label="Theme preference">
                                 {themeOptions.map((option) => (
                                     <button
                                         key={option.value}
@@ -966,6 +966,7 @@ function SettingsModalContent({ currentUser, onClose, onSave }: SettingsModalPro
                                         max={365}
                                         value={settings.trashRetentionDays}
                                         onChange={(e) => updateTrashRetentionDays(e.target.value)}
+                                        onWheel={(e) => e.stopPropagation()}
                                         aria-label="Trash retention days"
                                     />
                                 </label>

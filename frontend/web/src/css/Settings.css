@@ -501,6 +501,7 @@
 }
 
 .settings-segment {
+    position: relative;
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 4px;
@@ -509,6 +510,42 @@
     background: var(--panel);
     padding: 4px;
     margin-bottom: 16px;
+}
+
+.settings-segment::before {
+    content: '';
+    position: absolute;
+    top: 4px;
+    bottom: 4px;
+    left: 4px;
+    z-index: 0;
+    width: calc((100% - 12px) / 2);
+    border-radius: 6px;
+    background: var(--signal);
+    box-shadow: 0 0 0 1px rgba(var(--signal-rgb), 0.18), 0 8px 18px rgba(var(--signal-rgb), 0.14);
+    transform: translateX(0);
+    transition: transform 0.36s cubic-bezier(0.16, 1.16, 0.32, 1), box-shadow 0.2s ease;
+    pointer-events: none;
+}
+
+.settings-segment--list::before {
+    transform: translateX(calc(100% + 4px));
+}
+
+.settings-segment--theme::before {
+    width: calc((100% - 16px) / 3);
+}
+
+.settings-segment--theme-light::before {
+    transform: translateX(calc(100% + 4px));
+}
+
+.settings-segment--theme-dark::before {
+    transform: translateX(calc((100% + 4px) * 2));
+}
+
+.settings-segment.is-switching::before {
+    box-shadow: 0 0 0 1px rgba(var(--signal-rgb), 0.34), 0 10px 22px rgba(var(--signal-rgb), 0.14);
 }
 
 .settings-segment button {
@@ -523,11 +560,42 @@
     color: var(--mist);
     padding: 8px 10px;
     cursor: pointer;
+    position: relative;
+    z-index: 1;
+    transition: color 0.18s ease, transform 0.18s ease;
 }
 
 .settings-segment button.is-active {
-    background: var(--signal);
     color: #f8fbff;
+}
+
+.settings-segment button:active {
+    transform: scale(0.97);
+}
+
+.settings-segment button svg {
+    transform-origin: center;
+    transition: transform 0.18s ease;
+}
+
+.settings-segment button:active svg {
+    transform: scale(0.88);
+}
+
+.settings-segment button.is-active svg {
+    animation: settings-segment-icon-pop 0.36s cubic-bezier(0.2, 0.9, 0.2, 1.2);
+}
+
+@keyframes settings-segment-icon-pop {
+    0% {
+        transform: scale(0.78) rotate(-6deg);
+    }
+    56% {
+        transform: scale(1.16) rotate(4deg);
+    }
+    100% {
+        transform: scale(1) rotate(0);
+    }
 }
 
 .settings-segment--theme {
@@ -993,5 +1061,12 @@ html[data-theme='light'] .settings-actions {
     .settings-modal.is-closing,
     .settings-modal.is-closing .settings-dialog {
         animation: none;
+    }
+
+    .settings-segment::before,
+    .settings-segment button,
+    .settings-segment button svg {
+        transition-duration: 1ms;
+        animation-duration: 1ms;
     }
 }
