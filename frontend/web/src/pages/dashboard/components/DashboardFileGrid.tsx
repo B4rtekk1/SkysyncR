@@ -30,6 +30,9 @@ type DashboardFileGridProps = {
     onOpenFolder: (folder: ApiFolder) => void
     onShareFolder: (folder: ApiFolder) => void
     onDownloadFolder: (folder: ApiFolder) => void | Promise<void>
+    onDeleteFolder: (id: string) => void | Promise<void>
+    onRestoreFolder: (id: string) => void | Promise<void>
+    onPermanentDeleteFolder: (id: string) => void | Promise<void>
     onRenameFolder: (folder: ApiFolder, name: string, description: string | null) => Promise<void>
     onToggleFolderFavourite: (id: string) => void | Promise<void>
     onDelete: (id: string) => void | Promise<void>
@@ -84,6 +87,9 @@ export function DashboardFileGrid({
     onOpenFolder,
     onShareFolder,
     onDownloadFolder,
+    onDeleteFolder,
+    onRestoreFolder,
+    onPermanentDeleteFolder,
     onRenameFolder,
     onToggleFolderFavourite,
     onDelete,
@@ -127,10 +133,13 @@ export function DashboardFileGrid({
                     key={folder.id}
                     folder={folder}
                     index={i}
-                    onOpen={onOpenFolder}
-                    onShare={onShareFolder}
+                    onOpen={view === 'trash' ? () => undefined : onOpenFolder}
+                    onShare={view === 'all' || view === 'favourites' ? onShareFolder : undefined}
                     onDownload={view === 'all' || view === 'favourites' ? onDownloadFolder : undefined}
-                    onRename={onRenameFolder}
+                    onDelete={view === 'all' ? onDeleteFolder : undefined}
+                    onRestore={view === 'trash' ? onRestoreFolder : undefined}
+                    onPermanentDelete={view === 'trash' ? onPermanentDeleteFolder : undefined}
+                    onRename={view === 'all' || view === 'favourites' ? onRenameFolder : undefined}
                     isFavourite={folderFavouriteIds.has(folder.id)}
                     onToggleFavourite={view === 'all' || view === 'favourites' ? onToggleFolderFavourite : undefined}
                     selected={selectedFolderIds.has(folder.id)}

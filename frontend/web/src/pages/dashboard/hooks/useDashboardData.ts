@@ -163,8 +163,9 @@ export function useDashboardData({ view, activeFolderId, privateKey, userId }: U
                     fileData = files
                     folderData = foldersData
                 } else if (view === 'trash') {
-                    fileData = await listTrash()
-                    setFolders([])
+                    const [trashedFiles, trashedFolders] = await Promise.all([listTrash(), listFolders(undefined, false, true)])
+                    fileData = trashedFiles
+                    folderData = trashedFolders
                 } else {
                     fileData = await listSharedFilesWithMe()
                     setFolders([])

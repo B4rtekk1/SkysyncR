@@ -137,6 +137,9 @@ type DashboardContentProps = {
     onOpenFolder: (folder: ApiFolder) => void
     onShareFolder: (folder: ApiFolder) => void
     onDownloadFolder: (folder: ApiFolder) => void | Promise<void>
+    onDeleteFolder: (id: string) => void | Promise<void>
+    onRestoreFolder: (id: string) => void | Promise<void>
+    onPermanentDeleteFolder: (id: string) => void | Promise<void>
     onRenameFolder: (folder: ApiFolder, name: string, description: string | null) => Promise<void>
     onToggleFolderFavourite: (id: string) => void | Promise<void>
     onDelete: (id: string) => void | Promise<void>
@@ -305,6 +308,9 @@ export function DashboardContent({
     onOpenFolder,
     onShareFolder,
     onDownloadFolder,
+    onDeleteFolder,
+    onRestoreFolder,
+    onPermanentDeleteFolder,
     onRenameFolder,
     onToggleFolderFavourite,
     onDelete,
@@ -835,6 +841,9 @@ export function DashboardContent({
                     onOpenFolder={onOpenFolder}
                     onShareFolder={onShareFolder}
                     onDownloadFolder={onDownloadFolder}
+                    onDeleteFolder={onDeleteFolder}
+                    onRestoreFolder={onRestoreFolder}
+                    onPermanentDeleteFolder={onPermanentDeleteFolder}
                     onRenameFolder={onRenameFolder}
                     onToggleFolderFavourite={onToggleFolderFavourite}
                     onDelete={onDelete}

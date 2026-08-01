@@ -10,7 +10,7 @@ import { useNavigate } from '../router'
 import '../App.css'
 import '../css/dashboard.css'
 import type { Item, ShareableItem, ViewKey } from './dashboard/types'
-import { getStorageQuota, listFiles, listFolders, listTrash, moveFile, moveFolder, permanentlyDeleteFile, restoreFolderPoint, shareFile, shareFolder, type ApiFile, type ApiFolder, type FolderPointRestoreResult } from '../api/files'
+import { deleteFolder, getStorageQuota, listFiles, listFolders, listTrash, moveFile, moveFolder, permanentlyDeleteFile, permanentlyDeleteFolder, restoreFolder, restoreFolderPoint, shareFile, shareFolder, type ApiFile, type ApiFolder, type FolderPointRestoreResult } from '../api/files'
 import type { ReauthenticationPayload } from '../api/users'
 import { addFileTag, createTag, removeFileTag, type Tag } from '../api/tags'
 import { createCalendarEntry } from '../api/calendar'
@@ -184,7 +184,7 @@ function Dashboard() {
         toggleFilterMenu,
     } = useDashboardMenus({ filePreviewOpen: Boolean(filePreview) })
     const visibleFolders = useMemo(() => {
-        if (view !== 'all' && view !== 'favourites' && view !== 'recent' && view !== 'security') return []
+        if (view !== 'all' && view !== 'favourites' && view !== 'recent' && view !== 'security' && view !== 'trash') return []
         return folders
             .filter((folder) => (view === 'favourites' ? folderFavouriteIds.has(folder.id) : true))
             .filter((folder) =>
@@ -238,7 +238,7 @@ function Dashboard() {
     const selectedCount = selectedFileIds.size + selectedFolderIds.size
     const allVisibleSelected = useMemo(() => {
         const selectableFileIds = view === 'all' || view === 'favourites' || view === 'trash' ? visibleFileIds : []
-        const selectableFolderIds = view === 'all' || view === 'favourites' ? visibleFolderIds : []
+        const selectableFolderIds = view === 'all' || view === 'favourites' || view === 'trash' ? visibleFolderIds : []
         const total = selectableFileIds.length + selectableFolderIds.length
         if (total === 0) return false
         return selectableFileIds.every((id) => selectedFileIds.has(id)) && selectableFolderIds.every((id) => selectedFolderIds.has(id))
@@ -607,6 +607,40 @@ function Dashboard() {
         openFolderAt(folder, index)
     }
 
+    async function handleDeleteFolder(id: string) {
+        setError(null)
+        try {
+            await deleteFolder(id)
+            setFolders((current) => current.filter((folder) => folder.id !== id))
+        } catch (e) {
+            setError(e instanceof Error ? e.message : 'Could not move that folder to trash.')
+        }
+    }
+
+    async function handleRestoreFolder(id: string) {
+        setError(null)
+        try {
+            await restoreFolder(id)
+            setFolders((current) => current.filter((folder) => folder.id !== id))
+        } catch (e) {
+            setError(e instanceof Error ? e.message : 'Could not restore that folder.')
+        }
+    }
+
+    async function handlePermanentDeleteFolder(id: string) {
+        if (!window.confirm('Permanently delete this folder and its contents? This cannot be undone.')) return
+        const reauth = requestReauthentication('permanently delete this folder')
+        if (!reauth) return
+        setError(null)
+        try {
+            await permanentlyDeleteFolder(id, reauth)
+            setFolders((current) => current.filter((folder) => folder.id !== id))
+            await refreshQuota()
+        } catch (e) {
+            setError(e instanceof Error ? e.message : 'Could not permanently delete that folder.')
+        }
+    }
+
     function toggleFileSelected(id: string) {
         setSelectedFileIds((current) => {
             const next = new Set(current)
@@ -632,33 +666,38 @@ function Dashboard() {
         }
 
         setSelectedFileIds(new Set(view === 'all' || view === 'favourites' || view === 'trash' ? visibleFileIds : []))
-        setSelectedFolderIds(new Set(view === 'all' || view === 'favourites' ? visibleFolderIds : []))
+        setSelectedFolderIds(new Set(view === 'all' || view === 'favourites' || view === 'trash' ? visibleFolderIds : []))
     }, [allVisibleSelected, clearSelection, view, visibleFileIds, visibleFolderIds])
 
     const bulkDelete = useCallback(async () => {
         const ids = Array.from(selectedFileIds)
-        if (ids.length === 0) return
-        await Promise.all(ids.map((id) => handleDelete(id)))
+        const folderIds = Array.from(selectedFolderIds)
+        if (ids.length === 0 && folderIds.length === 0) return
+        await Promise.all([...ids.map((id) => handleDelete(id)), ...folderIds.map((id) => handleDeleteFolder(id))])
         clearSelection()
-    }, [clearSelection, handleDelete, selectedFileIds])
+    }, [clearSelection, handleDelete, handleDeleteFolder, selectedFileIds, selectedFolderIds])
 
     async function bulkRestore() {
         const ids = Array.from(selectedFileIds)
-        if (ids.length === 0) return
-        await Promise.all(ids.map((id) => handleRestore(id)))
+        const folderIds = Array.from(selectedFolderIds)
+        if (ids.length === 0 && folderIds.length === 0) return
+        await Promise.all([...ids.map((id) => handleRestore(id)), ...folderIds.map((id) => handleRestoreFolder(id))])
         clearSelection()
     }
 
     const bulkPermanentDelete = useCallback(async () => {
         const ids = Array.from(selectedFileIds)
-        if (ids.length === 0) return
-        const confirmed = window.confirm(`Permanently delete ${ids.length} selected file${ids.length === 1 ? '' : 's'}? This cannot be undone.`)
+        const folderIds = Array.from(selectedFolderIds)
+        if (ids.length === 0 && folderIds.length === 0) return
+        const total = ids.length + folderIds.length
+        const confirmed = window.confirm(`Permanently delete ${total} selected item${total === 1 ? '' : 's'}? This cannot be undone.`)
         if (!confirmed) return
-        const reauth = requestReauthentication(`permanently delete ${ids.length} selected file${ids.length === 1 ? '' : 's'}`)
+        const reauth = requestReauthentication(`permanently delete ${total} selected item${total === 1 ? '' : 's'}`)
         if (!reauth) return
         const previousItems = items
         const previousStorageItems = storageItems
         const previousFavouriteIds = new Set(favouriteIds)
+        const previousFolders = folders
 
         setItems((current) => current.filter((item) => !selectedFileIds.has(item.id)))
         setStorageItems((current) => current.filter((item) => !selectedFileIds.has(item.id)))
@@ -667,15 +706,17 @@ function Dashboard() {
             ids.forEach((id) => next.delete(id))
             return next
         })
+        setFolders((current) => current.filter((folder) => !selectedFolderIds.has(folder.id)))
 
         try {
-            await Promise.all(ids.map((id) => permanentlyDeleteFile(id, reauth)))
+            await Promise.all([...ids.map((id) => permanentlyDeleteFile(id, reauth)), ...folderIds.map((id) => permanentlyDeleteFolder(id, reauth))])
             await refreshQuota()
             clearSelection()
         } catch (e) {
             setItems(previousItems)
             setStorageItems(previousStorageItems)
             setFavouriteIds(previousFavouriteIds)
+            setFolders(previousFolders)
             setError(e instanceof Error ? e.message : 'Could not permanently delete the selected files.')
         }
     }, [
@@ -685,6 +726,8 @@ function Dashboard() {
         refreshQuota,
         requestReauthentication,
         selectedFileIds,
+        selectedFolderIds,
+        folders,
         setError,
         setFavouriteIds,
         setItems,
@@ -1065,6 +1108,9 @@ function Dashboard() {
                     onOpenFolder={openFolderWithSelectionReset}
                     onShareFolder={handleShareFolder}
                     onDownloadFolder={downloadFolder}
+                    onDeleteFolder={handleDeleteFolder}
+                    onRestoreFolder={handleRestoreFolder}
+                    onPermanentDeleteFolder={handlePermanentDeleteFolder}
                     onRenameFolder={handleRenameFolder}
                     onToggleFolderFavourite={toggleFolderFavourite}
                     onDelete={handleDelete}

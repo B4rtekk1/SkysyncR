@@ -321,8 +321,18 @@ export async function listFoldersPage(pageParams: ListFoldersPageParams = {}): P
     return readJson(res, folderListPage, 'FolderListPage');
 }
 
-export async function listFolders(parentFolderId?: string, favourite = false): Promise<ApiFolder[]> {
-    return collectPages((cursor) => listFoldersPage({ parentFolderId, favourite, cursor }))
+export async function listFolders(parentFolderId?: string, favourite = false, trashed = false): Promise<ApiFolder[]> {
+    return collectPages((cursor) => listFoldersPage({ parentFolderId, favourite, trashed, cursor }))
+}
+
+export async function deleteFolder(id: string): Promise<void> {
+    const res = await authenticatedFetch(`${API_BASE}folders/${id}`, { method: 'DELETE' })
+    if (!res.ok) throw new Error(await parseErrorMessage(res))
+}
+
+export async function restoreFolder(id: string): Promise<void> {
+    const res = await authenticatedFetch(`${API_BASE}folders/${id}/restore`, { method: 'POST' })
+    if (!res.ok) throw new Error(await parseErrorMessage(res))
 }
 
 export async function createFolder(params: {

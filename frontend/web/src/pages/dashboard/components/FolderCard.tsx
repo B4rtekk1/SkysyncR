@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState, type CSSProperties, type Drag
 import type { ApiFolder } from '../../../api/files'
 import { formatRelative } from '../fileUtils'
 import { FILE_CARD_DRAG_MIME } from '../hooks/useManualCardOrdering'
-import { CANCEL_ICON, CHECK_ICON, DOWNLOAD_ICON, INFO_ICON, RENAME_ICON, SHARE_ICON, STAR_ICON_FILLED, STAR_ICON_OUTLINE } from '../icons'
+import { CANCEL_ICON, CHECK_ICON, DOWNLOAD_ICON, INFO_ICON, RENAME_ICON, SHARE_ICON, STAR_ICON_FILLED, STAR_ICON_OUTLINE, TRASH_OPEN_ICON } from '../icons'
 import { FileRenameInput } from './FileRenameInput'
 import { FileInfoPopover, type InfoPopoverPosition } from './FileInfoPopover'
 
@@ -12,6 +12,9 @@ export function FolderCard({
     onOpen,
     onShare,
     onDownload,
+    onDelete,
+    onRestore,
+    onPermanentDelete,
     onRename,
     isFavourite,
     onToggleFavourite,
@@ -26,9 +29,12 @@ export function FolderCard({
     folder: ApiFolder
     index: number
     onOpen: (folder: ApiFolder) => void
-    onShare?: (folder: ApiFolder) => void | Promise<void>
+    onShare?: ((folder: ApiFolder) => void | Promise<void>) | undefined
     onDownload?: ((folder: ApiFolder) => void | Promise<void>) | undefined
-    onRename?: (folder: ApiFolder, name: string, description: string | null) => Promise<void>
+    onDelete?: ((id: string) => void | Promise<void>) | undefined
+    onRestore?: ((id: string) => void | Promise<void>) | undefined
+    onPermanentDelete?: ((id: string) => void | Promise<void>) | undefined
+    onRename?: ((folder: ApiFolder, name: string, description: string | null) => Promise<void>) | undefined
     isFavourite?: boolean
     onToggleFavourite?: ((id: string) => void | Promise<void>) | undefined
     selected?: boolean
@@ -360,6 +366,21 @@ export function FolderCard({
                             title="Download ZIP"
                         >
                             {DOWNLOAD_ICON}
+                        </button>
+                    )}
+                    {onDelete && !isRenaming && (
+                        <button className="file-card__action file-card__action--trash" type="button" onClick={(event) => { event.stopPropagation(); void onDelete(folder.id) }} aria-label={`Move ${folder.name} to trash`} title="Move to trash">
+                            {TRASH_OPEN_ICON}
+                        </button>
+                    )}
+                    {onRestore && !isRenaming && (
+                        <button className="file-card__action file-card__action--confirm" type="button" onClick={(event) => { event.stopPropagation(); void onRestore(folder.id) }} aria-label={`Restore ${folder.name}`} title="Restore">
+                            {CHECK_ICON}
+                        </button>
+                    )}
+                    {onPermanentDelete && !isRenaming && (
+                        <button className="file-card__action file-card__action--trash" type="button" onClick={(event) => { event.stopPropagation(); void onPermanentDelete(folder.id) }} aria-label={`Delete ${folder.name} forever`} title="Delete forever">
+                            {TRASH_OPEN_ICON}
                         </button>
                     )}
                     {!isRenaming && (
