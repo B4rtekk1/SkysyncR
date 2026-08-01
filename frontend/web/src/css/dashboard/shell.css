@@ -108,11 +108,6 @@
     outline-offset: -3px;
 }
 
-.is-resizing-sidebar {
-    cursor: col-resize;
-    user-select: none;
-}
-
 .shell__show-sidebar {
     flex-shrink: 0;
 }
@@ -584,7 +579,6 @@
     .groups-panel__head,
     .groups-settings__head,
     .groups-settings__grid,
-    .groups-invite,
     .groups-list,
     .groups-summary,
     .groups-invites__row {
@@ -610,9 +604,6 @@
         flex-direction: column-reverse;
     }
 
-    .groups-invite__submit {
-        width: 100%;
-    }
 
     .groups-invites__row {
         justify-items: start;
@@ -639,22 +630,22 @@
         grid-template-columns: 1fr auto auto;
     }
 
-    .file-grid--list .file-card__top {
+    .file-grid--list {
         grid-column: 1;
         grid-row: 1;
         padding-left: 16px;
     }
 
-    .file-grid--list .file-card__name {
+    .file-grid--list {
         grid-row: 2;
     }
 
-    .file-grid--list .file-card__meta {
+    .file-grid--list {
         grid-row: 3;
     }
 
     .file-grid--list .file-card__fav,
-    .file-grid--list .file-card__actions {
+    .file-grid--list {
         grid-row: 1 / span 3;
     }
 
@@ -662,11 +653,11 @@
         grid-column: 2;
     }
 
-    .file-grid--list .file-card__actions {
+    .file-grid--list {
         grid-column: 3;
     }
 
-    .file-grid--list .file-card--has-action:not(.file-card--has-favourite) .file-card__actions {
+    .file-grid--list .file-card--has-action:not(.file-card--has-favourite) {
         grid-column: 2;
     }
 }

@@ -58,7 +58,7 @@
     font-weight: 700;
 }
 
-.sheet-preview__table .sheet-preview__row-number {
+.sheet-preview__table {
     left: 0;
     z-index: 3;
     width: 54px;

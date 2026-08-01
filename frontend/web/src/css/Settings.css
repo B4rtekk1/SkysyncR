@@ -512,7 +512,7 @@
     gap: 12px;
 }
 
-.settings-password-form .password-requirements,
+.settings-password-form,
 .settings-password-form .settings-error,
 .settings-password-form .btn {
     grid-column: 1 / -1;

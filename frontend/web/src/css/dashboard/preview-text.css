@@ -63,51 +63,6 @@
     position: relative;
 }
 
-.syntax-token--builtin {
-    color: #4fc1ff;
-}
-
-.syntax-token--class-name {
-    color: #4ec9b0;
-}
-
-.syntax-token--comment {
-    color: #6a9955;
-    font-style: italic;
-}
-
-.syntax-token--decorator {
-    color: #c586c0;
-}
-
-.syntax-token--function {
-    color: #dcdcaa;
-}
-
-.syntax-token--keyword {
-    color: #569cd6;
-}
-
-.syntax-token--magic {
-    color: #dcdcaa;
-}
-
-.syntax-token--number {
-    color: #b5cea8;
-}
-
-.syntax-token--operator {
-    color: #d4d4d4;
-}
-
-.syntax-token--self {
-    color: #9cdcfe;
-}
-
-.syntax-token--string {
-    color: #ce9178;
-}
-
 .image-preview__editor-wrap {
     display: grid;
     grid-template-rows: minmax(0, 1fr) auto;
@@ -356,19 +311,6 @@
     margin: 0;
     color: #9ca3af;
     font-size: 0.78rem;
-}
-
-.image-preview__autosave--saving,
-.image-preview__autosave--pending {
-    color: #fbbf24;
-}
-
-.image-preview__autosave--saved {
-    color: #34d399;
-}
-
-.image-preview__autosave--error {
-    color: #ef4444;
 }
 
 .image-preview__type-diagnostics {
