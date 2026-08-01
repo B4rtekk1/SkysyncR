@@ -61,7 +61,8 @@ html[data-theme='light'] {
   gap: 10px;
 }
 
-.nav__theme-toggle {
+.nav__theme-toggle,
+.shell__theme-toggle {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -80,7 +81,8 @@ html[data-theme='light'] {
   transition: border-color 0.15s ease, color 0.15s ease, transform 0.15s ease;
 }
 
-.nav__theme-toggle:hover {
+.nav__theme-toggle:hover,
+.shell__theme-toggle:hover {
   border-color: var(--signal);
   color: var(--signal);
   transform: rotate(12deg);

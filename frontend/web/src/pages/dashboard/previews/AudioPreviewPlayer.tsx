@@ -2,28 +2,7 @@ import { useState } from 'react'
 import '../../../css/dashboard/preview-audio.css'
 import type { Item } from '../types'
 import { formatBytes } from '../fileUtils'
-
-function formatTime(seconds: number) {
-    if (!Number.isFinite(seconds) || seconds <= 0) return '0:00'
-
-    const total = Math.floor(seconds)
-    const hrs = Math.floor(total / 3600)
-    const mins = Math.floor((total % 3600) / 60)
-    const secs = total % 60
-
-    if (hrs > 0) {
-        return `${hrs}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`
-    }
-
-    return `${mins}:${String(secs).padStart(2, '0')}`
-}
-
-function formatDate(iso: string) {
-    return new Date(iso).toLocaleString(undefined, {
-        dateStyle: 'medium',
-        timeStyle: 'short',
-    })
-}
+import { formatDate, formatTime } from './previewUtils'
 
 export function AudioPreviewPlayer({ item, url }: { item: Item; url: string }) {
     const [duration, setDuration] = useState(0)

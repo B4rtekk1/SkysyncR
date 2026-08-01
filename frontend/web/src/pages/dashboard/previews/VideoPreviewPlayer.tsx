@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState, type CSSProperties, type Keyb
 import '../../../css/dashboard/preview-video.css'
 import type { Item } from '../types'
 import { formatBytes } from '../fileUtils'
+import { formatDate, formatTime } from './previewUtils'
 
 const PLAY_ICON = (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
@@ -44,28 +45,6 @@ const EXIT_FULLSCREEN_ICON = (
 const SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 2]
 const WAVEFORM_BARS = 96
 const MAX_WAVEFORM_BYTES = 16 * 1024 * 1024
-
-function formatTime(seconds: number) {
-    if (!Number.isFinite(seconds) || seconds <= 0) return '0:00'
-
-    const total = Math.floor(seconds)
-    const hrs = Math.floor(total / 3600)
-    const mins = Math.floor((total % 3600) / 60)
-    const secs = total % 60
-
-    if (hrs > 0) {
-        return `${hrs}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`
-    }
-
-    return `${mins}:${String(secs).padStart(2, '0')}`
-}
-
-function formatDate(iso: string) {
-    return new Date(iso).toLocaleString(undefined, {
-        dateStyle: 'medium',
-        timeStyle: 'short',
-    })
-}
 
 function buildWaveform(audioBuffer: AudioBuffer, bars = WAVEFORM_BARS) {
     const samplesPerBar = Math.max(1, Math.floor(audioBuffer.length / bars))
