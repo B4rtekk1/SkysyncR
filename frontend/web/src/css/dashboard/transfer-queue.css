@@ -127,13 +127,6 @@
     margin-top: 3px;
 }
 
-.transfer-queue__integrity--verified {
-    color: var(--signal);
-}
-
-.transfer-queue__integrity--missing {
-    color: var(--amber);
-}
 
 .transfer-queue__status {
     border-radius: 999px;
@@ -144,25 +137,6 @@
     min-width: 74px;
     padding: 5px 8px;
     text-align: center;
-}
-
-.transfer-queue__status--encrypting,
-.transfer-queue__status--uploading,
-.transfer-queue__status--downloading,
-.transfer-queue__status--verifying,
-.transfer-queue__status--decrypting {
-    color: var(--signal);
-    background: rgba(var(--signal-rgb), 0.12);
-}
-
-.transfer-queue__status--paused {
-    color: var(--amber);
-    background: rgba(255, 176, 76, 0.1);
-}
-
-.transfer-queue__status--failed {
-    color: #ef4444;
-    background: rgba(239, 68, 68, 0.1);
 }
 
 @media (max-width: 760px) {

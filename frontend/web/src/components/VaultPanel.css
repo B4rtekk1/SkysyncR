@@ -129,22 +129,22 @@
   transition: opacity 0.3s ease, transform 0.3s ease;
 }
 
-.lock-icon.is-locked .lock-icon__layer--locked {
+.lock-icon.is-locked {
   opacity: 1;
   transform: rotate(0deg) scale(1);
 }
 
-.lock-icon.is-locked .lock-icon__layer--unlocked {
+.lock-icon.is-locked {
   opacity: 0;
   transform: rotate(8deg) scale(0.85);
 }
 
-.lock-icon.is-unlocked .lock-icon__layer--locked {
+.lock-icon.is-unlocked {
   opacity: 0;
   transform: rotate(-8deg) scale(0.85);
 }
 
-.lock-icon.is-unlocked .lock-icon__layer--unlocked {
+.lock-icon.is-unlocked{
   opacity: 1;
   transform: rotate(0deg) scale(1);
 }

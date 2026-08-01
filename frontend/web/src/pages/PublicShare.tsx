@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useState, type SubmitEvent } from 'react'
 import { Link, useParams } from '../router'
 import '../App.css'
 import ThemeToggle from '../components/ThemeToggle'
@@ -264,7 +264,7 @@ function PublicShare() {
     }
   }, [accessDetails, downloadAttempt, isFolderShare, token])
 
-  function submitAccessDetails(event: FormEvent<HTMLFormElement>) {
+  function submitAccessDetails(event: SubmitEvent<HTMLFormElement>) {
     event.preventDefault()
     setStatus('loading')
     setMessage('Checking access details...')

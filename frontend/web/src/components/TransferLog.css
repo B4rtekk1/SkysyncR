@@ -72,18 +72,6 @@
   letter-spacing: 0.02em;
 }
 
-.log__status--queued {
-  color: var(--mist);
-}
-
-.log__status--encrypting {
-  color: var(--amber);
-}
-
-.log__status--synced {
-  color: var(--signal);
-}
-
 @keyframes rowIn {
   from {
     opacity: 0;
