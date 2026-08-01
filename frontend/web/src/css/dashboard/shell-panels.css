@@ -350,6 +350,97 @@
     outline: none;
 }
 
+.shell__shortcuts {
+    position: relative;
+    flex-shrink: 0;
+    color: var(--paper);
+}
+
+.shell__shortcuts summary {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    min-height: 36px;
+    padding: 0 11px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--panel-2);
+    color: var(--mist);
+    font-size: 0.78rem;
+    cursor: pointer;
+    list-style: none;
+    transition: border-color 0.16s ease, color 0.16s ease, background 0.16s ease;
+}
+
+.shell__shortcuts summary::-webkit-details-marker {
+    display: none;
+}
+
+.shell__shortcuts summary:hover,
+.shell__shortcuts[open] summary {
+    border-color: rgba(var(--signal-rgb), 0.46);
+    background: color-mix(in srgb, var(--panel-2) 88%, var(--signal));
+    color: var(--paper);
+}
+
+.shell__shortcuts-panel {
+    position: absolute;
+    top: calc(100% + 10px);
+    right: 0;
+    z-index: 30;
+    width: min(340px, calc(100vw - 32px));
+    padding: 16px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: var(--panel);
+    box-shadow: 0 18px 42px rgba(0, 0, 0, 0.28);
+}
+
+.shell__shortcuts-title {
+    margin: 0 0 12px;
+    color: var(--paper);
+    font-family: var(--font-display), sans-serif;
+    font-size: 0.88rem;
+    font-weight: 600;
+}
+
+.shell__shortcuts dl {
+    display: grid;
+    gap: 8px;
+    margin: 0;
+}
+
+.shell__shortcuts dl > div {
+    display: grid;
+    grid-template-columns: 116px 1fr;
+    align-items: center;
+    gap: 10px;
+}
+
+.shell__shortcuts dt {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px;
+}
+
+.shell__shortcuts dd {
+    margin: 0;
+    color: var(--mist);
+    font-size: 0.77rem;
+}
+
+.shell__shortcuts kbd {
+    padding: 2px 6px;
+    border: 1px solid var(--line);
+    border-bottom-width: 2px;
+    border-radius: 5px;
+    background: var(--panel-2);
+    color: var(--paper);
+    font-family: var(--font-mono), monospace;
+    font-size: 0.68rem;
+}
+
 .shell__topbar-actions {
     display: flex;
     align-items: center;

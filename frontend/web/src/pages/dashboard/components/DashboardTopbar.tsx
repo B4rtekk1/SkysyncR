@@ -1,4 +1,4 @@
-import { type RefObject } from 'react'
+import { useEffect, useRef, type RefObject } from 'react'
 import ThemeToggle from '../../../components/ThemeToggle'
 import { SIDEBAR_SHOW_ICON } from '../icons'
 import { NotificationCenter } from './NotificationCenter'
@@ -30,6 +30,19 @@ export function DashboardTopbar({
     onToggleMenu,
     onSignOut,
 }: DashboardTopbarProps) {
+    const shortcutsRef = useRef<HTMLDetailsElement>(null)
+
+    useEffect(() => {
+        function closeShortcutsOnOutsideClick(event: MouseEvent) {
+            if (!shortcutsRef.current?.contains(event.target as Node)) {
+                shortcutsRef.current?.removeAttribute('open')
+            }
+        }
+
+        document.addEventListener('mousedown', closeShortcutsOnOutsideClick)
+        return () => document.removeEventListener('mousedown', closeShortcutsOnOutsideClick)
+    }, [])
+
     return (
         <header className="shell__topbar">
             {sidebarHidden && (
@@ -52,7 +65,7 @@ export function DashboardTopbar({
                     ref={searchInputRef}
                     type="search"
                     aria-label="Search your vault"
-                    placeholder="Search your vault..."
+                    placeholder="Press / to search"
                     value={query}
                     onChange={(e) => onQueryChange(e.target.value)}
                 />
@@ -74,6 +87,25 @@ export function DashboardTopbar({
                     </svg>
                 </button>
             </label>
+
+            <details ref={shortcutsRef} className="shell__shortcuts">
+                <summary>
+                    <span aria-hidden="true">⌨</span>
+                    Keyboard shortcuts
+                </summary>
+                <div className="shell__shortcuts-panel">
+                    <p className="shell__shortcuts-title">Available shortcuts</p>
+                    <dl>
+                        <div><dt><kbd>/</kbd></dt><dd>Focus search</dd></div>
+                        <div><dt><kbd>Ctrl</kbd>/<kbd>⌘</kbd> <kbd>A</kbd></dt><dd>Select all visible</dd></div>
+                        <div><dt><kbd>N</kbd></dt><dd>New file</dd></div>
+                        <div><dt><kbd>Shift</kbd> + <kbd>N</kbd></dt><dd>New folder</dd></div>
+                        <div><dt><kbd>Enter</kbd></dt><dd>Open selected item</dd></div>
+                        <div><dt><kbd>Esc</kbd></dt><dd>Clear selection or search</dd></div>
+                        <div><dt><kbd>Delete</kbd></dt><dd>Delete selected items</dd></div>
+                    </dl>
+                </div>
+            </details>
 
             <div className="shell__topbar-actions">
                 <span className="shell__sync">

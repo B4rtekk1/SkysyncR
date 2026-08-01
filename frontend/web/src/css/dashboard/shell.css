@@ -479,6 +479,11 @@
         margin-left: auto;
     }
 
+    .shell__shortcuts {
+        order: 3;
+        margin-left: auto;
+    }
+
     .shell__content {
         padding: 24px 20px 40px;
     }
@@ -528,6 +533,17 @@
 
     .shell__sync {
         display: none;
+    }
+
+    .shell__shortcuts summary {
+        width: 36px;
+        justify-content: center;
+        padding: 0;
+        font-size: 0;
+    }
+
+    .shell__shortcuts summary span {
+        font-size: 1rem;
     }
 
     .shell__content-actions {
