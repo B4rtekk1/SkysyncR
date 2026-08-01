@@ -148,6 +148,7 @@ type DashboardContentProps = {
     onRename: (item: Item, filename: string) => Promise<void>
     onShare: (item: Item) => void | Promise<void>
     onNote: (item: Item) => void
+    onRemind: (item: Item) => void | Promise<void>
     onMoveFile: (item: Item) => void | Promise<void>
     onToggleFavourite: (id: string) => void | Promise<void>
     onCreateTag: (name: string) => Promise<Tag | null>
@@ -314,6 +315,7 @@ export function DashboardContent({
     onRename,
     onShare,
     onNote,
+    onRemind,
     onMoveFile,
     onToggleFavourite,
     onCreateTag,
@@ -686,6 +688,7 @@ export function DashboardContent({
                     onRename={onRename}
                     onShare={onShare}
                     onNote={onNote}
+                    onRemind={onRemind}
                     onMoveFile={onMoveFile}
                     onToggleFavourite={onToggleFavourite}
                     onCreateTag={onCreateTag}
@@ -840,6 +843,7 @@ export function DashboardContent({
                     onRename={onRename}
                     onShare={onShare}
                     onNote={onNote}
+                    onRemind={onRemind}
                     onMoveFile={onMoveFile}
                     onToggleFavourite={onToggleFavourite}
                     onCreateTag={onCreateTag}

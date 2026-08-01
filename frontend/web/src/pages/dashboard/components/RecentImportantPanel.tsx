@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type CSSProperties } from 'react'
+import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react'
 import type { ApiFile, ApiFolder, SharedFile } from '../../../api/files'
 import type { FileTag, Tag } from '../../../api/tags'
 import { getOperationLog, type OperationLogEntry } from '../../../api/users'
@@ -24,6 +24,7 @@ type RecentImportantPanelProps = {
     onRename: (item: Item, filename: string) => Promise<void>
     onShare: (item: Item) => void | Promise<void>
     onNote: (item: Item) => void
+    onRemind: (item: Item) => void | Promise<void>
     onMoveFile: (item: Item) => void | Promise<void>
     onToggleFavourite: (id: string) => void | Promise<void>
     onCreateTag: (name: string) => Promise<Tag | null>
@@ -36,8 +37,8 @@ type RecentImportantPanelProps = {
 }
 
 type PublicLinkAlert =
-    | { kind: 'file'; id: string; name: string; detail: string; updatedAt: string; file: ApiFile }
-    | { kind: 'folder'; id: string; name: string; detail: string; updatedAt: string; folder: ApiFolder }
+    | { kind: 'file'; id: string; name: string; detail: string; updatedAt: string; expiresAt: string | null; file: ApiFile }
+    | { kind: 'folder'; id: string; name: string; detail: string; updatedAt: string; expiresAt: string | null; folder: ApiFolder }
 
 const riskyOperations = new Set([
     'file.share',
@@ -74,15 +75,27 @@ function formatDateTime(value: string): string {
     }).format(date)
 }
 
-function toPublicLinkAlerts(files: ApiFile[], folders: ApiFolder[]): PublicLinkAlert[] {
+function formatExpiry(value: string | null, nowMs: number): string {
+    if (!value) return 'No expiration date'
+    const expiry = new Date(value)
+    if (Number.isNaN(expiry.getTime())) return 'Invalid expiration date'
+    const diffMs = expiry.getTime() - nowMs
+    if (diffMs <= 0) return 'Expired'
+    const days = Math.ceil(diffMs / (24 * 60 * 60 * 1000))
+    if (days === 1) return 'Expires tomorrow'
+    return `Expires in ${days} days`
+}
+
+function toPublicLinkAlerts(files: ApiFile[], folders: ApiFolder[], nowMs: number): PublicLinkAlert[] {
     const publicFiles = files
         .filter((file) => file.is_public && file.share_token && !file.is_deleted)
         .map((file): PublicLinkAlert => ({
             kind: 'file',
             id: file.id,
             name: file.filename,
-            detail: `${formatBytes(file.size_bytes)} · ${file.share_download_count}/${file.share_download_limit ?? 'unlimited'} downloads`,
+            detail: `${formatExpiry(file.share_expires_at, nowMs)} · ${formatBytes(file.size_bytes)} · ${file.share_download_count}/${file.share_download_limit ?? 'unlimited'} downloads`,
             updatedAt: file.updated_at,
+            expiresAt: file.share_expires_at,
             file,
         }))
     const publicFolders = folders
@@ -91,12 +104,28 @@ function toPublicLinkAlerts(files: ApiFile[], folders: ApiFolder[]): PublicLinkA
             kind: 'folder',
             id: folder.id,
             name: folder.name,
-            detail: 'Public folder link',
+            detail: `${formatExpiry(folder.share_expires_at, nowMs)} · Public folder link`,
             updatedAt: folder.updated_at,
+            expiresAt: folder.share_expires_at,
             folder,
         }))
 
     return [...publicFiles, ...publicFolders].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()).slice(0, 5)
+}
+
+function toExpiringLinkAlerts(files: ApiFile[], folders: ApiFolder[], nowMs: number): PublicLinkAlert[] {
+    const sevenDaysFromNow = nowMs + 7 * 24 * 60 * 60 * 1000
+    return toPublicLinkAlerts(files, folders, nowMs)
+        .filter((alert) => {
+            if (!alert.expiresAt) return false
+            const expiry = new Date(alert.expiresAt).getTime()
+            return !Number.isNaN(expiry) && expiry <= sevenDaysFromNow
+        })
+        .sort((a, b) => {
+            const aTime = a.expiresAt ? new Date(a.expiresAt).getTime() : Number.MAX_SAFE_INTEGER
+            const bTime = b.expiresAt ? new Date(b.expiresAt).getTime() : Number.MAX_SAFE_INTEGER
+            return aTime - bTime
+        })
 }
 
 function toSecurityOperations(operations: OperationLogEntry[], files: ApiFile[]): OperationLogEntry[] {
@@ -136,6 +165,7 @@ export function RecentImportantPanel({
     onRename,
     onShare,
     onNote,
+    onRemind,
     onMoveFile,
     onToggleFavourite,
     onCreateTag,
@@ -150,10 +180,16 @@ export function RecentImportantPanel({
     const [securityLoading, setSecurityLoading] = useState(true)
     const [securityError, setSecurityError] = useState<string | null>(null)
     const [blockingLinkId, setBlockingLinkId] = useState<string | null>(null)
+    const [nowMs] = useState(() => Date.now())
 
     const recentFiles = useMemo(() => sortByUpdatedAt(items).slice(0, 6), [items])
     const sharedFiles = useMemo(() => sortByUpdatedAt(items.filter(isSharedFile)).slice(0, 5), [items])
-    const publicLinkAlerts = useMemo(() => toPublicLinkAlerts(files, folders), [files, folders])
+    const publicLinkAlerts = useMemo(() => toPublicLinkAlerts(files, folders, nowMs), [files, folders, nowMs])
+    const expiringLinkAlerts = useMemo(() => toExpiringLinkAlerts(files, folders, nowMs), [files, folders, nowMs])
+    const expiredLinkAlerts = useMemo(
+        () => expiringLinkAlerts.filter((alert) => alert.expiresAt && new Date(alert.expiresAt).getTime() <= nowMs),
+        [expiringLinkAlerts, nowMs],
+    )
     const securityOperations = useMemo(() => toSecurityOperations(operationLog, files), [files, operationLog])
     const transferStatusByTempId = useMemo(
         () => new Map(uploadTransfers.map((transfer) => [transfer.tempId, transfer.status])),
@@ -162,6 +198,16 @@ export function RecentImportantPanel({
     const securityAlertCount = publicLinkAlerts.length + securityOperations.length
     const attentionCount = incomingGroupInvites.length + securityAlertCount
     const attentionStatus = securityLoading ? 'Checking' : attentionCount === 0 ? 'Clear' : `${attentionCount} items`
+
+    const blockPublicLink = useCallback(async (alert: PublicLinkAlert) => {
+        setBlockingLinkId(alert.id)
+        try {
+            if (alert.kind === 'file') await onBlockFileLink(alert.file)
+            else await onBlockFolderLink(alert.folder)
+        } finally {
+            setBlockingLinkId(null)
+        }
+    }, [onBlockFileLink, onBlockFolderLink])
 
     useEffect(() => {
         let active = true
@@ -185,15 +231,22 @@ export function RecentImportantPanel({
         }
     }, [])
 
-    async function blockPublicLink(alert: PublicLinkAlert) {
-        setBlockingLinkId(alert.id)
-        try {
-            if (alert.kind === 'file') await onBlockFileLink(alert.file)
-            else await onBlockFolderLink(alert.folder)
-        } finally {
-            setBlockingLinkId(null)
+    useEffect(() => {
+        if (expiredLinkAlerts.length === 0) return
+        let active = true
+
+        async function revokeExpiredLinks() {
+            for (const alert of expiredLinkAlerts) {
+                if (!active) return
+                await blockPublicLink(alert)
+            }
         }
-    }
+
+        void revokeExpiredLinks()
+        return () => {
+            active = false
+        }
+    }, [blockPublicLink, expiredLinkAlerts])
 
     return (
         <div className="recent-important">
@@ -239,6 +292,10 @@ export function RecentImportantPanel({
                     <span>Security alerts</span>
                     <strong>{securityLoading ? '-' : securityAlertCount}</strong>
                 </div>
+                <div className="recent-important__metric recent-important__metric--expiry">
+                    <span>Expiring links</span>
+                    <strong>{expiringLinkAlerts.length}</strong>
+                </div>
             </section>
 
             <div className="recent-important__layout">
@@ -264,6 +321,7 @@ export function RecentImportantPanel({
                                 onRename={onRename}
                                 onShare={onShare}
                                 onNote={onNote}
+                                onRemind={onRemind}
                                 onMove={onMoveFile}
                                 isFavourite={favouriteIds.has(item.id)}
                                 onToggleFavourite={onToggleFavourite}
@@ -332,6 +390,34 @@ export function RecentImportantPanel({
                         </div>
                     </section>
                 </div>
+
+                <section className="recent-important__panel recent-important__panel--wide">
+                    <div className="recent-important__head recent-important__head--expiry">
+                        <span>Deadlines</span>
+                        <h2>Access expiring within 7 days</h2>
+                    </div>
+                    <div className="recent-important__list recent-important__list--alerts">
+                        {expiringLinkAlerts.length === 0 && (
+                            <p className="recent-important__empty">No public file or folder links expire in the next 7 days.</p>
+                        )}
+                        {expiringLinkAlerts.map((alert) => (
+                            <article className="recent-important__row recent-important__row--action" key={`expiry:${alert.kind}:${alert.id}`}>
+                                <span className="recent-important__row-main">
+                                    <strong>{alert.name}</strong>
+                                    <small>{alert.detail}</small>
+                                </span>
+                                <button
+                                    className="btn btn--outline recent-important__danger"
+                                    type="button"
+                                    disabled={blockingLinkId === alert.id}
+                                    onClick={() => void blockPublicLink(alert)}
+                                >
+                                    {blockingLinkId === alert.id ? 'Revoking...' : 'Revoke access'}
+                                </button>
+                            </article>
+                        ))}
+                    </div>
+                </section>
 
                 <section className="recent-important__panel recent-important__panel--wide">
                     <div className="recent-important__head recent-important__head--security">

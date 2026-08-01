@@ -11,6 +11,7 @@ import '../css/dashboard.css'
 import type { Item, ShareableItem, ViewKey } from './dashboard/types'
 import { moveFile, moveFolder, permanentlyDeleteFile, shareFile, shareFolder, type ApiFile, type ApiFolder } from '../api/files'
 import { addFileTag, createTag, removeFileTag, type Tag } from '../api/tags'
+import { createCalendarEntry } from '../api/calendar'
 import { DashboardContent } from './dashboard/components/DashboardContent'
 import { DashboardModals } from './dashboard/components/DashboardModals'
 import { DashboardSidebar } from './dashboard/components/DashboardSidebar'
@@ -534,6 +535,31 @@ function Dashboard() {
         }
     }
 
+    async function remindAboutFile(item: Item) {
+        const reminderDate = new Date()
+        reminderDate.setDate(reminderDate.getDate() + 1)
+        const date = [
+            reminderDate.getFullYear(),
+            String(reminderDate.getMonth() + 1).padStart(2, '0'),
+            String(reminderDate.getDate()).padStart(2, '0'),
+        ].join('-')
+
+        setError(null)
+        try {
+            await createCalendarEntry({
+                kind: 'deadline',
+                date,
+                time: '09:00',
+                title: `Review ${item.filename}`,
+                note: `Reminder for ${item.filename}`,
+                reminder: '1d',
+                file_id: item.id,
+            })
+        } catch (e) {
+            setError(e instanceof Error ? e.message : 'Could not create that reminder.')
+        }
+    }
+
     function selectNavView(key: ViewKey) {
         clearSelection()
         if (key === 'all') {
@@ -891,6 +917,7 @@ function Dashboard() {
                     onRename={handleRename}
                     onShare={handleShare}
                     onNote={setNoteItem}
+                    onRemind={remindAboutFile}
                     onMoveFile={openMoveFile}
                     onToggleFavourite={toggleFavourite}
                     onCreateTag={createDashboardTag}

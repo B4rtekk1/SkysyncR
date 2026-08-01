@@ -220,6 +220,14 @@ export const NOTE_ICON = (
     </svg>
 )
 
+export const REMINDER_ICON = (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path d="M12 6v6l3.2 2" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+        <circle cx="12" cy="13" r="7" stroke="currentColor" strokeWidth="1.5" />
+        <path d="M5.2 4.8 3.8 6.2M18.8 4.8l1.4 1.4M9 20.2h6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+    </svg>
+)
+
 export const MOVE_TO_PARENT_ICON = (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
         <path d="M4.5 7h6l2 2.5h7v8.5a1.5 1.5 0 0 1-1.5 1.5h-12A1.5 1.5 0 0 1 4.5 18V7Z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />

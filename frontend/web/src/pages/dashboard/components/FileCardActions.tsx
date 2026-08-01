@@ -7,6 +7,7 @@ import {
     MORE_ICON,
     MOVE_TO_PARENT_ICON,
     NOTE_ICON,
+    REMINDER_ICON,
     RENAME_ICON,
     SHARE_ICON,
     TRASH_OPEN_ICON,
@@ -22,6 +23,7 @@ type FileCardActionsProps = {
     canDownload: boolean
     canShare: boolean
     canNote: boolean
+    canRemind: boolean
     isInfoOpen: boolean
     infoPopover: ReactNode
     tagControl?: ReactNode
@@ -32,6 +34,7 @@ type FileCardActionsProps = {
     onDownload?: ((item: Item) => void) | undefined
     onShare?: ((item: Item) => void | Promise<void>) | undefined
     onNote?: ((item: Item) => void) | undefined
+    onRemind?: ((item: Item) => void | Promise<void>) | undefined
     onMove?: ((item: Item) => void | Promise<void>) | undefined
     onDelete?: ((id: string) => void) | undefined
     onRestore?: ((id: string) => void) | undefined
@@ -56,6 +59,7 @@ export function FileCardActions({
     canDownload,
     canShare,
     canNote,
+    canRemind,
     isInfoOpen,
     infoPopover,
     tagControl,
@@ -66,6 +70,7 @@ export function FileCardActions({
     onDownload,
     onShare,
     onNote,
+    onRemind,
     onMove,
     onDelete,
     onRestore,
@@ -120,6 +125,15 @@ export function FileCardActions({
             icon: NOTE_ICON,
             active: Boolean(item.note),
             onSelect: () => onNote?.(item),
+        })
+    }
+
+    if (canRemind) {
+        secondaryActions.push({
+            key: 'remind',
+            label: 'Remind tomorrow',
+            icon: REMINDER_ICON,
+            onSelect: () => void onRemind?.(item),
         })
     }
 

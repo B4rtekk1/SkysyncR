@@ -33,6 +33,7 @@ export function FileCard({
                       onRename,
                       onShare,
                       onNote,
+                      onRemind,
                       onMove,
                       view,
                       isFavourite,
@@ -71,6 +72,7 @@ export function FileCard({
     onRename?: ((item: Item, filename: string) => Promise<void>) | undefined
     onShare?: ((item: Item) => void | Promise<void>) | undefined
     onNote?: ((item: Item) => void) | undefined
+    onRemind?: ((item: Item) => void | Promise<void>) | undefined
     onMove?: ((item: Item) => void | Promise<void>) | undefined
     view: ViewKey
     isFavourite?: boolean
@@ -119,6 +121,7 @@ export function FileCard({
     const canRename = Boolean(onRename && !shared && view !== 'trash' && !pending)
     const canShare = Boolean(onShare && !shared && view !== 'trash' && !pending)
     const canNote = Boolean(onNote && !shared && view !== 'trash' && !pending)
+    const canRemind = Boolean(onRemind && !shared && view !== 'trash' && !pending)
     const canMove = Boolean(onMove && !shared && view === 'all' && !pending)
     const canTag = Boolean((onAddTag || onRemoveTag || onCreateTag) && !shared && view !== 'trash' && !pending)
     const canDownload = Boolean(onDownload && view !== 'trash')
@@ -419,6 +422,7 @@ export function FileCard({
                     canDownload={canDownload}
                     canShare={canShare}
                     canNote={canNote}
+                    canRemind={canRemind}
                     isInfoOpen={isInfoOpen}
                     tagControl={
                         (tags.length > 0 || canTag) ? (
@@ -527,6 +531,7 @@ export function FileCard({
                     onDownload={onDownload}
                     onShare={onShare}
                     onNote={onNote}
+                    onRemind={onRemind}
                     onMove={canMove ? onMove : undefined}
                     onDelete={onDelete}
                     onRestore={onRestore}

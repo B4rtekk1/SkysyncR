@@ -97,7 +97,7 @@
 }
 
 .recent-important__metrics {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
     gap: 10px;
 }
 
@@ -145,6 +145,10 @@
     background: #ff8a8a;
 }
 
+.recent-important__metric--expiry::before {
+    background: #38bdf8;
+}
+
 .recent-important__panel {
     min-width: 0;
     overflow: hidden;
@@ -186,6 +190,10 @@
 
 .recent-important__head--security {
     background: rgba(255, 138, 138, 0.07);
+}
+
+.recent-important__head--expiry {
+    background: rgba(56, 189, 248, 0.07);
 }
 
 .recent-important__head h2 {

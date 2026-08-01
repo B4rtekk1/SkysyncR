@@ -18,6 +18,15 @@ export default defineConfig(
     },
   },
   {
+    files: ['public/sw.js'],
+    languageOptions: {
+      globals: {
+        ...globals.browser,
+        ...globals.serviceworker,
+      },
+    },
+  },
+  {
     files: ['**/*.test.ts'],
     languageOptions: {
       globals: globals.node,
