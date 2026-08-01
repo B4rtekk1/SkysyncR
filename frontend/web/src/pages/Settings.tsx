@@ -21,10 +21,12 @@ import {
     type CurrentUserResponse,
     type OperationLogEntry,
     type OperationLogResponse,
+    type ReauthenticationPayload,
     type SessionsResponse,
 } from '../api/users'
 import { decryptPrivateKey, encryptPrivateKey } from '../crypto/keys'
-import { loadEncryptedPrivateKey, storeEncryptedPrivateKey } from '../crypto/storage'
+import { clearActivePrivateKeys, loadEncryptedPrivateKey, storeEncryptedPrivateKey } from '../crypto/storage'
+import { setUnlockedVaultSession } from '../api/session'
 import {
     CLOSE_ICON,
     DOWNLOAD_ICON,
@@ -491,6 +493,22 @@ function SettingsModalContent({ currentUser, onClose, onSave }: SettingsModalPro
         window.location.assign('/login')
     }
 
+    async function lockVaultNow() {
+        setUnlockedVaultSession(null)
+        await clearActivePrivateKeys()
+        window.location.assign('/login')
+    }
+
+    function requestReauthentication(action: string): ReauthenticationPayload | null {
+        const password = window.prompt(`Confirm your password to ${action}.`)
+        if (!password) return null
+        const totpCode = window.prompt('Enter your 6-digit authenticator code if two-factor authentication is enabled.')?.trim()
+        return {
+            password,
+            totp_code: totpCode || null,
+        }
+    }
+
     async function signOutEverywhere() {
         setLogoutAllError(null)
 
@@ -558,7 +576,9 @@ function SettingsModalContent({ currentUser, onClose, onSave }: SettingsModalPro
         setDataExportLoading(true)
         setDataExportError(null)
         try {
-            await downloadUserDataExport()
+            const reauth = requestReauthentication('download your data export')
+            if (!reauth) return
+            await downloadUserDataExport(reauth)
             void loadOperationLog()
         } catch (error) {
             setDataExportError(error instanceof Error ? error.message : 'Could not prepare data export.')
@@ -866,6 +886,11 @@ function SettingsModalContent({ currentUser, onClose, onSave }: SettingsModalPro
                                 <div>
                                     <p className="settings-kicker">Security</p>
                                     <h2>Privacy controls</h2>
+                                </div>
+                                <div className="settings-panel__actions">
+                                    <button className="btn btn--outline" type="button" onClick={() => void lockVaultNow()}>
+                                        Zablokuj teraz
+                                    </button>
                                 </div>
                             </div>
                             <div className="settings-toggles">

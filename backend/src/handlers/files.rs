@@ -37,6 +37,7 @@ use crate::db::files::{
 use crate::db::notifications::NewNotification;
 use crate::db::storage::try_apply_storage_delta;
 use crate::observability::{RequestId, record_transfer_error, record_transfer_success};
+use crate::security::{ReauthenticationRequest, verify_reauthentication};
 use crate::services::notifications::create_and_publish_notification;
 use crate::services::ransomware_detection::detect_and_alert_after_file_mutation;
 use crate::services::trash::permanently_delete_user_file;
@@ -675,7 +676,10 @@ pub async fn permanent_delete_file(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(file_id): Path<Uuid>,
+    Json(reauth): Json<ReauthenticationRequest>,
 ) -> Result<StatusCode, ApiError> {
+    verify_reauthentication(&state, auth.user_id, &reauth).await?;
+
     let deleted = permanently_delete_user_file(&state.db_pool, auth.user_id, file_id)
         .await
         .map_err(|e| internal_error("permanently delete file", e))?;

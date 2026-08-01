@@ -1,5 +1,6 @@
 import { authenticatedFetch, getValidAccessToken } from './auth'
 import { apiFetch } from './http'
+import type { ReauthenticationPayload } from './users'
 import { verifyBlobChecksum, type IntegrityVerificationResult } from './filesIntegrity'
 import type {
     File as ApiFile,
@@ -8,6 +9,9 @@ import type {
     FileSharePermission,
     FileVersion,
     Folder as ApiFolder,
+    FolderGroupShare,
+    FolderGroupShareEvent,
+    FolderGroupSharePermission,
     FolderPointRestoreResult,
     PublicFolderShareAccess,
     PublicFileShareAccess,
@@ -24,6 +28,9 @@ import {
     fileVersions,
     files,
     folder,
+    folderGroupShare,
+    folderGroupShareEvents,
+    folderGroupShares,
     folderPointRestoreResult,
     folders,
     parseApiErrorBody,
@@ -67,6 +74,9 @@ export type {
     FileSharePerson,
     FileShareRecipient,
     FileVersion,
+    FolderGroupShare,
+    FolderGroupShareEvent,
+    FolderGroupSharePermission,
     FolderPointRestoreResult,
     PublicFolderShareAccess,
     PublicFileShareAccess,
@@ -201,6 +211,62 @@ export async function deleteFolderShare(folderId: string, shareId: string): Prom
         method: 'DELETE',
     })
     if (!res.ok) throw new Error(await parseErrorMessage(res))
+}
+
+export async function listFolderGroupShares(folderId: string): Promise<FolderGroupShare[]> {
+    const res = await authenticatedFetch(`${API_BASE}folders/${folderId}/group-shares`, { method: 'GET' })
+    if (!res.ok) throw new Error(await parseErrorMessage(res))
+    return readJson(res, folderGroupShares, 'FolderGroupShare[]')
+}
+
+export async function createFolderGroupShare(params: {
+    folderId: string
+    groupId: string
+    permission: FolderGroupSharePermission
+}): Promise<FolderGroupShare> {
+    const res = await authenticatedFetch(`${API_BASE}folders/${params.folderId}/group-shares`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            group_id: params.groupId,
+            permission: params.permission,
+        }),
+    })
+    if (!res.ok) throw new Error(await parseErrorMessage(res))
+    return readJson(res, folderGroupShare, 'FolderGroupShare')
+}
+
+export async function updateFolderGroupShare(params: {
+    folderId: string
+    shareId: string
+    permission: FolderGroupSharePermission
+}): Promise<FolderGroupShare> {
+    const res = await authenticatedFetch(`${API_BASE}folders/${params.folderId}/group-shares/${params.shareId}`, {
+        method: 'PATCH',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            permission: params.permission,
+        }),
+    })
+    if (!res.ok) throw new Error(await parseErrorMessage(res))
+    return readJson(res, folderGroupShare, 'FolderGroupShare')
+}
+
+export async function deleteFolderGroupShare(folderId: string, shareId: string): Promise<void> {
+    const res = await authenticatedFetch(`${API_BASE}folders/${folderId}/group-shares/${shareId}`, {
+        method: 'DELETE',
+    })
+    if (!res.ok) throw new Error(await parseErrorMessage(res))
+}
+
+export async function listFolderGroupShareEvents(folderId: string): Promise<FolderGroupShareEvent[]> {
+    const res = await authenticatedFetch(`${API_BASE}folders/${folderId}/group-shares/activity`, { method: 'GET' })
+    if (!res.ok) throw new Error(await parseErrorMessage(res))
+    return readJson(res, folderGroupShareEvents, 'FolderGroupShareEvent[]')
 }
 
 export async function createFileShare(params: {
@@ -447,9 +513,20 @@ export async function listFileActivity(id: string): Promise<FileAudit[]> {
     return readJson(res, fileActivity, 'FileAudit[]')
 }
 
-export async function permanentlyDeleteFile(id: string): Promise<void> {
+export async function permanentlyDeleteFile(id: string, reauth: ReauthenticationPayload): Promise<void> {
     const res = await authenticatedFetch(`${API_BASE}files/${id}/permanent`, {
         method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(reauth),
+    })
+    if (!res.ok) throw new Error(await parseErrorMessage(res))
+}
+
+export async function permanentlyDeleteFolder(id: string, reauth: ReauthenticationPayload): Promise<void> {
+    const res = await authenticatedFetch(`${API_BASE}folders/${id}/permanent`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(reauth),
     })
     if (!res.ok) throw new Error(await parseErrorMessage(res))
 }

@@ -13,7 +13,7 @@ pub fn users_routes() -> Router<AppState> {
     Router::new()
         .route("/users/me", get(current_user))
         .route("/users/settings", patch(update_user_settings))
-        .route("/users/export", get(export_user_data))
+        .route("/users/export", post(export_user_data))
         .route("/users/change-password", post(change_password))
         .route("/users/sessions", get(list_sessions))
         .route("/users/operation-log", get(list_operation_log))

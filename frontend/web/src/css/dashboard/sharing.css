@@ -100,7 +100,7 @@
     min-height: 0;
     display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(210px, 250px);
-    grid-template-rows: auto auto auto;
+    grid-template-rows: auto auto auto auto;
     gap: 12px;
     overflow: auto;
     padding: 14px;
@@ -125,6 +125,13 @@
 }
 
 .share-modal__panel--people {
+    grid-column: 1 / -1;
+    grid-row: 4;
+    display: flex;
+    flex-direction: column;
+}
+
+.share-modal__panel--teams {
     grid-column: 1 / -1;
     grid-row: 3;
     display: flex;
@@ -587,6 +594,12 @@
     padding-right: 2px;
 }
 
+.share-modal__team-history {
+    display: grid;
+    gap: 8px;
+    margin-top: 12px;
+}
+
 .share-modal__empty {
     margin: 0;
     color: var(--mist);
@@ -638,6 +651,7 @@
 
     .share-modal__panel--link,
     .share-modal__panel--people,
+    .share-modal__panel--teams,
     .share-modal__panel--access {
         grid-column: auto;
         grid-row: auto;

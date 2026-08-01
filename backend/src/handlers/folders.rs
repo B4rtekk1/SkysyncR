@@ -19,20 +19,24 @@ use uuid::Uuid;
 use crate::auth::AuthUser;
 use crate::db::files::FileRecord;
 use crate::db::folders::{
-    FolderListPageCursor, FolderListPageOptions, FolderPointRestoreResult, FolderRecord,
-    FolderShareRecipientRecord, FolderShareRecord, NewFolderRecord, NewFolderShare,
-    add_user_folder_favourite, create_folder_record, delete_user_folder_share,
-    folder_belongs_to_user, folder_is_descendant_of, get_folder_share_recipient,
-    get_public_folder_file_for_download, get_public_folder_tree,
-    list_public_folder_share_access_events, list_public_folder_tree_files,
-    list_user_favourite_folders, list_user_favourite_folders_page, list_user_folder_shares,
+    FolderGroupShareEventRecord, FolderGroupShareRecord, FolderListPageCursor,
+    FolderListPageOptions, FolderPointRestoreResult, FolderRecord, FolderShareRecipientRecord,
+    FolderShareRecord, NewFolderGroupShare, NewFolderRecord, NewFolderShare,
+    add_user_folder_favourite, create_folder_record, delete_user_folder_group_share,
+    delete_user_folder_share, folder_belongs_to_user, folder_is_descendant_of,
+    get_folder_share_recipient, get_public_folder_file_for_download, get_public_folder_tree,
+    insert_folder_group_audit_log, list_public_folder_share_access_events,
+    list_public_folder_tree_files, list_user_favourite_folders, list_user_favourite_folders_page,
+    list_user_folder_group_share_events, list_user_folder_group_shares, list_user_folder_shares,
     list_user_folders, list_user_folders_page, move_user_folder,
     public_folder_share_access_allowed, remove_user_folder_favourite, rename_user_folder,
     restore_user_folder, restore_user_folder_to_point, soft_delete_user_folder,
-    update_user_folder_share, upsert_user_folder_share, user_folder_exists,
+    update_user_folder_share, upsert_user_folder_group_share, upsert_user_folder_share,
+    user_folder_exists,
 };
 use crate::db::notifications::NewNotification;
 use crate::observability::RequestId;
+use crate::security::{ReauthenticationRequest, verify_reauthentication};
 use crate::services::notifications::create_and_publish_notification;
 use crate::services::trash::permanently_delete_user_folder;
 use crate::state::AppState;
@@ -87,6 +91,17 @@ pub struct CreateFolderShareRequest {
     pub email: String,
     pub permission: String,
     pub encrypted_key: String,
+}
+
+#[derive(Deserialize)]
+pub struct FolderGroupShareRequest {
+    pub group_id: Uuid,
+    pub permission: String,
+}
+
+#[derive(Deserialize)]
+pub struct FolderGroupShareUpdateRequest {
+    pub permission: String,
 }
 
 #[derive(Deserialize)]
@@ -515,6 +530,146 @@ pub async fn delete_folder_share(
     Ok(StatusCode::NO_CONTENT)
 }
 
+pub async fn list_folder_group_shares(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Path(folder_id): Path<Uuid>,
+) -> Result<Json<Vec<FolderGroupShareRecord>>, ApiError> {
+    ensure_user_folder_exists(&state, auth.user_id, folder_id).await?;
+    let shares = list_user_folder_group_shares(&state.db_pool, auth.user_id, folder_id)
+        .await
+        .map_err(|e| internal_error("list folder group shares", e))?;
+
+    Ok(Json(shares))
+}
+
+pub async fn create_folder_group_share(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Path(folder_id): Path<Uuid>,
+    Json(payload): Json<FolderGroupShareRequest>,
+) -> Result<(StatusCode, Json<FolderGroupShareRecord>), ApiError> {
+    let permission = validate_folder_group_permission(&payload.permission)?;
+    let share = upsert_user_folder_group_share(
+        &state.db_pool,
+        NewFolderGroupShare {
+            owner_id: auth.user_id,
+            folder_id,
+            group_id: payload.group_id,
+            permission,
+            actor_user_id: auth.user_id,
+        },
+    )
+    .await
+    .map_err(|e| internal_error("create folder group share", e))?
+    .ok_or_else(|| ApiError::BadRequest("Folder or group not found".into()))?;
+
+    log_folder_group_audit(
+        &state,
+        auth.user_id,
+        "folder.group_share.grant",
+        folder_id,
+        share.group_id,
+        Some(&share.permission),
+    )
+    .await;
+
+    Ok((StatusCode::CREATED, Json(share)))
+}
+
+pub async fn update_folder_group_share(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Path((folder_id, group_share_id)): Path<(Uuid, Uuid)>,
+    Json(payload): Json<FolderGroupShareUpdateRequest>,
+) -> Result<Json<FolderGroupShareRecord>, ApiError> {
+    let permission = validate_folder_group_permission(&payload.permission)?;
+    let current = list_user_folder_group_shares(&state.db_pool, auth.user_id, folder_id)
+        .await
+        .map_err(|e| internal_error("load folder group shares", e))?
+        .into_iter()
+        .find(|share| share.id == group_share_id)
+        .ok_or_else(|| ApiError::BadRequest("Folder group share not found".into()))?;
+
+    let share = upsert_user_folder_group_share(
+        &state.db_pool,
+        NewFolderGroupShare {
+            owner_id: auth.user_id,
+            folder_id,
+            group_id: current.group_id,
+            permission,
+            actor_user_id: auth.user_id,
+        },
+    )
+    .await
+    .map_err(|e| internal_error("update folder group share", e))?
+    .ok_or_else(|| ApiError::BadRequest("Folder group share not found".into()))?;
+
+    log_folder_group_audit(
+        &state,
+        auth.user_id,
+        "folder.group_share.update",
+        folder_id,
+        share.group_id,
+        Some(&share.permission),
+    )
+    .await;
+
+    Ok(Json(share))
+}
+
+pub async fn delete_folder_group_share(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Path((folder_id, group_share_id)): Path<(Uuid, Uuid)>,
+) -> Result<StatusCode, ApiError> {
+    let current = list_user_folder_group_shares(&state.db_pool, auth.user_id, folder_id)
+        .await
+        .map_err(|e| internal_error("load folder group share", e))?
+        .into_iter()
+        .find(|share| share.id == group_share_id)
+        .ok_or_else(|| ApiError::BadRequest("Folder group share not found".into()))?;
+
+    let rows = delete_user_folder_group_share(
+        &state.db_pool,
+        auth.user_id,
+        folder_id,
+        group_share_id,
+        auth.user_id,
+    )
+    .await
+    .map_err(|e| internal_error("delete folder group share", e))?;
+
+    if rows == 0 {
+        return Err(ApiError::BadRequest("Folder group share not found".into()));
+    }
+
+    log_folder_group_audit(
+        &state,
+        auth.user_id,
+        "folder.group_share.revoke",
+        folder_id,
+        current.group_id,
+        Some(&current.permission),
+    )
+    .await;
+
+    Ok(StatusCode::NO_CONTENT)
+}
+
+pub async fn list_folder_group_share_events(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Path(folder_id): Path<Uuid>,
+) -> Result<Json<Vec<FolderGroupShareEventRecord>>, ApiError> {
+    ensure_user_folder_exists(&state, auth.user_id, folder_id).await?;
+    let events = list_user_folder_group_share_events(&state.db_pool, auth.user_id, folder_id)
+        .await
+        .map_err(|e| internal_error("list folder group share events", e))?;
+
+    Ok(Json(events))
+}
+
 pub async fn rename_folder(
     State(state): State<AppState>,
     auth: AuthUser,
@@ -664,7 +819,10 @@ pub async fn permanent_delete_folder(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(folder_id): Path<Uuid>,
+    Json(reauth): Json<ReauthenticationRequest>,
 ) -> Result<StatusCode, ApiError> {
+    verify_reauthentication(&state, auth.user_id, &reauth).await?;
+
     let deleted = permanently_delete_user_folder(&state.db_pool, auth.user_id, folder_id)
         .await
         .map_err(|e| internal_error("permanently delete folder", e))?;
@@ -979,5 +1137,37 @@ fn validate_share_permission(value: &str) -> Result<String, ApiError> {
     match value {
         "read" | "download" | "write" => Ok(value.to_string()),
         _ => Err(ApiError::BadRequest("Invalid share permission".into())),
+    }
+}
+
+fn validate_folder_group_permission(value: &str) -> Result<String, ApiError> {
+    match value.trim() {
+        "read" | "edit" | "manage" => Ok(value.trim().to_string()),
+        _ => Err(ApiError::BadRequest(
+            "Invalid folder group permission".into(),
+        )),
+    }
+}
+
+async fn log_folder_group_audit(
+    state: &AppState,
+    user_id: Uuid,
+    operation: &str,
+    folder_id: Uuid,
+    group_id: Uuid,
+    permission: Option<&str>,
+) {
+    if let Err(e) = insert_folder_group_audit_log(
+        &state.db_pool,
+        &state.config.audit_log_encryption_key,
+        user_id,
+        operation,
+        folder_id,
+        group_id,
+        permission,
+    )
+    .await
+    {
+        tracing::warn!(error = %e, operation, folder_id = %folder_id, group_id = %group_id, "failed to write folder group audit log");
     }
 }

@@ -12,6 +12,7 @@ import {
 } from '../../../api/files'
 import { encryptTextEnvelope, unwrapFileKeyForUser } from '../../../crypto/fileEncryption'
 import type { Item, ShareableItem } from '../types'
+import type { ReauthenticationPayload } from '../../../api/users'
 
 type UseFileActionsOptions = {
     setItems: Dispatch<SetStateAction<Item[]>>
@@ -23,6 +24,7 @@ type UseFileActionsOptions = {
     favouriteIds: Set<string>
     refreshQuota: () => Promise<void>
     privateKey: CryptoKey | null
+    requestReauthentication: (action: string) => ReauthenticationPayload | null
 }
 
 export function useFileActions({
@@ -35,6 +37,7 @@ export function useFileActions({
     favouriteIds,
     refreshQuota,
     privateKey,
+    requestReauthentication,
 }: UseFileActionsOptions) {
     const handleDelete = useCallback(
         async (id: string) => {
@@ -82,6 +85,8 @@ export function useFileActions({
         async (id: string) => {
             const confirmed = window.confirm('Permanently delete this file? This cannot be undone.')
             if (!confirmed) return
+            const reauth = requestReauthentication('permanently delete this file')
+            if (!reauth) return
 
             let previousItems: Item[] = []
             let previousStorageItems: ApiFile[] = []
@@ -103,7 +108,7 @@ export function useFileActions({
             })
 
             try {
-                await permanentlyDeleteFile(id)
+                await permanentlyDeleteFile(id, reauth)
                 await refreshQuota()
             } catch (e) {
                 setItems(previousItems)
@@ -112,7 +117,7 @@ export function useFileActions({
                 setError(e instanceof Error ? e.message : 'Could not permanently delete that file.')
             }
         },
-        [refreshQuota, setError, setFavouriteIds, setItems, setStorageItems],
+        [refreshQuota, requestReauthentication, setError, setFavouriteIds, setItems, setStorageItems],
     )
 
     const handleRestoreVersion = useCallback(

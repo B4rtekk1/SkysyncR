@@ -1034,9 +1034,9 @@ async fn public_file_share_download_consumes_limit_atomically() {
         None,
         Some("integration-test-agent"),
     )
-        .await
-        .unwrap()
-        .expect("first public download should be allowed");
+    .await
+    .unwrap()
+    .expect("first public download should be allowed");
     assert_eq!(download.filename, "public.txt");
 
     let blocked = consume_public_file_share_for_download(&pool, &share_token, None, None, None)
@@ -1052,14 +1052,13 @@ async fn public_file_share_download_consumes_limit_atomically() {
             .unwrap();
     assert_eq!(count, 1);
 
-    let event =
-        sqlx::query_as::<_, (String, Option<String>)>(
-            "SELECT share_token, user_agent FROM public_file_share_access_events WHERE file_id = $1",
-        )
-        .bind(file.id)
-        .fetch_one(&pool)
-        .await
-        .unwrap();
+    let event = sqlx::query_as::<_, (String, Option<String>)>(
+        "SELECT share_token, user_agent FROM public_file_share_access_events WHERE file_id = $1",
+    )
+    .bind(file.id)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
     assert_eq!(event.0, share_token);
     assert_eq!(event.1.as_deref(), Some("integration-test-agent"));
 }

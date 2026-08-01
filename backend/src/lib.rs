@@ -6,6 +6,7 @@ pub mod handlers;
 pub mod models;
 pub mod observability;
 pub mod routes;
+pub mod security;
 pub mod services;
 pub mod state;
 pub mod utils;

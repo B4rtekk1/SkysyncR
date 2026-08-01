@@ -135,6 +135,8 @@ export type VerifyUserRequest = {
 
 export type FileSharePermission = "read" | "download" | "write"
 
+export type FolderGroupSharePermission = "read" | "edit" | "manage"
+
 export type GroupRole = "viewer" | "editor" | "admin"
 
 export type CalendarEntryKind = "event" | "deadline"
@@ -182,6 +184,30 @@ export type FileShare = {
   "display_name": string | null
   "public_key": string
   "permission": FileSharePermission
+  "created_at": string
+}
+
+export type FolderGroupShare = {
+  "id": string
+  "folder_id": string
+  "group_id": string
+  "group_name": string
+  "permission": FolderGroupSharePermission
+  "created_by_email": string | null
+  "updated_by_email": string | null
+  "created_at": string
+  "updated_at": string
+}
+
+export type FolderGroupShareEvent = {
+  "id": string
+  "folder_id": string
+  "group_id": string | null
+  "group_name": string | null
+  "actor_email": string | null
+  "action": string
+  "previous_permission": FolderGroupSharePermission | null
+  "new_permission": FolderGroupSharePermission | null
   "created_at": string
 }
 

@@ -3,6 +3,9 @@ import type {
   CurrentUser,
   File,
   FileAudit,
+  FolderGroupShare,
+  FolderGroupShareEvent,
+  FolderGroupSharePermission,
   PublicFolderShareAccess,
   PublicFileShareAccess,
   FileShare,
@@ -136,6 +139,7 @@ function oneOf<const T extends readonly string[]>(
 }
 
 const fileSharePermission = oneOf(['read', 'download', 'write'] as const)
+const folderGroupSharePermission = oneOf(['read', 'edit', 'manage'] as const)
 const groupRole = oneOf(['viewer', 'editor', 'admin'] as const)
 const calendarKind = oneOf(['event', 'deadline'] as const)
 
@@ -348,6 +352,41 @@ export const fileShare: Validator<FileShare> = (value, path) => {
   }
 }
 
+export const folderGroupShare: Validator<FolderGroupShare> = (value, path) => {
+  const item = object(value, path)
+  return {
+    id: string(prop(item, 'id', path), `${path}.id`),
+    folder_id: string(prop(item, 'folder_id', path), `${path}.folder_id`),
+    group_id: string(prop(item, 'group_id', path), `${path}.group_id`),
+    group_name: string(prop(item, 'group_name', path), `${path}.group_name`),
+    permission: folderGroupSharePermission(prop(item, 'permission', path), `${path}.permission`) as FolderGroupSharePermission,
+    created_by_email: nullableString(prop(item, 'created_by_email', path), `${path}.created_by_email`),
+    updated_by_email: nullableString(prop(item, 'updated_by_email', path), `${path}.updated_by_email`),
+    created_at: string(prop(item, 'created_at', path), `${path}.created_at`),
+    updated_at: string(prop(item, 'updated_at', path), `${path}.updated_at`),
+  }
+}
+
+export const folderGroupShareEvent: Validator<FolderGroupShareEvent> = (value, path) => {
+  const item = object(value, path)
+  return {
+    id: string(prop(item, 'id', path), `${path}.id`),
+    folder_id: string(prop(item, 'folder_id', path), `${path}.folder_id`),
+    group_id: nullableString(prop(item, 'group_id', path), `${path}.group_id`),
+    group_name: nullableString(prop(item, 'group_name', path), `${path}.group_name`),
+    actor_email: nullableString(prop(item, 'actor_email', path), `${path}.actor_email`),
+    action: string(prop(item, 'action', path), `${path}.action`),
+    previous_permission: nullableFolderGroupSharePermission(prop(item, 'previous_permission', path), `${path}.previous_permission`),
+    new_permission: nullableFolderGroupSharePermission(prop(item, 'new_permission', path), `${path}.new_permission`),
+    created_at: string(prop(item, 'created_at', path), `${path}.created_at`),
+  }
+}
+
+function nullableFolderGroupSharePermission(value: unknown, path: string): FolderGroupSharePermission | null {
+  if (value === null) return null
+  return folderGroupSharePermission(value, path) as FolderGroupSharePermission
+}
+
 export const fileVersion: Validator<FileVersion> = (value, path) => {
   const item = object(value, path)
   return {
@@ -519,6 +558,8 @@ export const calendarEntry: Validator<CalendarEntry> = (value, path) => {
 export const files = arrayOf(file)
 export const sharedFiles = arrayOf(sharedFile)
 export const fileShares = arrayOf(fileShare)
+export const folderGroupShares = arrayOf(folderGroupShare)
+export const folderGroupShareEvents = arrayOf(folderGroupShareEvent)
 export const fileVersions = arrayOf(fileVersion)
 export const fileActivity = arrayOf(fileAudit)
 export const publicFileShareAccessEvents = arrayOf(publicFileShareAccess)

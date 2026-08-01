@@ -4,6 +4,7 @@ use serde::{Serialize, Serializer};
 use sqlx::{FromRow, PgPool, Postgres, QueryBuilder, Row, Transaction};
 use uuid::Uuid;
 
+use super::audit_logs::{NewAuditLog, insert_user_audit_log};
 use super::file_records::{DownloadFileRecord, FileRecord};
 
 fn serialize_optional_bytes_base64<S>(
@@ -76,6 +77,40 @@ pub struct NewFolderShare {
     pub recipient_email: String,
     pub permission: String,
     pub encrypted_key: Vec<u8>,
+}
+
+pub struct NewFolderGroupShare {
+    pub owner_id: Uuid,
+    pub folder_id: Uuid,
+    pub group_id: Uuid,
+    pub permission: String,
+    pub actor_user_id: Uuid,
+}
+
+#[derive(FromRow, Serialize)]
+pub struct FolderGroupShareRecord {
+    pub id: Uuid,
+    pub folder_id: Uuid,
+    pub group_id: Uuid,
+    pub group_name: String,
+    pub permission: String,
+    pub created_by_email: Option<String>,
+    pub updated_by_email: Option<String>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+#[derive(FromRow, Serialize)]
+pub struct FolderGroupShareEventRecord {
+    pub id: Uuid,
+    pub folder_id: Uuid,
+    pub group_id: Option<Uuid>,
+    pub group_name: Option<String>,
+    pub actor_email: Option<String>,
+    pub action: String,
+    pub previous_permission: Option<String>,
+    pub new_permission: Option<String>,
+    pub created_at: DateTime<Utc>,
 }
 
 pub struct FolderListPageCursor {
@@ -1008,6 +1043,310 @@ pub async fn delete_user_folder_share(
     .await?;
 
     Ok(result.rows_affected())
+}
+
+pub async fn list_user_folder_group_shares(
+    pool: &PgPool,
+    owner_id: Uuid,
+    folder_id: Uuid,
+) -> Result<Vec<FolderGroupShareRecord>, sqlx::Error> {
+    sqlx::query_as::<_, FolderGroupShareRecord>(
+        r#"
+        SELECT
+            fgs.id,
+            fgs.folder_id,
+            fgs.group_id,
+            groups.name AS group_name,
+            fgs.permission,
+            creator.email AS created_by_email,
+            updater.email AS updated_by_email,
+            fgs.created_at,
+            fgs.updated_at
+        FROM folder_group_shares fgs
+        JOIN folders f ON f.id = fgs.folder_id
+        JOIN groups ON groups.id = fgs.group_id
+        LEFT JOIN users creator ON creator.id = fgs.created_by_user_id
+        LEFT JOIN users updater ON updater.id = fgs.updated_by_user_id
+        WHERE fgs.folder_id = $1
+          AND fgs.owner_id = $2
+          AND f.owner_id = $2
+          AND f.is_deleted = FALSE
+        ORDER BY fgs.updated_at DESC
+        "#,
+    )
+    .bind(folder_id)
+    .bind(owner_id)
+    .fetch_all(pool)
+    .await
+}
+
+pub async fn upsert_user_folder_group_share(
+    pool: &PgPool,
+    share: NewFolderGroupShare,
+) -> Result<Option<FolderGroupShareRecord>, sqlx::Error> {
+    let mut tx = pool.begin().await?;
+
+    let previous_permission = sqlx::query_scalar::<_, String>(
+        r#"
+        SELECT fgs.permission
+        FROM folder_group_shares fgs
+        JOIN folders f ON f.id = fgs.folder_id
+        JOIN groups g ON g.id = fgs.group_id
+        WHERE fgs.folder_id = $1
+          AND fgs.group_id = $2
+          AND fgs.owner_id = $3
+          AND f.owner_id = $3
+          AND g.owner_id = $3
+          AND f.is_deleted = FALSE
+        "#,
+    )
+    .bind(share.folder_id)
+    .bind(share.group_id)
+    .bind(share.owner_id)
+    .fetch_optional(&mut *tx)
+    .await?;
+
+    let row = sqlx::query_as::<_, FolderGroupShareRecord>(
+        r#"
+        WITH target AS (
+            SELECT f.id AS folder_id, g.id AS group_id
+            FROM folders f
+            JOIN groups g ON g.id = $3
+            WHERE f.id = $2
+              AND f.owner_id = $1
+              AND g.owner_id = $1
+              AND f.is_deleted = FALSE
+        ),
+        upserted AS (
+            INSERT INTO folder_group_shares (
+                folder_id,
+                owner_id,
+                group_id,
+                permission,
+                created_by_user_id,
+                updated_by_user_id
+            )
+            SELECT folder_id, $1, group_id, $4, $5, $5
+            FROM target
+            ON CONFLICT (folder_id, group_id)
+            DO UPDATE SET
+                permission = EXCLUDED.permission,
+                updated_by_user_id = EXCLUDED.updated_by_user_id,
+                updated_at = NOW()
+            RETURNING *
+        )
+        SELECT
+            upserted.id,
+            upserted.folder_id,
+            upserted.group_id,
+            groups.name AS group_name,
+            upserted.permission,
+            creator.email AS created_by_email,
+            updater.email AS updated_by_email,
+            upserted.created_at,
+            upserted.updated_at
+        FROM upserted
+        JOIN groups ON groups.id = upserted.group_id
+        LEFT JOIN users creator ON creator.id = upserted.created_by_user_id
+        LEFT JOIN users updater ON updater.id = upserted.updated_by_user_id
+        "#,
+    )
+    .bind(share.owner_id)
+    .bind(share.folder_id)
+    .bind(share.group_id)
+    .bind(&share.permission)
+    .bind(share.actor_user_id)
+    .fetch_optional(&mut *tx)
+    .await?;
+
+    if row.is_some() {
+        sqlx::query(
+            r#"
+            INSERT INTO folder_group_share_events (
+                folder_id,
+                group_id,
+                actor_user_id,
+                action,
+                previous_permission,
+                new_permission
+            )
+            VALUES ($1, $2, $3, $4, $5, $6)
+            "#,
+        )
+        .bind(share.folder_id)
+        .bind(share.group_id)
+        .bind(share.actor_user_id)
+        .bind(if previous_permission.is_some() {
+            "update"
+        } else {
+            "grant"
+        })
+        .bind(previous_permission)
+        .bind(&share.permission)
+        .execute(&mut *tx)
+        .await?;
+
+        let person_permission = folder_group_permission_to_person_permission(&share.permission);
+        sqlx::query(
+            r#"
+            UPDATE folder_shares fs
+            SET permission = $4,
+                updated_at = NOW()
+            FROM group_members gm
+            WHERE fs.folder_id = $1
+              AND fs.owner_id = $2
+              AND gm.group_id = $3
+              AND gm.user_id = fs.recipient_user_id
+            "#,
+        )
+        .bind(share.folder_id)
+        .bind(share.owner_id)
+        .bind(share.group_id)
+        .bind(person_permission)
+        .execute(&mut *tx)
+        .await?;
+    }
+
+    tx.commit().await?;
+    Ok(row)
+}
+
+pub async fn delete_user_folder_group_share(
+    pool: &PgPool,
+    owner_id: Uuid,
+    folder_id: Uuid,
+    group_share_id: Uuid,
+    actor_user_id: Uuid,
+) -> Result<u64, sqlx::Error> {
+    let mut tx = pool.begin().await?;
+    let removed = sqlx::query_as::<_, (Uuid, String)>(
+        r#"
+        DELETE FROM folder_group_shares
+        WHERE id = $1
+          AND folder_id = $2
+          AND owner_id = $3
+        RETURNING group_id, permission
+        "#,
+    )
+    .bind(group_share_id)
+    .bind(folder_id)
+    .bind(owner_id)
+    .fetch_optional(&mut *tx)
+    .await?;
+
+    let Some((group_id, previous_permission)) = removed else {
+        tx.commit().await?;
+        return Ok(0);
+    };
+
+    sqlx::query(
+        r#"
+        INSERT INTO folder_group_share_events (
+            folder_id,
+            group_id,
+            actor_user_id,
+            action,
+            previous_permission,
+            new_permission
+        )
+        VALUES ($1, $2, $3, 'revoke', $4, NULL)
+        "#,
+    )
+    .bind(folder_id)
+    .bind(group_id)
+    .bind(actor_user_id)
+    .bind(previous_permission)
+    .execute(&mut *tx)
+    .await?;
+
+    sqlx::query(
+        r#"
+        DELETE FROM folder_shares fs
+        USING group_members gm
+        WHERE fs.folder_id = $1
+          AND fs.owner_id = $2
+          AND gm.group_id = $3
+          AND gm.user_id = fs.recipient_user_id
+        "#,
+    )
+    .bind(folder_id)
+    .bind(owner_id)
+    .bind(group_id)
+    .execute(&mut *tx)
+    .await?;
+
+    tx.commit().await?;
+    Ok(1)
+}
+
+pub async fn list_user_folder_group_share_events(
+    pool: &PgPool,
+    owner_id: Uuid,
+    folder_id: Uuid,
+) -> Result<Vec<FolderGroupShareEventRecord>, sqlx::Error> {
+    sqlx::query_as::<_, FolderGroupShareEventRecord>(
+        r#"
+        SELECT
+            events.id,
+            events.folder_id,
+            events.group_id,
+            groups.name AS group_name,
+            actor.email AS actor_email,
+            events.action,
+            events.previous_permission,
+            events.new_permission,
+            events.created_at
+        FROM folder_group_share_events events
+        JOIN folders f ON f.id = events.folder_id
+        LEFT JOIN groups ON groups.id = events.group_id
+        LEFT JOIN users actor ON actor.id = events.actor_user_id
+        WHERE events.folder_id = $1
+          AND f.owner_id = $2
+        ORDER BY events.created_at DESC
+        LIMIT 100
+        "#,
+    )
+    .bind(folder_id)
+    .bind(owner_id)
+    .fetch_all(pool)
+    .await
+}
+
+pub async fn insert_folder_group_audit_log(
+    pool: &PgPool,
+    encryption_key: &str,
+    user_id: Uuid,
+    action: &str,
+    folder_id: Uuid,
+    group_id: Uuid,
+    permission: Option<&str>,
+) -> Result<(), sqlx::Error> {
+    insert_user_audit_log(
+        pool,
+        encryption_key,
+        NewAuditLog {
+            user_id,
+            action,
+            resource_id: Some(folder_id),
+            resource_type: Some("folder"),
+            device_label: None,
+            details: serde_json::json!({
+                "resource_id": folder_id,
+                "resource_type": "folder",
+                "group_id": group_id,
+                "permission": permission,
+            }),
+        },
+    )
+    .await
+}
+
+fn folder_group_permission_to_person_permission(permission: &str) -> &'static str {
+    match permission {
+        "read" => "read",
+        "edit" | "manage" => "write",
+        _ => "read",
+    }
 }
 
 pub async fn rename_user_folder(

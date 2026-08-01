@@ -23,6 +23,7 @@ use crate::models::users::{
     LoginTotpRequest, RefreshResponse, RegisterRequest, RegisterResponse, TotpCodeRequest,
     TotpSetupResponse, TotpStatusResponse, UpdateUserSettingsRequest, UserSettingsResponse,
 };
+use crate::security::{ReauthenticationRequest, verify_reauthentication};
 use crate::services::notifications::create_and_publish_notification;
 use crate::state::AppState;
 use crate::utils::errors::{ApiError, internal_error, map_db_error};
@@ -390,7 +391,10 @@ pub async fn current_user(
 pub async fn export_user_data(
     State(state): State<AppState>,
     auth: AuthUser,
+    Json(reauth): Json<ReauthenticationRequest>,
 ) -> Result<Response, ApiError> {
+    verify_reauthentication(&state, auth.user_id, &reauth).await?;
+
     let export_id = Uuid::new_v4();
     let (manifest, files) = build_user_export_manifest(&state, auth.user_id, export_id).await?;
     let manifest_bytes = serde_json::to_vec_pretty(&manifest)

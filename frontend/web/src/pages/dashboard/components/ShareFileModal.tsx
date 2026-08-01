@@ -1,27 +1,35 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import '../../../css/dashboard/sharing.css'
 import {
+    createFolderGroupShare,
     createFolderShare,
     createFileShare,
+    deleteFolderGroupShare,
     deleteFolderShare,
     deleteFileShare,
     getFolderShareRecipient,
     getFileShareRecipient,
+    listFolderGroupShareEvents,
+    listFolderGroupShares,
     listFolderShares,
     listFileShares,
     listPublicFolderShareAccess,
     listPublicFileShareAccess,
     type FileSharePermission,
     type FileSharePerson,
+    type FolderGroupShare,
+    type FolderGroupShareEvent,
+    type FolderGroupSharePermission,
     type PublicFileShareAccess,
     type PublicFolderShareAccess,
+    updateFolderGroupShare,
 } from '../../../api/files'
 import { listGroupShareRecipients } from '../../../api/groups'
 import { unwrapFileKeyForUser, wrapFileKeyForUser } from '../../../crypto/fileEncryption'
 import { useModalA11y } from '../../../hooks/useModalA11y'
 import { CLOSE_ICON, COPY_ICON } from '../icons'
 import { createQrPath } from '../qr'
-import { DEFAULT_SHARE_DURATION_SECONDS, PermissionDropdown } from './shareControls'
+import { DEFAULT_SHARE_DURATION_SECONDS, FolderGroupPermissionDropdown, PermissionDropdown } from './shareControls'
 import type { Group, GroupInviteRole, ShareableItem } from '../types'
 
 type ShareFileModalProps = {
@@ -117,6 +125,10 @@ export function ShareFileModal({
     const [accessEvents, setAccessEvents] = useState<ShareAccessEvent[]>([])
     const [accessLoading, setAccessLoading] = useState(false)
     const [selectedGroupId, setSelectedGroupId] = useState('')
+    const [groupPermissionDraft, setGroupPermissionDraft] = useState<FolderGroupSharePermission>('read')
+    const [folderGroupShares, setFolderGroupShares] = useState<FolderGroupShare[]>([])
+    const [folderGroupEvents, setFolderGroupEvents] = useState<FolderGroupShareEvent[]>([])
+    const [folderGroupsLoading, setFolderGroupsLoading] = useState(false)
     const [groupSharing, setGroupSharing] = useState(false)
     const [showLinkSettings, setShowLinkSettings] = useState(false)
     const requestedShareRef = useRef<string | null>(null)
@@ -176,6 +188,10 @@ export function ShareFileModal({
     function roleToPermission(role: GroupInviteRole): FileSharePermission {
         if (role === 'viewer') return 'read'
         return 'write'
+    }
+
+    function groupPermissionToPersonPermission(permission: FolderGroupSharePermission): FileSharePermission {
+        return permission === 'read' ? 'read' : 'write'
     }
 
     useModalA11y({ dialogRef, onClose })
@@ -245,6 +261,38 @@ export function ShareFileModal({
             active = false
         }
     }, [isFileShare, item.id, item.share_download_count])
+
+    useEffect(() => {
+        let active = true
+        async function loadFolderGroups() {
+            if (isFileShare) {
+                setFolderGroupShares([])
+                setFolderGroupEvents([])
+                return
+            }
+
+            setFolderGroupsLoading(true)
+            try {
+                const [shares, events] = await Promise.all([
+                    listFolderGroupShares(item.id),
+                    listFolderGroupShareEvents(item.id),
+                ])
+                if (active) {
+                    setFolderGroupShares(shares)
+                    setFolderGroupEvents(events)
+                }
+            } catch (e) {
+                if (active) setError(e instanceof Error ? e.message : 'Could not load team access.')
+            } finally {
+                if (active) setFolderGroupsLoading(false)
+            }
+        }
+
+        void loadFolderGroups()
+        return () => {
+            active = false
+        }
+    }, [isFileShare, item.id])
 
     async function copyShareUrl() {
         if (!shareUrl) return
@@ -335,12 +383,22 @@ export function ShareFileModal({
         setError(null)
         setGroupSharing(true)
         try {
+            const personPermission = isFileShare
+                ? roleToPermission(group.defaultRole)
+                : groupPermissionToPersonPermission(groupPermissionDraft)
             const recipients = await listGroupShareRecipients(group.id)
             if (recipients.length === 0) {
                 setError('This group has no active account members with public keys.')
                 return
             }
 
+            const savedGroupShare = isFileShare
+                ? null
+                : await createFolderGroupShare({
+                      folderId: item.id,
+                      groupId: group.id,
+                      permission: groupPermissionDraft,
+                  })
             const itemKey = await unwrapFileKeyForUser(item.encrypted_key, privateKey)
             const savedPeople = await Promise.all(
                 recipients.map(async (recipient) => {
@@ -355,7 +413,7 @@ export function ShareFileModal({
                         : createFolderShare({
                               folderId: item.id,
                               email: recipient.email,
-                              permission: roleToPermission(recipient.role),
+                              permission: personPermission,
                               encryptedKey: wrappedKey,
                           })
                 }),
@@ -367,6 +425,15 @@ export function ShareFileModal({
                 for (const person of nextPeople) byEmail.set(person.email, person)
                 return Array.from(byEmail.values()).sort((a, b) => a.email.localeCompare(b.email))
             })
+            if (savedGroupShare) {
+                setFolderGroupShares((current) => {
+                    const existing = current.some((share) => share.id === savedGroupShare.id || share.group_id === savedGroupShare.group_id)
+                    return existing
+                        ? current.map((share) => (share.id === savedGroupShare.id || share.group_id === savedGroupShare.group_id ? savedGroupShare : share))
+                        : [savedGroupShare, ...current]
+                })
+                setFolderGroupEvents(await listFolderGroupShareEvents(item.id))
+            }
             setError(`Shared with ${nextPeople.length} group member${nextPeople.length === 1 ? '' : 's'}.`)
         } catch (e) {
             setError(e instanceof Error ? e.message : 'Could not share with that group.')
@@ -393,6 +460,36 @@ export function ShareFileModal({
             setError(e instanceof Error ? e.message : 'Could not update permission.')
         } finally {
             setPeopleSaving(false)
+        }
+    }
+
+    async function updateFolderGroupPermission(share: FolderGroupShare, permission: FolderGroupSharePermission) {
+        setError(null)
+        setGroupSharing(true)
+        try {
+            const saved = await updateFolderGroupShare({ folderId: item.id, shareId: share.id, permission })
+            setFolderGroupShares((current) => current.map((currentShare) => (currentShare.id === saved.id ? saved : currentShare)))
+            setFolderGroupEvents(await listFolderGroupShareEvents(item.id))
+        } catch (e) {
+            setError(e instanceof Error ? e.message : 'Could not update team access.')
+        } finally {
+            setGroupSharing(false)
+        }
+    }
+
+    async function removeFolderGroup(share: FolderGroupShare) {
+        setError(null)
+        setGroupSharing(true)
+        try {
+            await deleteFolderGroupShare(item.id, share.id)
+            setFolderGroupShares((current) => current.filter((currentShare) => currentShare.id !== share.id))
+            setFolderGroupEvents(await listFolderGroupShareEvents(item.id))
+            const memberEmails = new Set(groups.find((group) => group.id === share.group_id)?.members.map((member) => member.email) ?? [])
+            setPeople((current) => current.filter((person) => !memberEmails.has(person.email)))
+        } catch (e) {
+            setError(e instanceof Error ? e.message : 'Could not remove team access.')
+        } finally {
+            setGroupSharing(false)
         }
     }
 
@@ -653,29 +750,31 @@ export function ShareFileModal({
                             <h3>People with accounts</h3>
                             <span>{peopleLoading ? '...' : people.length}</span>
                         </div>
-                        <div className="share-modal__group-form">
-                            <select
-                                value={selectedGroupId}
-                                onChange={(event) => setSelectedGroupId(event.target.value)}
-                                disabled={groupSharing || groups.length === 0}
-                                aria-label="Group"
-                            >
-                                <option value="">Choose group</option>
-                                {groups.map((group) => (
-                                    <option key={group.id} value={group.id}>
-                                        {group.name}
-                                    </option>
-                                ))}
-                            </select>
-                            <button
-                                className="btn btn--outline"
-                                type="button"
-                                onClick={() => void addGroup()}
-                                disabled={groupSharing || !selectedGroupId}
-                            >
-                                {groupSharing ? 'Sharing' : 'Share with group'}
-                            </button>
-                        </div>
+                        {isFileShare && (
+                            <div className="share-modal__group-form">
+                                <select
+                                    value={selectedGroupId}
+                                    onChange={(event) => setSelectedGroupId(event.target.value)}
+                                    disabled={groupSharing || groups.length === 0}
+                                    aria-label="Group"
+                                >
+                                    <option value="">Choose group</option>
+                                    {groups.map((group) => (
+                                        <option key={group.id} value={group.id}>
+                                            {group.name}
+                                        </option>
+                                    ))}
+                                </select>
+                                <button
+                                    className="btn btn--outline"
+                                    type="button"
+                                    onClick={() => void addGroup()}
+                                    disabled={groupSharing || !selectedGroupId}
+                                >
+                                    {groupSharing ? 'Sharing' : 'Share with group'}
+                                </button>
+                            </div>
+                        )}
                         <div className="share-modal__person-form">
                             <input
                                 value={emailDraft}
@@ -715,6 +814,78 @@ export function ShareFileModal({
                             )}
                         </div>
                     </section>
+
+                    {!isFileShare && (
+                        <section className="share-modal__panel share-modal__panel--teams">
+                            <div className="share-modal__section-head">
+                                <h3>Teams</h3>
+                                <span>{folderGroupsLoading ? '...' : folderGroupShares.length}</span>
+                            </div>
+                            <div className="share-modal__group-form">
+                                <select
+                                    value={selectedGroupId}
+                                    onChange={(event) => setSelectedGroupId(event.target.value)}
+                                    disabled={groupSharing || groups.length === 0}
+                                    aria-label="Folder team"
+                                >
+                                    <option value="">Choose group</option>
+                                    {groups.map((group) => (
+                                        <option key={group.id} value={group.id}>
+                                            {group.name}
+                                        </option>
+                                    ))}
+                                </select>
+                                <FolderGroupPermissionDropdown
+                                    ariaLabel="Team folder permission"
+                                    value={groupPermissionDraft}
+                                    onChange={setGroupPermissionDraft}
+                                />
+                                <button
+                                    className="btn btn--outline"
+                                    type="button"
+                                    onClick={() => void addGroup()}
+                                    disabled={groupSharing || !selectedGroupId}
+                                >
+                                    {groupSharing ? 'Sharing' : 'Assign group'}
+                                </button>
+                            </div>
+                            <div className="share-modal__people-list">
+                                {folderGroupsLoading ? (
+                                    <p className="share-modal__empty">Loading teams...</p>
+                                ) : folderGroupShares.length === 0 ? (
+                                    <p className="share-modal__empty">Assign a group to manage team folder access.</p>
+                                ) : (
+                                    folderGroupShares.map((share) => (
+                                        <div className="share-modal__person" key={share.id}>
+                                            <span>{share.group_name}</span>
+                                            <FolderGroupPermissionDropdown
+                                                ariaLabel={`Permission for ${share.group_name}`}
+                                                value={share.permission}
+                                                onChange={(permission) => void updateFolderGroupPermission(share, permission)}
+                                            />
+                                            <button type="button" onClick={() => void removeFolderGroup(share)} aria-label={`Remove ${share.group_name}`}>
+                                                x
+                                            </button>
+                                        </div>
+                                    ))
+                                )}
+                            </div>
+                            {folderGroupEvents.length > 0 && (
+                                <div className="share-modal__team-history">
+                                    {folderGroupEvents.slice(0, 5).map((event) => (
+                                        <div className="share-modal__access-event" key={event.id}>
+                                            <span>{formatAccessDate(event.created_at)}</span>
+                                            <strong>{event.actor_email ?? 'Unknown user'}</strong>
+                                            <small>
+                                                {event.group_name ?? 'Deleted group'}: {event.action}
+                                                {event.new_permission ? ` ${event.new_permission}` : ''}
+                                            </small>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </section>
+                    )}
                 </form>
 
                 <footer className="share-modal__footer">

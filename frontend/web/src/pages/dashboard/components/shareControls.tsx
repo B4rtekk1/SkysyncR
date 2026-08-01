@@ -1,5 +1,5 @@
 import { useRef, useState, type FocusEvent } from 'react'
-import type { FileSharePermission } from '../../../api/files'
+import type { FileSharePermission, FolderGroupSharePermission } from '../../../api/files'
 
 export const DEFAULT_SHARE_DURATION_SECONDS = 60 * 60 * 24 * 7
 
@@ -19,6 +19,16 @@ const PERMISSION_OPTIONS: Array<{
     { value: 'read', label: 'Can view', description: 'Open only' },
     { value: 'download', label: 'Can download', description: 'View and save' },
     { value: 'write', label: 'Can edit', description: 'Change content' },
+]
+
+const GROUP_PERMISSION_OPTIONS: Array<{
+    value: FolderGroupSharePermission
+    label: string
+    description: string
+}> = [
+    { value: 'read', label: 'Read', description: 'View folder' },
+    { value: 'edit', label: 'Edit', description: 'Change files' },
+    { value: 'manage', label: 'Manage', description: 'Control access' },
 ]
 
 export function PermissionDropdown({
@@ -67,6 +77,75 @@ export function PermissionDropdown({
             {open && (
                 <div className="share-permission__menu" role="listbox" aria-label={ariaLabel}>
                     {PERMISSION_OPTIONS.map((option) => (
+                        <button
+                            key={option.value}
+                            className={`share-permission__option ${option.value === value ? 'is-selected' : ''}`}
+                            type="button"
+                            role="option"
+                            aria-selected={option.value === value}
+                            onClick={() => {
+                                onChange(option.value)
+                                setOpen(false)
+                            }}
+                        >
+                            <span>
+                                <strong>{option.label}</strong>
+                                <small>{option.description}</small>
+                            </span>
+                        </button>
+                    ))}
+                </div>
+            )}
+        </div>
+    )
+}
+
+export function FolderGroupPermissionDropdown({
+    ariaLabel,
+    onChange,
+    value,
+}: {
+    ariaLabel: string
+    onChange: (permission: FolderGroupSharePermission) => void
+    value: FolderGroupSharePermission
+}) {
+    const [open, setOpen] = useState(false)
+    const placement = 'up'
+    const rootRef = useRef<HTMLDivElement>(null)
+    const selected = GROUP_PERMISSION_OPTIONS.find((option) => option.value === value) ?? GROUP_PERMISSION_OPTIONS[0]!
+
+    function handleBlur(e: FocusEvent<HTMLDivElement>) {
+        const nextTarget = e.relatedTarget
+        if (!nextTarget || !e.currentTarget.contains(nextTarget as Node)) {
+            setOpen(false)
+        }
+    }
+
+    return (
+        <div
+            className={`share-permission ${open ? 'is-open' : ''} share-permission--${placement}`}
+            ref={rootRef}
+            onBlur={handleBlur}
+        >
+            <button
+                className="share-permission__trigger"
+                type="button"
+                onClick={() => setOpen((current) => !current)}
+                aria-label={ariaLabel}
+                aria-haspopup="listbox"
+                aria-expanded={open}
+            >
+                <span>
+                    <strong>{selected.label}</strong>
+                    <small>{selected.description}</small>
+                </span>
+                <span className="share-permission__chevron" aria-hidden="true">
+                    v
+                </span>
+            </button>
+            {open && (
+                <div className="share-permission__menu" role="listbox" aria-label={ariaLabel}>
+                    {GROUP_PERMISSION_OPTIONS.map((option) => (
                         <button
                             key={option.value}
                             className={`share-permission__option ${option.value === value ? 'is-selected' : ''}`}

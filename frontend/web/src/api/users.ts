@@ -62,6 +62,10 @@ export class ApiRequestError extends Error {
 export type TotpLoginRequired = { totp_required: true; challenge_id: string }
 export type TotpSetup = { secret: string; otpauth_url: string }
 export type TotpStatus = { enabled: boolean; pending: boolean }
+export type ReauthenticationPayload = {
+  password: string
+  totp_code?: string | null
+}
 
 async function readErrorMessage(res: Response, fallback: string): Promise<string> {
   const contentType = res.headers.get('content-type') ?? ''
@@ -269,9 +273,11 @@ export async function getOperationLog(): Promise<OperationLogResponse> {
   return readJson(res, operationLogResponse, 'OperationLogResponse')
 }
 
-export async function downloadUserDataExport(): Promise<void> {
+export async function downloadUserDataExport(reauth: ReauthenticationPayload): Promise<void> {
   const res = await authenticatedFetch(`${url}users/export`, {
-    method: 'GET',
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(reauth),
   })
 
   if (!res.ok) {

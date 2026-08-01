@@ -1,6 +1,7 @@
 import React, {
     useEffect,
     useMemo,
+    useCallback,
     useState,
     type ChangeEvent,
     type DragEvent,
@@ -10,6 +11,7 @@ import '../App.css'
 import '../css/dashboard.css'
 import type { Item, ShareableItem, ViewKey } from './dashboard/types'
 import { getStorageQuota, listFiles, listFolders, listTrash, moveFile, moveFolder, permanentlyDeleteFile, restoreFolderPoint, shareFile, shareFolder, type ApiFile, type ApiFolder, type FolderPointRestoreResult } from '../api/files'
+import type { ReauthenticationPayload } from '../api/users'
 import { addFileTag, createTag, removeFileTag, type Tag } from '../api/tags'
 import { createCalendarEntry } from '../api/calendar'
 import { DashboardContent } from './dashboard/components/DashboardContent'
@@ -240,6 +242,15 @@ function Dashboard() {
         () => visibleFolders.filter((folder) => !selectedFolderIds.has(folder.id)),
         [selectedFolderIds, visibleFolders],
     )
+    const requestReauthentication = useCallback((action: string): ReauthenticationPayload | null => {
+        const password = window.prompt(`Confirm your password to ${action}.`)
+        if (!password) return null
+        const totpCode = window.prompt('Enter your 6-digit authenticator code if two-factor authentication is enabled.')?.trim()
+        return {
+            password,
+            totp_code: totpCode || null,
+        }
+    }, [])
     const {
         usedPct,
         storageStatus,
@@ -319,6 +330,7 @@ function Dashboard() {
         favouriteIds,
         refreshQuota,
         privateKey,
+        requestReauthentication,
     })
     const {
         draggedCardId,
@@ -637,6 +649,8 @@ function Dashboard() {
         if (ids.length === 0) return
         const confirmed = window.confirm(`Permanently delete ${ids.length} selected file${ids.length === 1 ? '' : 's'}? This cannot be undone.`)
         if (!confirmed) return
+        const reauth = requestReauthentication(`permanently delete ${ids.length} selected file${ids.length === 1 ? '' : 's'}`)
+        if (!reauth) return
         const previousItems = items
         const previousStorageItems = storageItems
         const previousFavouriteIds = new Set(favouriteIds)
@@ -650,7 +664,7 @@ function Dashboard() {
         })
 
         try {
-            await Promise.all(ids.map((id) => permanentlyDeleteFile(id)))
+            await Promise.all(ids.map((id) => permanentlyDeleteFile(id, reauth)))
             await refreshQuota()
             clearSelection()
         } catch (e) {
