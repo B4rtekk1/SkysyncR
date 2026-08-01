@@ -70,7 +70,7 @@ export function FileNoteModal({ item, saving, onClose, onSave }: FileNoteModalPr
                             {CANCEL_ICON}
                         </button>
                         <button
-                            className="image-preview__close"
+                            className="image-preview__close app-close-button"
                             type="button"
                             onClick={onClose}
                             disabled={saving}

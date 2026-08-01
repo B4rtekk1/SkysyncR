@@ -1,5 +1,6 @@
 import { useRef } from 'react'
 import { useModalA11y } from '../../../hooks/useModalA11y'
+import { CLOSE_ICON } from '../icons'
 
 type CreateFolderModalProps = {
     currentFolderName: string
@@ -39,8 +40,8 @@ export function CreateFolderModal({
                         <h2 id="folder-create-title">New folder</h2>
                         <span>{currentFolderName}</span>
                     </div>
-                    <button className="file-filter__close" type="button" onClick={onClose} aria-label="Close">
-                        x
+                    <button className="file-filter__close app-close-button" type="button" onClick={onClose} aria-label="Close">
+                        {CLOSE_ICON}
                     </button>
                 </div>
                 <div className="file-filter__modal-body">

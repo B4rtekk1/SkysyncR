@@ -108,6 +108,44 @@ button {
   font-family: inherit;
 }
 
+/* Keep every close control consistent with the file preview modal. */
+button.app-close-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  flex: 0 0 auto;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: #ef4444;
+  cursor: pointer;
+  font-family: var(--font-mono), monospace;
+  font-size: 0.9rem;
+  line-height: 1;
+  transition: border-color 0.18s ease, color 0.18s ease, transform 0.18s ease;
+}
+
+button.app-close-button svg {
+  display: block;
+  flex: 0 0 auto;
+}
+
+button.app-close-button:hover,
+button.app-close-button:focus-visible {
+  border-color: transparent;
+  background: transparent;
+  color: #ef4444;
+  outline: none;
+  transform: rotate(90deg) scale(1.12);
+}
+
+button.app-close-button:focus-visible {
+  outline: 2px solid #ef4444;
+  outline-offset: 2px;
+}
+
 html.is-theme-fading *,
 html.is-theme-fading *::before,
 html.is-theme-fading *::after {

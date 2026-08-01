@@ -443,7 +443,7 @@ export function GroupsPanel({
                                     <h3 className="groups-modal__title">Invite to {activeGroup.name}</h3>
                                 </div>
                                 <button
-                                    className="groups-modal__close"
+                                    className="groups-modal__close app-close-button"
                                     type="button"
                                     onClick={closeInvite}
                                     aria-label="Close add-member dialog"
@@ -599,7 +599,7 @@ export function GroupsPanel({
                                 <h3 className="groups-modal__title">Create group</h3>
                             </div>
                             <button
-                                className="groups-modal__close"
+                                className="groups-modal__close app-close-button"
                                 type="button"
                                 onClick={closeCreate}
                                 aria-label="Close group dialog"

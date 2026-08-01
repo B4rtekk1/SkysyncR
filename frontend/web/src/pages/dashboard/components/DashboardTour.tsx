@@ -110,7 +110,7 @@ export function DashboardTour({ userId }: { userId: string }) {
             <section className="dashboard-tour__card">
                 <div className="dashboard-tour__header">
                     <span className="dashboard-tour__eyebrow">{step.eyebrow}</span>
-                    <button className="dashboard-tour__close" type="button" onClick={closeTour} aria-label="Close tutorial">
+                    <button className="dashboard-tour__close app-close-button" type="button" onClick={closeTour} aria-label="Close tutorial">
                         ×
                     </button>
                 </div>

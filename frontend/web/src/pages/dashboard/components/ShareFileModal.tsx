@@ -527,7 +527,7 @@ export function ShareFileModal({
                         </p>
                         <h2 id="share-title">{title}</h2>
                     </div>
-                    <button className="share-modal__close" type="button" onClick={onClose} aria-label="Close share dialog">
+                    <button className="share-modal__close app-close-button" type="button" onClick={onClose} aria-label="Close share dialog">
                         {CLOSE_ICON}
                     </button>
                 </header>

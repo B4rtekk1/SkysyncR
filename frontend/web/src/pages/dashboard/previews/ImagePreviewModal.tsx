@@ -242,7 +242,7 @@ export function ImagePreviewModal({
                             {DOWNLOAD_ICON}
                         </button>
                         <button
-                            className="image-preview__close"
+                            className="image-preview__close app-close-button"
                             type="button"
                             onClick={onClose}
                             aria-label="Close preview"

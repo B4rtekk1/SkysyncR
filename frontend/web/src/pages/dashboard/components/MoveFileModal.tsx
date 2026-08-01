@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { listFolders, type ApiFolder } from '../../../api/files'
 import { decryptFoldersMetadata } from '../encryptedMetadata'
 import type { Item } from '../types'
+import { CLOSE_ICON } from '../icons'
 
 type FolderTreeNode = ApiFolder & {
     children: FolderTreeNode[]
@@ -87,8 +88,8 @@ export function MoveFileModal({ item, privateKey, moving, onClose, onMove }: Mov
                         <span className="eyebrow">Move file</span>
                         <h2 id="move-file-title">{item.filename}</h2>
                     </div>
-                    <button className="file-filter__close" type="button" onClick={onClose} aria-label="Close move dialog">
-                        x
+                    <button className="file-filter__close app-close-button" type="button" onClick={onClose} aria-label="Close move dialog">
+                        {CLOSE_ICON}
                     </button>
                 </div>
 

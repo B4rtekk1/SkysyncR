@@ -5,6 +5,7 @@ import type { PDFDocumentProxy, RenderTask } from 'pdfjs-dist'
 import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.mjs?url'
 import type { Item } from '../types'
 import { formatBytes } from '../fileUtils'
+import { CLOSE_ICON } from '../icons'
 
 pdfjs.GlobalWorkerOptions.workerSrc = pdfWorkerUrl
 
@@ -523,7 +524,9 @@ export function PdfPreview({ item, url }: { item: Item; url: string }) {
                                 <output>{searchQuery.trim() ? `${searchResults.length ? activeSearchResult + 1 : 0}/${searchResults.length}` : ''}</output>
                                 <button type="button" onClick={() => selectSearchResult(activeSearchResult - 1)} disabled={!searchResults.length} aria-label="Previous result">‹</button>
                                 <button type="button" onClick={() => selectSearchResult(activeSearchResult + 1)} disabled={!searchResults.length} aria-label="Next result">›</button>
-                                <button type="button" onClick={() => setIsSearchOpen(false)} aria-label="Close search">×</button>
+                                <button className="app-close-button" type="button" onClick={() => setIsSearchOpen(false)} aria-label="Close search">
+                                    {CLOSE_ICON}
+                                </button>
                             </div>
                         )}
                     </div>

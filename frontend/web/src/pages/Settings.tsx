@@ -621,7 +621,7 @@ function SettingsModalContent({ currentUser, onClose, onSave }: SettingsModalPro
                     <div className="shell__topbar-actions">
                         {saved && <span className="settings-saved">Saved</span>}
                         <ThemeToggle className="shell__theme-toggle" />
-                        <button className="settings-close" type="button" onClick={requestClose} aria-label="Close settings">
+                        <button className="settings-close app-close-button" type="button" onClick={requestClose} aria-label="Close settings">
                             {CLOSE_ICON}
                         </button>
                     </div>

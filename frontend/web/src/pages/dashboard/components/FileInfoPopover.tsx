@@ -156,6 +156,7 @@ export function FileInfoPopover({ item, view, typeLabel, position, onClose, onRe
                             e.stopPropagation()
                             onClose()
                         }}
+                        className="app-close-button"
                         aria-label="Close details"
                     >
                         {CANCEL_ICON}

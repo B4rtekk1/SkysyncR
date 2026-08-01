@@ -106,7 +106,7 @@ export function FileFilterModal({
                     </div>
                     <button
                         type="button"
-                        className="file-filter__close"
+                        className="file-filter__close app-close-button"
                         onClick={onClose}
                         aria-label="Close filters"
                     >
