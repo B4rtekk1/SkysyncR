@@ -626,25 +626,10 @@
         grid-template-columns: 1fr 1fr;
     }
 
-    .file-grid--list .file-card {
+    .file-card {
         grid-template-columns: 1fr auto auto;
     }
-
-    .file-grid--list {
-        grid-column: 1;
-        grid-row: 1;
-        padding-left: 16px;
-    }
-
-    .file-grid--list {
-        grid-row: 2;
-    }
-
-    .file-grid--list {
-        grid-row: 3;
-    }
-
-    .file-grid--list .file-card__fav,
+    .file-card__fav,
     .file-grid--list {
         grid-row: 1 / span 3;
     }

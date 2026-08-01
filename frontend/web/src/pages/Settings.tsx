@@ -50,6 +50,7 @@ import {
 } from './settingsPreferences'
 import PasswordRequirements from './register/PasswordRequirements'
 import { getPasswordRequirements } from './register/passwordRules'
+import EyeIcon from './login/EyeIcon'
 import { useModalA11y } from '../hooks/useModalA11y'
 
 const SETTINGS_ANIMATION_MS = 220
@@ -204,6 +205,9 @@ function SettingsModalContent({ currentUser, onClose, onSave }: SettingsModalPro
     const [currentPassword, setCurrentPassword] = useState('')
     const [newPassword, setNewPassword] = useState('')
     const [confirmNewPassword, setConfirmNewPassword] = useState('')
+    const [showCurrentPassword, setShowCurrentPassword] = useState(false)
+    const [showNewPassword, setShowNewPassword] = useState(false)
+    const [showConfirmNewPassword, setShowConfirmNewPassword] = useState(false)
     const [passwordSaving, setPasswordSaving] = useState(false)
     const [passwordSaved, setPasswordSaved] = useState(false)
     const [passwordError, setPasswordError] = useState<string | null>(null)
@@ -727,45 +731,80 @@ function SettingsModalContent({ currentUser, onClose, onSave }: SettingsModalPro
                                 />
                                 <label className="settings-field">
                                     <span>Current password</span>
-                                    <input
-                                        type="password"
-                                        autoComplete="current-password"
-                                        value={currentPassword}
-                                        onChange={(e) => {
-                                            setCurrentPassword(e.target.value)
-                                            setPasswordError(null)
-                                            setPasswordSaved(false)
-                                        }}
-                                    />
+                                    <div className="settings-password-input-group">
+                                        <input
+                                            type={showCurrentPassword ? 'text' : 'password'}
+                                            autoComplete="current-password"
+                                            value={currentPassword}
+                                            onChange={(e) => {
+                                                setCurrentPassword(e.target.value)
+                                                setPasswordError(null)
+                                                setPasswordSaved(false)
+                                            }}
+                                        />
+                                        <button
+                                            type="button"
+                                            className="settings-password-toggle"
+                                            onClick={() => setShowCurrentPassword((value) => !value)}
+                                            aria-label={showCurrentPassword ? 'Hide current password' : 'Show current password'}
+                                        >
+                                            <EyeIcon open={showCurrentPassword} />
+                                        </button>
+                                    </div>
                                 </label>
                                 <label className="settings-field">
                                     <span>New password</span>
-                                    <input
-                                        type="password"
-                                        autoComplete="new-password"
-                                        value={newPassword}
-                                        onChange={(e) => {
-                                            setNewPassword(e.target.value)
-                                            setPasswordError(null)
-                                            setPasswordSaved(false)
-                                        }}
-                                    />
+                                    <div className="settings-password-input-group">
+                                        <input
+                                            type={showNewPassword ? 'text' : 'password'}
+                                            autoComplete="new-password"
+                                            value={newPassword}
+                                            onChange={(e) => {
+                                                setNewPassword(e.target.value)
+                                                setPasswordError(null)
+                                                setPasswordSaved(false)
+                                            }}
+                                        />
+                                        <button
+                                            type="button"
+                                            className="settings-password-toggle"
+                                            onClick={() => setShowNewPassword((value) => !value)}
+                                            aria-label={showNewPassword ? 'Hide new password' : 'Show new password'}
+                                        >
+                                            <EyeIcon open={showNewPassword} />
+                                        </button>
+                                    </div>
                                 </label>
                                 {newPassword.length > 0 && <PasswordRequirements password={newPassword} />}
                                 <label className="settings-field">
                                     <span>Confirm new password</span>
-                                    <input
-                                        type="password"
-                                        autoComplete="new-password"
-                                        value={confirmNewPassword}
-                                        onChange={(e) => {
-                                            setConfirmNewPassword(e.target.value)
-                                            setPasswordError(null)
-                                            setPasswordSaved(false)
-                                        }}
-                                    />
+                                    <div className="settings-password-input-group">
+                                        <input
+                                            type={showConfirmNewPassword ? 'text' : 'password'}
+                                            autoComplete="new-password"
+                                            value={confirmNewPassword}
+                                            onChange={(e) => {
+                                                setConfirmNewPassword(e.target.value)
+                                                setPasswordError(null)
+                                                setPasswordSaved(false)
+                                            }}
+                                        />
+                                        <button
+                                            type="button"
+                                            className="settings-password-toggle"
+                                            onClick={() => setShowConfirmNewPassword((value) => !value)}
+                                            aria-label={showConfirmNewPassword ? 'Hide confirmed password' : 'Show confirmed password'}
+                                        >
+                                            <EyeIcon open={showConfirmNewPassword} />
+                                        </button>
+                                    </div>
                                 </label>
                                 {passwordError && <p className="settings-error">{passwordError}</p>}
+                                {passwordSaved && (
+                                    <p className="settings-success" role="status" aria-live="polite">
+                                        Password changed successfully.
+                                    </p>
+                                )}
                                 <button
                                     className="btn btn--outline"
                                     type="submit"

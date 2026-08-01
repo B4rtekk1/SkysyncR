@@ -383,6 +383,12 @@
     font-size: 0.78rem;
 }
 
+.settings-success {
+    margin: 0;
+    color: var(--signal);
+    font-size: 0.78rem;
+}
+
 .settings-field {
     display: flex;
     flex-direction: column;
@@ -416,6 +422,48 @@
 .settings-field input[readonly]:focus {
     border-color: var(--line);
     box-shadow: none;
+}
+
+.settings-password-input-group {
+    position: relative;
+    display: flex;
+}
+
+.settings-password-input-group input {
+    flex: 1;
+    padding-right: 42px;
+}
+
+.settings-password-toggle {
+    position: absolute;
+    top: 50%;
+    right: 4px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    height: 34px;
+    border: none;
+    border-radius: 7px;
+    background: transparent;
+    color: var(--mist);
+    cursor: pointer;
+    transform: translateY(-50%);
+    transition: color 0.15s ease, background 0.15s ease;
+}
+
+.settings-password-toggle:hover {
+    background: rgba(255, 255, 255, 0.06);
+    color: var(--paper);
+}
+
+.settings-password-toggle:active {
+    transform: translateY(-50%) scale(0.88);
+}
+
+.settings-password-toggle:focus-visible {
+    outline: 2px solid var(--signal);
+    outline-offset: 1px;
 }
 
 .settings-options {
@@ -514,6 +562,7 @@
 
 .settings-password-form,
 .settings-password-form .settings-error,
+.settings-password-form .settings-success,
 .settings-password-form .btn {
     grid-column: 1 / -1;
 }
