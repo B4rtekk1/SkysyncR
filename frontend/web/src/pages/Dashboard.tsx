@@ -608,7 +608,7 @@ function Dashboard() {
         openFolderAt(folder, index)
     }
 
-    async function handleDeleteFolder(id: string) {
+    const handleDeleteFolder = useCallback(async (id: string) => {
         setError(null)
         try {
             await deleteFolder(id)
@@ -616,7 +616,7 @@ function Dashboard() {
         } catch (e) {
             setError(e instanceof Error ? e.message : 'Could not move that folder to trash.')
         }
-    }
+    }, [setError, setFolders])
 
     async function handleRestoreFolder(id: string) {
         setError(null)
@@ -734,6 +734,7 @@ function Dashboard() {
         setItems,
         setStorageItems,
         storageItems,
+        setFolders,
     ])
 
     async function bulkDownload() {

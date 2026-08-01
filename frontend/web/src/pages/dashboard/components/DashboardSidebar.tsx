@@ -5,7 +5,7 @@ import React, {
     type RefObject,
 } from 'react'
 import { Link } from '../../../router'
-import { preloadSettingsModal } from './DashboardModals'
+import { preloadSettingsModal } from './settingsModalPreload'
 import type { StorageQuota } from '../../../api/files'
 import {
     DRAG_HANDLE_ICON,

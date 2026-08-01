@@ -9,18 +9,12 @@ import { MoveFileModal } from './MoveFileModal'
 import { hasFileExtension } from '../createdFile'
 import type { FilePreviewState, Group, Item, ShareableItem } from '../types'
 import type { SettingsState } from '../../settingsPreferences'
+import { loadSettingsModal } from './settingsModalPreload'
 
 const ImagePreviewModal = lazy(() =>
     import('../previews/ImagePreviewModal').then((module) => ({ default: module.ImagePreviewModal })),
 )
-const loadSettingsModal = () => import('../../Settings')
 const SettingsModal = lazy(loadSettingsModal)
-
-// Warm up the settings chunk before the user clicks the button. This keeps the
-// initial dashboard bundle small while making the first modal open immediate.
-export function preloadSettingsModal() {
-    void loadSettingsModal()
-}
 const ShareFileModal = lazy(() =>
     import('./ShareFileModal').then((module) => ({ default: module.ShareFileModal })),
 )
