@@ -45,6 +45,11 @@ import { useStorageSummary } from './dashboard/hooks/useStorageSummary'
 import { useNetworkStatus } from '../hooks/useNetworkStatus'
 import { decryptFilesMetadata, decryptFoldersMetadata } from './dashboard/encryptedMetadata'
 
+function isTextEditingTarget(target: EventTarget | null) {
+    if (!(target instanceof Element)) return false
+    return Boolean(target.closest('input, textarea, select, [contenteditable="true"]'))
+}
+
 function Dashboard() {
     const navigate = useNavigate()
     const [view, setView] = useState<ViewKey>(() => loadActiveView())
@@ -574,6 +579,11 @@ function Dashboard() {
         }
     }
 
+    const clearSelection = useCallback(() => {
+        setSelectedFileIds(new Set())
+        setSelectedFolderIds(new Set())
+    }, [])
+
     function selectNavView(key: ViewKey) {
         clearSelection()
         if (key === 'all') {
@@ -582,10 +592,10 @@ function Dashboard() {
         setView(key)
     }
 
-    function openFolderWithSelectionReset(folder: Parameters<typeof openFolder>[0]) {
+    const openFolderWithSelectionReset = useCallback((folder: Parameters<typeof openFolder>[0]) => {
         clearSelection()
         openFolder(folder)
-    }
+    }, [clearSelection, openFolder])
 
     function openFolderRootWithSelectionReset() {
         clearSelection()
@@ -615,12 +625,7 @@ function Dashboard() {
         })
     }
 
-    function clearSelection() {
-        setSelectedFileIds(new Set())
-        setSelectedFolderIds(new Set())
-    }
-
-    function toggleAllVisibleSelected() {
+    const toggleAllVisibleSelected = useCallback(() => {
         if (allVisibleSelected) {
             clearSelection()
             return
@@ -628,14 +633,14 @@ function Dashboard() {
 
         setSelectedFileIds(new Set(view === 'all' || view === 'favourites' || view === 'trash' ? visibleFileIds : []))
         setSelectedFolderIds(new Set(view === 'all' || view === 'favourites' ? visibleFolderIds : []))
-    }
+    }, [allVisibleSelected, clearSelection, view, visibleFileIds, visibleFolderIds])
 
-    async function bulkDelete() {
+    const bulkDelete = useCallback(async () => {
         const ids = Array.from(selectedFileIds)
         if (ids.length === 0) return
         await Promise.all(ids.map((id) => handleDelete(id)))
         clearSelection()
-    }
+    }, [clearSelection, handleDelete, selectedFileIds])
 
     async function bulkRestore() {
         const ids = Array.from(selectedFileIds)
@@ -644,7 +649,7 @@ function Dashboard() {
         clearSelection()
     }
 
-    async function bulkPermanentDelete() {
+    const bulkPermanentDelete = useCallback(async () => {
         const ids = Array.from(selectedFileIds)
         if (ids.length === 0) return
         const confirmed = window.confirm(`Permanently delete ${ids.length} selected file${ids.length === 1 ? '' : 's'}? This cannot be undone.`)
@@ -673,7 +678,19 @@ function Dashboard() {
             setFavouriteIds(previousFavouriteIds)
             setError(e instanceof Error ? e.message : 'Could not permanently delete the selected files.')
         }
-    }
+    }, [
+        clearSelection,
+        favouriteIds,
+        items,
+        refreshQuota,
+        requestReauthentication,
+        selectedFileIds,
+        setError,
+        setFavouriteIds,
+        setItems,
+        setStorageItems,
+        storageItems,
+    ])
 
     async function bulkDownload() {
         const selectedFiles = renderedItems.filter((item) => selectedFileIds.has(item.id))
@@ -714,6 +731,109 @@ function Dashboard() {
             setError(e instanceof Error ? e.message : 'Could not move the selected items.')
         }
     }
+
+    useEffect(() => {
+        const modalOpen = Boolean(filePreview || settingsOpen || fileCreateOpen || folderCreateOpen || noteItem || moveItem || shareItem)
+        const bulkActionsAvailable = view === 'all' || view === 'favourites' || view === 'trash'
+
+        function openSelectedItem() {
+            if (selectedFileIds.size + selectedFolderIds.size !== 1) return false
+
+            const selectedFolderId = Array.from(selectedFolderIds)[0]
+            if (selectedFolderId) {
+                const folder = visibleFolders.find((item) => item.id === selectedFolderId)
+                if (!folder) return false
+                openFolderWithSelectionReset(folder)
+                return true
+            }
+
+            const selectedFileId = Array.from(selectedFileIds)[0]
+            const item = renderedItems.find((current) => current.id === selectedFileId)
+            if (!item || pendingIds.has(item.id) || view === 'trash') return false
+            void handleFilePreview(item)
+            return true
+        }
+
+        function handleDashboardKeyDown(event: KeyboardEvent) {
+            if (event.defaultPrevented || isTextEditingTarget(event.target)) return
+
+            if (event.key === '/' && !modalOpen) {
+                event.preventDefault()
+                searchInputRef.current?.focus()
+                return
+            }
+
+            if (modalOpen) return
+
+            const shortcutKey = event.key.toLowerCase()
+            const usesCommandModifier = event.ctrlKey || event.metaKey
+
+            if (event.key === 'Escape') {
+                if (selectedCount > 0) {
+                    event.preventDefault()
+                    clearSelection()
+                    return
+                }
+                if (query) {
+                    event.preventDefault()
+                    setQuery('')
+                }
+                return
+            }
+
+            if (usesCommandModifier && shortcutKey === 'a' && bulkActionsAvailable) {
+                event.preventDefault()
+                toggleAllVisibleSelected()
+                return
+            }
+
+            if (!usesCommandModifier && !event.altKey && shortcutKey === 'n' && view === 'all') {
+                event.preventDefault()
+                if (event.shiftKey) setFolderCreateOpen(true)
+                else setFileCreateOpen(true)
+                return
+            }
+
+            if (event.key === 'Enter' && openSelectedItem()) {
+                event.preventDefault()
+                return
+            }
+
+            if ((event.key === 'Delete' || event.key === 'Backspace') && selectedCount > 0 && bulkActionsAvailable) {
+                event.preventDefault()
+                if (view === 'trash') void bulkPermanentDelete()
+                else void bulkDelete()
+            }
+        }
+
+        window.addEventListener('keydown', handleDashboardKeyDown)
+        return () => window.removeEventListener('keydown', handleDashboardKeyDown)
+    }, [
+        bulkDelete,
+        bulkPermanentDelete,
+        clearSelection,
+        fileCreateOpen,
+        filePreview,
+        folderCreateOpen,
+        handleFilePreview,
+        moveItem,
+        noteItem,
+        openFolderWithSelectionReset,
+        pendingIds,
+        query,
+        renderedItems,
+        searchInputRef,
+        selectedCount,
+        selectedFileIds,
+        selectedFolderIds,
+        settingsOpen,
+        setFileCreateOpen,
+        setFolderCreateOpen,
+        shareItem,
+        toggleAllVisibleSelected,
+        view,
+        visibleFolders,
+    ])
 
     async function blockPublicFileLink(file: ApiFile) {
         const previousItems = items
