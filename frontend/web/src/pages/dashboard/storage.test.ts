@@ -103,7 +103,7 @@ test('layout, sort, sidebar and active view loaders reject invalid stored values
   assert.equal(loadFileSort(), 'manual')
   assert.equal(loadSidebarWidth(), 340)
   assert.equal(loadSidebarHidden(), false)
-  assert.equal(loadActiveView(), 'all')
+  assert.equal(loadActiveView(), 'recent')
   assert.equal(clampSidebarWidth(71.5), 72)
 })
 
@@ -116,7 +116,7 @@ test('save helpers persist values that matching loaders can read', () => {
   assert.equal(loadLayoutMode(), 'list')
   assert.equal(loadFileSort(), 'updated-asc')
   assert.equal(loadActiveView(), 'trash')
-  assert.deepEqual(loadNavOrder(), ['trash', 'all', 'calendar', 'groups', 'shared', 'favourites', 'security'])
+  assert.deepEqual(loadNavOrder(), ['trash', 'all', 'calendar', 'groups', 'shared', 'favourites', 'recent', 'security'])
 })
 
 test('loadFileFilter migrates legacy filter keys', () => {
@@ -248,7 +248,7 @@ test('applySavedOrder puts known ids first and preserves unknown ids after them'
 
 test('nav order loader removes unknown entries and appends missing default entries', () => {
   localStorage.setItem(NAV_ORDER_STORAGE_KEY, JSON.stringify(['trash', 'unknown', 'all']))
-  assert.deepEqual(loadNavOrder(), ['trash', 'all', 'favourites', 'shared', 'groups', 'calendar', 'security'])
+  assert.deepEqual(loadNavOrder(), ['trash', 'all', 'recent', 'favourites', 'shared', 'groups', 'calendar', 'security'])
 
   localStorage.setItem(NAV_ORDER_STORAGE_KEY, 'not-json')
   assert.deepEqual(loadNavOrder(), DEFAULT_NAV_ORDER)

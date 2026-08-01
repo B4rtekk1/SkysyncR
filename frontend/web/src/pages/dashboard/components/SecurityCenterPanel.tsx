@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import type { ApiFile, ApiFolder } from '../../../api/files'
+import type { ApiFile, ApiFolder, FolderPointRestoreResult } from '../../../api/files'
 import {
     getOperationLog,
     getSessions,
@@ -40,7 +40,26 @@ type SecurityCenterPanelProps = {
     folders: ApiFolder[]
     onBlockFileLink: (file: ApiFile) => Promise<void>
     onBlockFolderLink: (folder: ApiFolder) => Promise<void>
+    onRestoreFolderPoint: (folder: ApiFolder, restoreAt: string) => Promise<FolderPointRestoreResult>
     onSignOutCurrentSession: () => Promise<void>
+}
+
+type RecoveryFilePreview = {
+    id: string
+    name: string
+    operation: string
+    known: boolean
+}
+
+type RecoveryIncident = {
+    id: string
+    operation: string
+    folder: ApiFolder | null
+    createdAt: string
+    restoreAt: string
+    deviceLabel: string | null
+    affectedFiles: RecoveryFilePreview[]
+    unknownAffectedCount: number
 }
 
 const riskyOperations = new Set([
@@ -138,11 +157,69 @@ function recentSuspiciousOperations(operations: OperationLogEntry[], files: ApiF
         .slice(0, 10)
 }
 
+function folderIdForOperation(entry: OperationLogEntry, fileById: Map<string, ApiFile>): string | null {
+    if (entry.resource_type === 'folder') return entry.resource_id
+    if (entry.resource_type === 'file' && entry.resource_id) return fileById.get(entry.resource_id)?.folder_id ?? null
+    return null
+}
+
+function toRecoveryIncidents(
+    operations: OperationLogEntry[],
+    files: ApiFile[],
+    folders: ApiFolder[],
+): RecoveryIncident[] {
+    const fileById = new Map(files.map((file) => [file.id, file]))
+    const folderById = new Map(folders.map((folder) => [folder.id, folder]))
+    const suspicious = recentSuspiciousOperations(operations, files)
+
+    return suspicious.slice(0, 6).map((entry) => {
+        const folderId = folderIdForOperation(entry, fileById)
+        const createdAt = new Date(entry.created_at).getTime()
+        const related = suspicious.filter((candidate) => {
+            const candidateTime = new Date(candidate.created_at).getTime()
+            if (Number.isNaN(createdAt) || Number.isNaN(candidateTime)) return candidate.id === entry.id
+            return Math.abs(candidateTime - createdAt) <= 30 * 60 * 1000
+                && folderIdForOperation(candidate, fileById) === folderId
+                && (candidate.device_label ?? '') === (entry.device_label ?? '')
+        })
+        const affectedFiles = related
+            .filter((candidate) => candidate.resource_type === 'file' && candidate.resource_id)
+            .map((candidate): RecoveryFilePreview => {
+                const file = candidate.resource_id ? fileById.get(candidate.resource_id) : null
+                return {
+                    id: candidate.resource_id as string,
+                    name: file?.filename ?? `File ${candidate.resource_id}`,
+                    operation: candidate.operation,
+                    known: Boolean(file),
+                }
+            })
+            .filter((file, index, list) => list.findIndex((item) => item.id === file.id) === index)
+            .slice(0, 5)
+        const unknownAffectedCount = related.filter(
+            (candidate) => candidate.resource_type === 'file'
+                && candidate.resource_id
+                && !fileById.has(candidate.resource_id),
+        ).length
+
+        return {
+            id: entry.id,
+            operation: entry.operation,
+            folder: folderId ? folderById.get(folderId) ?? null : null,
+            createdAt: entry.created_at,
+            restoreAt: new Date(Math.max(0, createdAt - 1000)).toISOString(),
+            deviceLabel: entry.device_label,
+            affectedFiles,
+            unknownAffectedCount,
+        }
+    })
+}
+
 export function SecurityCenterPanel({
     files,
     folders,
     onBlockFileLink,
     onBlockFolderLink,
+    onRestoreFolderPoint,
     onSignOutCurrentSession,
 }: SecurityCenterPanelProps) {
     const [sessionsData, setSessionsData] = useState<SessionsResponse | null>(null)
@@ -150,11 +227,14 @@ export function SecurityCenterPanel({
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState<string | null>(null)
     const [blockingLinkId, setBlockingLinkId] = useState<string | null>(null)
+    const [restoringIncidentId, setRestoringIncidentId] = useState<string | null>(null)
+    const [restoreSummary, setRestoreSummary] = useState<string | null>(null)
     const [revokingSessionId, setRevokingSessionId] = useState<string | null>(null)
     const [trustingSessionId, setTrustingSessionId] = useState<string | null>(null)
 
     const publicLinks = useMemo(() => toPublicLinks(files, folders), [files, folders])
     const suspiciousOperations = useMemo(() => recentSuspiciousOperations(operationLog, files), [files, operationLog])
+    const recoveryIncidents = useMemo(() => toRecoveryIncidents(operationLog, files, folders), [files, folders, operationLog])
     const restoreHistory = useMemo(
         () => operationLog.filter((entry) => entry.operation === 'file.restore' || entry.operation === 'file.version.restore').slice(0, 8),
         [operationLog],
@@ -194,6 +274,27 @@ export function SecurityCenterPanel({
             setError(err instanceof Error ? err.message : 'Could not block that public link.')
         } finally {
             setBlockingLinkId(null)
+        }
+    }
+
+    async function restoreIncident(incident: RecoveryIncident) {
+        if (!incident.folder) return
+        const confirmed = window.confirm(`Restore "${incident.folder.name}" to the moment before ${formatTime(incident.createdAt)}?`)
+        if (!confirmed) return
+
+        setRestoringIncidentId(incident.id)
+        setRestoreSummary(null)
+        setError(null)
+        try {
+            const result = await onRestoreFolderPoint(incident.folder, incident.restoreAt)
+            setRestoreSummary(
+                `Restored ${result.file_count} files and ${result.folder_count} folders. Removed ${result.deleted_file_count} files and ${result.deleted_folder_count} folders created after the restore point.`,
+            )
+            await loadSecurityData()
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Could not restore that folder.')
+        } finally {
+            setRestoringIncidentId(null)
         }
     }
 
@@ -248,6 +349,54 @@ export function SecurityCenterPanel({
                 <div className="security-center__metric">
                     <span>Signed-in devices</span>
                     <strong>{sessionsData?.sessions.length ?? '-'}</strong>
+                </div>
+            </section>
+
+            <section className="security-center__panel security-center__panel--wide ransomware-recovery">
+                <div className="security-center__head">
+                    <span>Ransomware recovery</span>
+                    <h2>Folder point-in-time restore</h2>
+                </div>
+                {restoreSummary && <p className="security-center__success">{restoreSummary}</p>}
+                <div className="security-center__list">
+                    {recoveryIncidents.length === 0 && <p className="security-center__empty">No ransomware-like file bursts are visible in the recent log.</p>}
+                    {recoveryIncidents.map((incident) => (
+                        <article className="security-center__incident" key={incident.id}>
+                            <div className="security-center__incident-main">
+                                <div className="security-center__incident-head">
+                                    <span className="security-center__badge security-center__badge--warning">
+                                        {operationLabels[incident.operation] ?? incident.operation}
+                                    </span>
+                                    <time dateTime={incident.createdAt}>{formatTime(incident.createdAt)}</time>
+                                </div>
+                                <strong>{incident.folder?.name ?? 'Folder not available in current snapshot'}</strong>
+                                <small>
+                                    {incident.deviceLabel ?? 'Unknown device'} · restore point {formatTime(incident.restoreAt)}
+                                </small>
+                                <div className="security-center__affected" aria-label="Affected files">
+                                    {incident.affectedFiles.length === 0 && (
+                                        <span className="security-center__affected-empty">Affected file preview unavailable.</span>
+                                    )}
+                                    {incident.affectedFiles.map((file) => (
+                                        <span className={!file.known ? 'is-missing' : ''} key={file.id}>
+                                            {file.name}
+                                        </span>
+                                    ))}
+                                    {incident.unknownAffectedCount > 0 && (
+                                        <span className="is-missing">+{incident.unknownAffectedCount} not in current snapshot</span>
+                                    )}
+                                </div>
+                            </div>
+                            <button
+                                className="btn btn--solid"
+                                type="button"
+                                disabled={!incident.folder || restoringIncidentId !== null}
+                                onClick={() => void restoreIncident(incident)}
+                            >
+                                {restoringIncidentId === incident.id ? 'Restoring...' : 'Restore folder'}
+                            </button>
+                        </article>
+                    ))}
                 </div>
             </section>
 

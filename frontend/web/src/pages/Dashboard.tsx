@@ -9,7 +9,7 @@ import { useNavigate } from '../router'
 import '../App.css'
 import '../css/dashboard.css'
 import type { Item, ShareableItem, ViewKey } from './dashboard/types'
-import { moveFile, moveFolder, permanentlyDeleteFile, shareFile, shareFolder, type ApiFile, type ApiFolder } from '../api/files'
+import { getStorageQuota, listFiles, listFolders, listTrash, moveFile, moveFolder, permanentlyDeleteFile, restoreFolderPoint, shareFile, shareFolder, type ApiFile, type ApiFolder, type FolderPointRestoreResult } from '../api/files'
 import { addFileTag, createTag, removeFileTag, type Tag } from '../api/tags'
 import { createCalendarEntry } from '../api/calendar'
 import { DashboardContent } from './dashboard/components/DashboardContent'
@@ -41,6 +41,7 @@ import { useNoteActions } from './dashboard/hooks/useNoteActions'
 import { useSidebarState } from './dashboard/hooks/useSidebarState'
 import { useStorageSummary } from './dashboard/hooks/useStorageSummary'
 import { useNetworkStatus } from '../hooks/useNetworkStatus'
+import { decryptFilesMetadata, decryptFoldersMetadata } from './dashboard/encryptedMetadata'
 
 function Dashboard() {
     const navigate = useNavigate()
@@ -129,6 +130,7 @@ function Dashboard() {
         error,
         setError,
         quota,
+        setQuota,
         storageItems,
         setStorageItems,
         tags,
@@ -175,7 +177,7 @@ function Dashboard() {
         toggleFilterMenu,
     } = useDashboardMenus({ filePreviewOpen: Boolean(filePreview) })
     const visibleFolders = useMemo(() => {
-        if (view !== 'all' && view !== 'favourites' && view !== 'recent') return []
+        if (view !== 'all' && view !== 'favourites' && view !== 'recent' && view !== 'security') return []
         return folders
             .filter((folder) => (view === 'favourites' ? folderFavouriteIds.has(folder.id) : true))
             .filter((folder) =>
@@ -730,6 +732,29 @@ function Dashboard() {
         }
     }
 
+    async function restoreFolderToPoint(folder: ApiFolder, restoreAt: string): Promise<FolderPointRestoreResult> {
+        if (!privateKey) throw new Error('Vault key is not available.')
+
+        const result = await restoreFolderPoint(folder.id, restoreAt)
+        const [quotaData, files, trashedFiles, foldersData] = await Promise.all([
+            getStorageQuota(),
+            listFiles(),
+            listTrash(),
+            listFolders(),
+        ])
+        const fileData = [...files, ...trashedFiles.filter((file) => !files.some((current) => current.id === file.id))]
+        const [visibleFileData, visibleFolderData] = await Promise.all([
+            decryptFilesMetadata(fileData, privateKey),
+            decryptFoldersMetadata(foldersData, privateKey),
+        ])
+        setQuota(quotaData)
+        setStorageItems(visibleFileData)
+        setFolders(visibleFolderData)
+        setFavouriteIds(new Set(fileData.filter((file) => file.is_favourite).map((file) => file.id)))
+        setFolderFavouriteIds(new Set(foldersData.filter((item) => item.is_favourite).map((item) => item.id)))
+        return result
+    }
+
     if (sessionLoading || !currentUser || !privateKey) {
         return (
             <div className="dashboard-loading" role="status" aria-live="polite">
@@ -947,6 +972,7 @@ function Dashboard() {
                     onBulkMove={bulkMove}
                     onBlockFileLink={blockPublicFileLink}
                     onBlockFolderLink={blockPublicFolderLink}
+                    onRestoreFolderPoint={restoreFolderToPoint}
                     onSignOutCurrentSession={signOut}
                 />
             </div>

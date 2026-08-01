@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent, type DragEvent, type RefObject } from 'react'
 import type { CurrentUserResponse } from '../../../api/users'
-import type { ApiFile, ApiFolder } from '../../../api/files'
+import type { ApiFile, ApiFolder, FolderPointRestoreResult } from '../../../api/files'
 import type { FileTag, Tag } from '../../../api/tags'
 import { CalendarPanel } from './CalendarPanel'
 import { DashboardFileGrid } from './DashboardFileGrid'
@@ -178,6 +178,7 @@ type DashboardContentProps = {
     onBulkMove: (targetFolderId: string | null) => void | Promise<void>
     onBlockFileLink: (file: ApiFile) => Promise<void>
     onBlockFolderLink: (folder: ApiFolder) => Promise<void>
+    onRestoreFolderPoint: (folder: ApiFolder, restoreAt: string) => Promise<FolderPointRestoreResult>
     onSignOutCurrentSession: () => Promise<void>
 }
 
@@ -345,6 +346,7 @@ export function DashboardContent({
     onBulkMove,
     onBlockFileLink,
     onBlockFolderLink,
+    onRestoreFolderPoint,
     onSignOutCurrentSession,
 }: DashboardContentProps) {
     const parentFolder = folderTrail.length > 1 ? folderTrail[folderTrail.length - 2] : null
@@ -766,6 +768,7 @@ export function DashboardContent({
                     folders={visibleFolders}
                     onBlockFileLink={onBlockFileLink}
                     onBlockFolderLink={onBlockFolderLink}
+                    onRestoreFolderPoint={onRestoreFolderPoint}
                     onSignOutCurrentSession={onSignOutCurrentSession}
                 />
             )}

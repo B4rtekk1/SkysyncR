@@ -115,7 +115,23 @@ export function useDashboardData({ view, activeFolderId, privateKey, userId }: U
                 setError(null)
                 setItems([])
                 setFolders([])
-                if (view === 'groups' || view === 'calendar' || view === 'security') {
+                if (view === 'security') {
+                    if (!privateKey) return
+
+                    const [files, trashedFiles, foldersData] = await Promise.all([listFiles(), listTrash(), listFolders()])
+                    const fileData = [...files, ...trashedFiles.filter((file) => !files.some((current) => current.id === file.id))]
+                    const [visibleFileData, visibleFolderData] = await Promise.all([
+                        decryptFilesMetadata(fileData, privateKey),
+                        decryptFoldersMetadata(foldersData, privateKey),
+                    ])
+                    setStorageItems(visibleFileData)
+                    setFolders(visibleFolderData)
+                    setFavouriteIds(new Set(fileData.filter((file) => file.is_favourite).map((file) => file.id)))
+                    setFolderFavouriteIds(new Set(foldersData.filter((folder) => folder.is_favourite).map((folder) => folder.id)))
+                    return
+                }
+
+                if (view === 'groups' || view === 'calendar') {
                     return
                 }
 
