@@ -1,6 +1,6 @@
 use chrono::{Duration, Utc};
-use skysyncr::crypto::jwt::{generate_access_token_capped, verify_access_token};
-use skysyncr::db::files::{
+use skysync::crypto::jwt::{generate_access_token_capped, verify_access_token};
+use skysync::db::files::{
     NewFileRecord, NewFileShare, UpdatedFileContent, consume_public_file_share_for_download,
     create_file_record, create_file_version_snapshot_in_tx,
     file_content_key_fingerprint_exists_in_tx, get_user_file_for_content_update_in_tx,
@@ -8,15 +8,15 @@ use skysyncr::db::files::{
     rename_user_file, soft_delete_user_file, update_user_file_content, update_user_file_note,
     update_user_file_share_keys_in_tx, upsert_user_file_share,
 };
-use skysyncr::db::refresh_tokens::{
+use skysync::db::refresh_tokens::{
     RefreshTokenAuth, authenticate_refresh_token, create_refresh_token,
     rotate_recent_refresh_token_reuse, rotate_refresh_token,
 };
-use skysyncr::db::storage::{get_storage_quota, try_apply_storage_delta};
-use skysyncr::db::users::{
+use skysync::db::storage::{get_storage_quota, try_apply_storage_delta};
+use skysync::db::users::{
     is_login_allowed, record_failed_login, reset_failed_login, update_last_login,
 };
-use skysyncr::services::ransomware_detection::detect_and_alert_after_file_mutation;
+use skysync::services::ransomware_detection::detect_and_alert_after_file_mutation;
 use sqlx::{Executor, PgPool, postgres::PgPoolOptions};
 use std::borrow::Cow;
 use std::sync::{Arc, OnceLock};
@@ -27,7 +27,7 @@ static DB_LOCK: OnceLock<Arc<Mutex<()>>> = OnceLock::new();
 
 async fn test_pool() -> (OwnedMutexGuard<()>, PgPool) {
     let (guard, pool) = reset_test_pool().await;
-    skysyncr::db::migrations::run(&pool)
+    skysync::db::migrations::run(&pool)
         .await
         .expect("apply migrations");
 
@@ -42,7 +42,7 @@ async fn reset_test_pool() -> (OwnedMutexGuard<()>, PgPool) {
         .await;
     let database_url =
         std::env::var("DATABASE_URL").expect("DATABASE_URL must be set for integration tests");
-    let allow_non_local_reset = std::env::var("SKYSYNCR_ALLOW_NON_LOCAL_TEST_DB_RESET")
+    let allow_non_local_reset = std::env::var("SKYSYNC_ALLOW_NON_LOCAL_TEST_DB_RESET")
         .map(|value| value == "true")
         .unwrap_or(false);
     let database_name = database_url
@@ -53,7 +53,7 @@ async fn reset_test_pool() -> (OwnedMutexGuard<()>, PgPool) {
         .unwrap_or_else(|| Cow::from(""));
     assert!(
         allow_non_local_reset || database_name.to_lowercase().contains("test"),
-        "integration tests reset the public schema; use a dedicated test database name containing 'test' or set SKYSYNCR_ALLOW_NON_LOCAL_TEST_DB_RESET=true",
+        "integration tests reset the public schema; use a dedicated test database name containing 'test' or set SKYSYNC_ALLOW_NON_LOCAL_TEST_DB_RESET=true",
     );
 
     let pool = PgPoolOptions::new()
@@ -232,7 +232,7 @@ async fn insert_user(pool: &PgPool, email: &str) -> Uuid {
 async fn migrations_apply_to_empty_database() {
     let (_guard, pool) = reset_test_pool().await;
 
-    skysyncr::db::migrations::run(&pool)
+    skysync::db::migrations::run(&pool)
         .await
         .expect("migrate empty database");
 
@@ -288,7 +288,7 @@ async fn migrations_apply_to_existing_legacy_database_and_backup_destructive_cha
     .await
     .expect("insert legacy refresh token");
 
-    skysyncr::db::migrations::run(&pool)
+    skysync::db::migrations::run(&pool)
         .await
         .expect("migrate legacy database");
 
@@ -494,7 +494,7 @@ async fn refresh_token_rotation_revokes_old_token_and_accepts_new_token() {
     let old_token = "old-refresh-token";
     let new_token = "new-refresh-token";
 
-    let metadata = skysyncr::db::refresh_tokens::RefreshTokenMetadata {
+    let metadata = skysync::db::refresh_tokens::RefreshTokenMetadata {
         device_id: Some("test-device-id"),
         device_label: Some("Test browser on Linux"),
         user_agent: Some("test-agent"),
@@ -549,7 +549,7 @@ async fn recent_refresh_token_reuse_rotates_active_session_token() {
     let first_rotated_token = "first-rotated-refresh-token";
     let race_recovery_token = "race-recovery-refresh-token";
 
-    let metadata = skysyncr::db::refresh_tokens::RefreshTokenMetadata {
+    let metadata = skysync::db::refresh_tokens::RefreshTokenMetadata {
         device_id: Some("test-device-id"),
         device_label: Some("Test browser on Linux"),
         user_agent: Some("test-agent"),

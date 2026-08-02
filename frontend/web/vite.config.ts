@@ -26,7 +26,7 @@ function contentSecurityPolicy(connectSources: string[], scriptSources = ["'self
 
 function developmentDocumentHeaders(policy: string): Plugin {
   return {
-    name: 'skysyncr-development-document-headers',
+    name: 'skysync-development-document-headers',
     apply: 'serve',
     configureServer(server) {
       server.middlewares.use((request, response, next) => {

@@ -4,7 +4,7 @@ export type Theme = 'dark' | 'light'
 export type ThemePreference = Theme | 'system'
 
 const THEME_STORAGE_KEY = 'theme_preference'
-const THEME_CHANGE_EVENT = 'skysyncr-theme-change'
+const THEME_CHANGE_EVENT = 'skysync-theme-change'
 const THEME_TRANSITION_MS = 520
 const SYSTEM_LIGHT_QUERY = '(prefers-color-scheme: light)'
 

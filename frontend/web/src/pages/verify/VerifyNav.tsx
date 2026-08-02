@@ -12,7 +12,7 @@ function VerifyNav() {
             window.location.reload()
           }}
         >
-          SkysyncR
+          Skysync
         </Link>
         <ThemeToggle className="nav__theme-toggle" />
       </nav>

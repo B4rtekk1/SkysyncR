@@ -15,7 +15,7 @@ function NotFound() {
               window.location.reload()
             }}
           >
-            SkysyncR
+            Skysync
           </Link>
           <div className="nav__actions">
             <ThemeToggle className="nav__theme-toggle" />

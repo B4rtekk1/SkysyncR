@@ -27,7 +27,7 @@ pub fn otpauth_url(email: &str, secret: &[u8]) -> String {
     // 30-second period are the TOTP defaults, so omitting them keeps the QR payload
     // small enough for the frontend generator.
     format!(
-        "otpauth://totp/SkysyncR:{email}?secret={}&issuer=SkysyncR",
+        "otpauth://totp/Skysync:{email}?secret={}&issuer=Skysync",
         secret_base32(secret),
     )
 }
@@ -123,7 +123,7 @@ mod tests {
 
         assert_eq!(
             otpauth_url("user@example.com", secret),
-            "otpauth://totp/SkysyncR:user@example.com?secret=GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ&issuer=SkysyncR",
+            "otpauth://totp/Skysync:user@example.com?secret=GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ&issuer=Skysync",
         );
     }
 }

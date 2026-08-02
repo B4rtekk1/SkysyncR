@@ -8,7 +8,7 @@ function AuthNav() {
           to="/"
           className="auth-nav__logo"
         >
-          SkysyncR
+          Skysync
         </Link>
         <div className="auth-nav__actions">
           <ThemeToggle className="nav__theme-toggle" />

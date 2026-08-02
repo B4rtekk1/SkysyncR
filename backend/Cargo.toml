@@ -1,14 +1,14 @@
 [package]
-name = "SkysyncR"
+name = "Skysync"
 version = "0.1.0"
 edition = "2024"
 
 [lib]
-name = "skysyncr"
+name = "skysync"
 path = "src/lib.rs"
 
 [[bin]]
-name = "skysyncr-server"
+name = "skysync-server"
 path = "src/main.rs"
 
 [dependencies]

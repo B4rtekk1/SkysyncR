@@ -571,7 +571,7 @@ function SettingsModalContent({ currentUser, onClose, onSave }: SettingsModalPro
         const datePart = new Date().toISOString().slice(0, 10)
         const userPart = safeLogFilenamePart(currentUser.email)
         const payload = buildOperationLogExport(currentUser, operationLog.operations)
-        downloadJsonFile(`skysyncr-operation-log-${userPart}-${datePart}.json`, payload)
+        downloadJsonFile(`skysync-operation-log-${userPart}-${datePart}.json`, payload)
     }
 
     async function downloadDataExport() {
@@ -642,7 +642,7 @@ function SettingsModalContent({ currentUser, onClose, onSave }: SettingsModalPro
                                 )}
                             </div>
                             <div>
-                                <strong>{settings.displayName || 'SkysyncR account'}</strong>
+                                <strong>{settings.displayName || 'Skysync account'}</strong>
                                 <span>{currentUser?.email ?? 'Unavailable'}</span>
                             </div>
                         </div>

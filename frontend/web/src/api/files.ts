@@ -43,7 +43,7 @@ import {
 } from './validators'
 
 const API_BASE = import.meta.env?.VITE_API_BASE ?? 'http://localhost:3000/'
-const DOWNLOAD_CHECKSUM_HEADER = 'x-skysyncr-sha256'
+const DOWNLOAD_CHECKSUM_HEADER = 'x-skysync-sha256'
 
 async function parseErrorMessage(response: Response): Promise<string> {
     try {
@@ -822,11 +822,11 @@ export async function downloadPublicFile(
     return {
         blob: download.blob,
         filename:
-            filenameFromBase64Header(res.headers.get('x-skysyncr-filename-b64')) ??
+            filenameFromBase64Header(res.headers.get('x-skysync-filename-b64')) ??
             filenameFromContentDisposition(res.headers.get('content-disposition')) ??
             'download.bin',
-        mimeType: res.headers.get('x-skysyncr-mime-type'),
-        encryptionNonce: res.headers.get('x-skysyncr-encryption-nonce'),
+        mimeType: res.headers.get('x-skysync-mime-type'),
+        encryptionNonce: res.headers.get('x-skysync-encryption-nonce'),
         checksum: download.checksum,
         integrity: download.integrity,
     }
@@ -884,11 +884,11 @@ export async function downloadPublicFolderFile(
     return {
         blob: download.blob,
         filename:
-            filenameFromBase64Header(res.headers.get('x-skysyncr-filename-b64')) ??
+            filenameFromBase64Header(res.headers.get('x-skysync-filename-b64')) ??
             filenameFromContentDisposition(res.headers.get('content-disposition')) ??
             'download.bin',
-        mimeType: res.headers.get('x-skysyncr-mime-type'),
-        encryptionNonce: res.headers.get('x-skysyncr-encryption-nonce'),
+        mimeType: res.headers.get('x-skysync-mime-type'),
+        encryptionNonce: res.headers.get('x-skysync-encryption-nonce'),
         checksum: download.checksum,
         integrity: download.integrity,
     }

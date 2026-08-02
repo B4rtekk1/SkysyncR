@@ -44,7 +44,7 @@ use crate::services::trash::permanently_delete_user_file;
 use crate::state::AppState;
 use crate::utils::errors::{ApiError, internal_error};
 
-const DEVICE_LABEL_HEADER: &str = "x-skysyncr-device-label";
+const DEVICE_LABEL_HEADER: &str = "x-skysync-device-label";
 
 #[derive(Deserialize)]
 pub struct ListFilesQuery {
@@ -1401,22 +1401,22 @@ pub async fn download_file(
     if let Some(checksum) = file.checksum.as_deref()
         && let Ok(value) = HeaderValue::from_str(checksum)
     {
-        headers.insert("x-skysyncr-sha256", value);
+        headers.insert("x-skysync-sha256", value);
     }
     if let Ok(value) =
         HeaderValue::from_str(&general_purpose::STANDARD.encode(file.filename.as_bytes()))
     {
-        headers.insert("x-skysyncr-filename-b64", value);
+        headers.insert("x-skysync-filename-b64", value);
     }
     if let Ok(value) =
         HeaderValue::from_str(&general_purpose::STANDARD.encode(&file.encryption_nonce))
     {
-        headers.insert("x-skysyncr-encryption-nonce", value);
+        headers.insert("x-skysync-encryption-nonce", value);
     }
     if let Some(mime_type) = file.mime_type.as_deref()
         && let Ok(value) = HeaderValue::from_str(mime_type)
     {
-        headers.insert("x-skysyncr-mime-type", value);
+        headers.insert("x-skysync-mime-type", value);
     }
     let disposition = format!(
         "attachment; filename=\"{}\"",
@@ -1493,22 +1493,22 @@ pub async fn download_public_file(
     if let Some(checksum) = file.checksum.as_deref()
         && let Ok(value) = HeaderValue::from_str(checksum)
     {
-        headers.insert("x-skysyncr-sha256", value);
+        headers.insert("x-skysync-sha256", value);
     }
     if let Ok(value) =
         HeaderValue::from_str(&general_purpose::STANDARD.encode(file.filename.as_bytes()))
     {
-        headers.insert("x-skysyncr-filename-b64", value);
+        headers.insert("x-skysync-filename-b64", value);
     }
     if let Ok(value) =
         HeaderValue::from_str(&general_purpose::STANDARD.encode(&file.encryption_nonce))
     {
-        headers.insert("x-skysyncr-encryption-nonce", value);
+        headers.insert("x-skysync-encryption-nonce", value);
     }
     if let Some(mime_type) = file.mime_type.as_deref()
         && let Ok(value) = HeaderValue::from_str(mime_type)
     {
-        headers.insert("x-skysyncr-mime-type", value);
+        headers.insert("x-skysync-mime-type", value);
     }
     let disposition = format!(
         "attachment; filename=\"{}\"",
@@ -1958,7 +1958,7 @@ fn encode_file_cursor(file: &FileRecord) -> Result<String, ApiError> {
 }
 
 fn is_valid_file_encryption_nonce(value: &[u8]) -> bool {
-    value.len() == 12 || value == b"skysyncr-file:v2"
+    value.len() == 12 || value == b"skysync-file:v2"
 }
 
 fn sanitize_download_filename(filename: &str) -> String {

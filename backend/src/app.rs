@@ -88,16 +88,16 @@ fn cors_layer() -> CorsLayer {
             header::AUTHORIZATION,
             header::CONTENT_TYPE,
             HeaderName::from_static("upload-offset"),
-            HeaderName::from_static("x-skysyncr-device-id"),
-            HeaderName::from_static("x-skysyncr-device-label"),
+            HeaderName::from_static("x-skysync-device-id"),
+            HeaderName::from_static("x-skysync-device-label"),
         ])
         .expose_headers([
             header::CONTENT_TYPE,
             header::CONTENT_DISPOSITION,
-            HeaderName::from_static("x-skysyncr-sha256"),
-            HeaderName::from_static("x-skysyncr-filename-b64"),
-            HeaderName::from_static("x-skysyncr-encryption-nonce"),
-            HeaderName::from_static("x-skysyncr-mime-type"),
+            HeaderName::from_static("x-skysync-sha256"),
+            HeaderName::from_static("x-skysync-filename-b64"),
+            HeaderName::from_static("x-skysync-encryption-nonce"),
+            HeaderName::from_static("x-skysync-mime-type"),
         ])
         .allow_credentials(true)
 }

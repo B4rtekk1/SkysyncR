@@ -29,4 +29,4 @@ $env:JWT_SECRET = "change-me-at-least-32-bytes-for-tests"
 cargo test
 ```
 
-Do not point integration tests at `appdb` unless you deliberately set `SKYSYNCR_ALLOW_NON_LOCAL_TEST_DB_RESET=true`; the tests will drop and recreate schemas.
+Do not point integration tests at `appdb` unless you deliberately set `SKYSYNC_ALLOW_NON_LOCAL_TEST_DB_RESET=true`; the tests will drop and recreate schemas.

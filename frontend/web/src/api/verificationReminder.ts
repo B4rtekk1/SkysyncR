@@ -1,4 +1,4 @@
-const PENDING_VERIFICATION_EMAIL_KEY = 'skysyncr.pendingVerificationEmail'
+const PENDING_VERIFICATION_EMAIL_KEY = 'skysync.pendingVerificationEmail'
 
 export function loadPendingVerificationEmail() {
   try {

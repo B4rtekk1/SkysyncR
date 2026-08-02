@@ -8,10 +8,10 @@ export class NetworkError extends Error {
   }
 }
 
-const DEVICE_ID_KEY = 'skysyncr_device_id'
-const DEVICE_LABEL_KEY = 'skysyncr_device_label'
-const DEVICE_ID_HEADER = 'x-skysyncr-device-id'
-const DEVICE_LABEL_HEADER = 'x-skysyncr-device-label'
+const DEVICE_ID_KEY = 'skysync_device_id'
+const DEVICE_LABEL_KEY = 'skysync_device_label'
+const DEVICE_ID_HEADER = 'x-skysync-device-id'
+const DEVICE_LABEL_HEADER = 'x-skysync-device-label'
 
 function randomDeviceId(): string {
   return crypto.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`

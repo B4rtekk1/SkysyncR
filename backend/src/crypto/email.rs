@@ -158,7 +158,7 @@ pub async fn send_password_reset_email(
     let email = Message::builder()
         .from(config.from_email.parse()?)
         .to(to_email.parse()?)
-        .subject("Reset your SkysyncR password")
+        .subject("Reset your Skysync password")
         .header(ContentType::TEXT_HTML)
         .body(format!(
             "<p>Use the link below to reset your password:</p><p><a href=\"{}\">{}</a></p>",

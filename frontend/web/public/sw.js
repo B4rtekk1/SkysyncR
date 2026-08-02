@@ -1,4 +1,4 @@
-const CACHE_NAME = 'skysyncr-app-shell-v1'
+const CACHE_NAME = 'skysync-app-shell-v1'
 const APP_SHELL = ['/', '/index.html', '/manifest.webmanifest', '/og-image.png', '/icons.svg']
 
 self.addEventListener('install', (event) => {

@@ -1,10 +1,10 @@
 import type { EncryptedPrivateKey } from './keys'
 
-const DB_NAME = 'skysyncr-vault'
+const DB_NAME = 'skysync-vault'
 const STORE_NAME = 'keys'
 const ACTIVE_PRIVATE_KEY_PREFIX = 'active-private-key:'
 const ACTIVE_PRIVATE_KEY_IDLE_TIMEOUT_MS = 15 * 60 * 1000
-const ACTIVE_PRIVATE_KEY_CLEARED_EVENT = 'skysyncr:active-private-key-cleared'
+const ACTIVE_PRIVATE_KEY_CLEARED_EVENT = 'skysync:active-private-key-cleared'
 
 type ActivePrivateKeySession = {
   userId: string

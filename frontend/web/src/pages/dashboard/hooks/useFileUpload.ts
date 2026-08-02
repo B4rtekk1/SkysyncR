@@ -69,7 +69,7 @@ type UseFileUploadOptions = {
     refreshQuota: () => Promise<void>
 }
 
-const DB_NAME = 'skysyncr-transfer-queue'
+const DB_NAME = 'skysync-transfer-queue'
 const DB_VERSION = 1
 const STORE_NAME = 'uploads'
 const COMPLETED_UPLOAD_TRANSFER_RETENTION_MS = 5000

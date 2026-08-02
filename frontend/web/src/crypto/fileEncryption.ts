@@ -2,7 +2,7 @@ export async function generateFileKey(): Promise<CryptoKey> {
     return crypto.subtle.generateKey({name: 'AES-GCM', length: 256}, true, ['encrypt', 'decrypt'])
 }
 
-const FILE_FORMAT_V2 = 'skysyncr-file:v2'
+const FILE_FORMAT_V2 = 'skysync-file:v2'
 const FILE_FORMAT_V2_BYTES = new TextEncoder().encode(FILE_FORMAT_V2)
 const FILE_STREAM_MAGIC = new TextEncoder().encode('SSRFENC2')
 const FILE_CHUNK_SIZE = 4 * 1024 * 1024

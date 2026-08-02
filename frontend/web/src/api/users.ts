@@ -298,7 +298,7 @@ export async function downloadUserDataExport(reauth: ReauthenticationPayload): P
   const blob = await res.blob()
   const disposition = res.headers.get('content-disposition') ?? ''
   const filenameMatch = /filename="([^"]+)"/.exec(disposition)
-  const filename = filenameMatch?.[1] ?? `skysyncr-user-export-${new Date().toISOString().slice(0, 10)}.tar`
+  const filename = filenameMatch?.[1] ?? `skysync-user-export-${new Date().toISOString().slice(0, 10)}.tar`
   const href = URL.createObjectURL(blob)
   const link = document.createElement('a')
   link.href = href

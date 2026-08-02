@@ -90,7 +90,7 @@ export function DashboardSidebar({
                     window.location.reload()
                 }}
             >
-                <span className="shell__sidebar-label">SkysyncR</span>
+                <span className="shell__sidebar-label">Skysync</span>
             </Link>
 
             <button

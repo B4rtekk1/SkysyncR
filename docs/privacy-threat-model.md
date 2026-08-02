@@ -2,7 +2,7 @@
 
 ## Scope
 
-This model covers SkysyncR browser-side vault encryption for private file keys, encrypted metadata, and the locally stored encrypted account private key.
+This model covers Skysync browser-side vault encryption for private file keys, encrypted metadata, and the locally stored encrypted account private key.
 
 ## Assets
 

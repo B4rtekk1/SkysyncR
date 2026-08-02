@@ -42,7 +42,7 @@ test('chunked file encryption streams round trip file contents', async () => {
 
 test('chunked file decryption rejects non-stream nonce markers', async () => {
   const key = await generateFileKey()
-  const nonce = toBase64(new TextEncoder().encode('not-skysyncr'))
+  const nonce = toBase64(new TextEncoder().encode('not-skysync'))
 
   assert.equal(isChunkedFileNonce(nonce), false)
   assert.throws(() => decryptFileStream(new Blob(), key, nonce))

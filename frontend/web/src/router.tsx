@@ -64,11 +64,11 @@ function getLocation(): LocationState {
 
 function subscribeToLocationChange(onStoreChange: () => void) {
     window.addEventListener('popstate', onStoreChange)
-    window.addEventListener('skysyncr:navigate', onStoreChange)
+    window.addEventListener('skysync:navigate', onStoreChange)
 
     return () => {
         window.removeEventListener('popstate', onStoreChange)
-        window.removeEventListener('skysyncr:navigate', onStoreChange)
+        window.removeEventListener('skysync:navigate', onStoreChange)
     }
 }
 
@@ -109,7 +109,7 @@ function matchRoute(pattern: string, pathname: string) {
 }
 
 function notifyNavigation() {
-    window.dispatchEvent(new Event('skysyncr:navigate'))
+    window.dispatchEvent(new Event('skysync:navigate'))
 }
 
 export function BrowserRouter({ children }: { children: ReactNode }) {

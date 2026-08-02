@@ -3,9 +3,9 @@ services:
     image: postgres:17
     restart: unless-stopped
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-skysyncr}
+      POSTGRES_USER: ${POSTGRES_USER:-skysync}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
-      POSTGRES_DB: ${POSTGRES_DB:-skysyncr}
+      POSTGRES_DB: ${POSTGRES_DB:-skysync}
     volumes:
       - db_data:/var/lib/postgresql/data
     healthcheck:
@@ -23,12 +23,12 @@ services:
       db:
         condition: service_healthy
     environment:
-      DATABASE_URL: postgres://${POSTGRES_USER:-skysyncr}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-skysyncr}
+      DATABASE_URL: postgres://${POSTGRES_USER:-skysync}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-skysync}
       JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET}
       TOTP_ENCRYPTION_KEY: ${TOTP_ENCRYPTION_KEY:?set TOTP_ENCRYPTION_KEY}
       APP_ENV: production
       LOG_FORMAT: json
-    command: ["skysyncr-migrate"]
+    command: ["skysync-migrate"]
 
   backend:
     build:
@@ -41,7 +41,7 @@ services:
       migrate:
         condition: service_completed_successfully
     environment:
-      DATABASE_URL: postgres://${POSTGRES_USER:-skysyncr}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-skysyncr}
+      DATABASE_URL: postgres://${POSTGRES_USER:-skysync}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-skysync}
       JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET}
       TOTP_ENCRYPTION_KEY: ${TOTP_ENCRYPTION_KEY:?set TOTP_ENCRYPTION_KEY}
       APP_ENV: production
@@ -51,14 +51,14 @@ services:
       SMTP_USERNAME: ${SMTP_USERNAME:-}
       SMTP_EMAIL: ${SMTP_EMAIL:-}
       SMTP_PASSWORD: ${SMTP_PASSWORD:-}
-      UPLOAD_DIR: /var/lib/skysyncr/uploads
+      UPLOAD_DIR: /var/lib/skysync/uploads
       MAX_FILE_SIZE_BYTES: ${MAX_FILE_SIZE_BYTES:-1073741824}
       MAX_CONCURRENT_FILE_TRANSFERS: ${MAX_CONCURRENT_FILE_TRANSFERS:-4}
       FILE_TRANSFER_TIMEOUT_SECONDS: ${FILE_TRANSFER_TIMEOUT_SECONDS:-900}
       TRASH_RETENTION_DAYS: ${TRASH_RETENTION_DAYS:-30}
       TRASH_PURGE_INTERVAL_HOURS: ${TRASH_PURGE_INTERVAL_HOURS:-24}
     volumes:
-      - uploads:/var/lib/skysyncr/uploads
+      - uploads:/var/lib/skysync/uploads
     expose:
       - "3000"
 

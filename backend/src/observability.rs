@@ -15,7 +15,7 @@ use crate::db::storage::{StorageOverview, get_storage_overview};
 use crate::state::AppState;
 
 const REQUEST_ID_HEADER: HeaderName = HeaderName::from_static("x-request-id");
-const DEFAULT_LOG_FILTER: &str = "skysyncr=info,tower_http=info,sqlx=warn";
+const DEFAULT_LOG_FILTER: &str = "skysync=info,tower_http=info,sqlx=warn";
 const METRICS_CONTENT_TYPE: &str = "text/plain; version=0.0.4; charset=utf-8";
 const MAX_HTTP_METRIC_KEYS: usize = 1024;
 const HTTP_METRICS_OVERFLOW_PATH: &str = "/__other__";
@@ -293,68 +293,68 @@ impl Metrics {
         db_pool_idle: u32,
     ) -> String {
         let mut out = String::new();
-        out.push_str("# HELP skysyncr_up Application liveness from the metrics endpoint.\n");
-        out.push_str("# TYPE skysyncr_up gauge\nskysyncr_up 1\n");
-        out.push_str("# HELP skysyncr_db_pool_connections PostgreSQL pool connections.\n");
-        out.push_str("# TYPE skysyncr_db_pool_connections gauge\n");
+        out.push_str("# HELP skysync_up Application liveness from the metrics endpoint.\n");
+        out.push_str("# TYPE skysync_up gauge\nskysync_up 1\n");
+        out.push_str("# HELP skysync_db_pool_connections PostgreSQL pool connections.\n");
+        out.push_str("# TYPE skysync_db_pool_connections gauge\n");
         push_metric(
             &mut out,
-            "skysyncr_db_pool_connections",
+            "skysync_db_pool_connections",
             &[("state", "open")],
             db_pool_size as f64,
         );
         push_metric(
             &mut out,
-            "skysyncr_db_pool_connections",
+            "skysync_db_pool_connections",
             &[("state", "idle")],
             db_pool_idle as f64,
         );
 
         if let Some(latency_ms) = db_probe_latency_ms {
-            out.push_str("# HELP skysyncr_database_health_probe_latency_ms Latest database health probe latency.\n");
-            out.push_str("# TYPE skysyncr_database_health_probe_latency_ms gauge\n");
+            out.push_str("# HELP skysync_database_health_probe_latency_ms Latest database health probe latency.\n");
+            out.push_str("# TYPE skysync_database_health_probe_latency_ms gauge\n");
             push_metric(
                 &mut out,
-                "skysyncr_database_health_probe_latency_ms",
+                "skysync_database_health_probe_latency_ms",
                 &[],
                 latency_ms,
             );
         } else {
-            out.push_str("# HELP skysyncr_database_reachable Database health probe result.\n");
+            out.push_str("# HELP skysync_database_reachable Database health probe result.\n");
             out.push_str(
-                "# TYPE skysyncr_database_reachable gauge\nskysyncr_database_reachable 0\n",
+                "# TYPE skysync_database_reachable gauge\nskysync_database_reachable 0\n",
             );
         }
 
         if let Some(storage) = storage {
-            out.push_str("# HELP skysyncr_storage_bytes Storage quota usage across users.\n");
-            out.push_str("# TYPE skysyncr_storage_bytes gauge\n");
+            out.push_str("# HELP skysync_storage_bytes Storage quota usage across users.\n");
+            out.push_str("# TYPE skysync_storage_bytes gauge\n");
             push_metric(
                 &mut out,
-                "skysyncr_storage_bytes",
+                "skysync_storage_bytes",
                 &[("kind", "used")],
                 storage.used_bytes as f64,
             );
             push_metric(
                 &mut out,
-                "skysyncr_storage_bytes",
+                "skysync_storage_bytes",
                 &[("kind", "total")],
                 storage.total_bytes as f64,
             );
             push_metric(
                 &mut out,
-                "skysyncr_storage_users_total",
+                "skysync_storage_users_total",
                 &[],
                 storage.users as f64,
             );
         }
 
-        out.push_str("# HELP skysyncr_http_requests_total HTTP requests grouped by method, path and status class.\n");
-        out.push_str("# TYPE skysyncr_http_requests_total counter\n");
-        out.push_str("# HELP skysyncr_http_request_latency_ms_sum Total HTTP request latency in milliseconds.\n");
-        out.push_str("# TYPE skysyncr_http_request_latency_ms_sum counter\n");
-        out.push_str("# HELP skysyncr_http_request_latency_ms_max Maximum observed HTTP request latency in milliseconds.\n");
-        out.push_str("# TYPE skysyncr_http_request_latency_ms_max gauge\n");
+        out.push_str("# HELP skysync_http_requests_total HTTP requests grouped by method, path and status class.\n");
+        out.push_str("# TYPE skysync_http_requests_total counter\n");
+        out.push_str("# HELP skysync_http_request_latency_ms_sum Total HTTP request latency in milliseconds.\n");
+        out.push_str("# TYPE skysync_http_request_latency_ms_sum counter\n");
+        out.push_str("# HELP skysync_http_request_latency_ms_max Maximum observed HTTP request latency in milliseconds.\n");
+        out.push_str("# TYPE skysync_http_request_latency_ms_max gauge\n");
         for (key, metric) in self
             .http_requests
             .lock()
@@ -368,28 +368,28 @@ impl Metrics {
             ];
             push_metric(
                 &mut out,
-                "skysyncr_http_requests_total",
+                "skysync_http_requests_total",
                 &labels,
                 metric.count as f64,
             );
             push_metric(
                 &mut out,
-                "skysyncr_http_request_latency_ms_sum",
+                "skysync_http_request_latency_ms_sum",
                 &labels,
                 metric.latency_ms_sum,
             );
             push_metric(
                 &mut out,
-                "skysyncr_http_request_latency_ms_max",
+                "skysync_http_request_latency_ms_max",
                 &labels,
                 metric.latency_ms_max,
             );
         }
 
-        out.push_str("# HELP skysyncr_file_transfer_operations_total File transfer operations grouped by direction and result.\n");
-        out.push_str("# TYPE skysyncr_file_transfer_operations_total counter\n");
-        out.push_str("# HELP skysyncr_file_transfer_bytes_total File transfer bytes grouped by direction and result.\n");
-        out.push_str("# TYPE skysyncr_file_transfer_bytes_total counter\n");
+        out.push_str("# HELP skysync_file_transfer_operations_total File transfer operations grouped by direction and result.\n");
+        out.push_str("# TYPE skysync_file_transfer_operations_total counter\n");
+        out.push_str("# HELP skysync_file_transfer_bytes_total File transfer bytes grouped by direction and result.\n");
+        out.push_str("# TYPE skysync_file_transfer_bytes_total counter\n");
         for (key, metric) in self
             .transfers
             .lock()
@@ -399,22 +399,22 @@ impl Metrics {
             let labels = [("direction", key.direction), ("result", key.result)];
             push_metric(
                 &mut out,
-                "skysyncr_file_transfer_operations_total",
+                "skysync_file_transfer_operations_total",
                 &labels,
                 metric.count as f64,
             );
             push_metric(
                 &mut out,
-                "skysyncr_file_transfer_bytes_total",
+                "skysync_file_transfer_bytes_total",
                 &labels,
                 metric.bytes as f64,
             );
         }
 
-        out.push_str("# HELP skysyncr_db_operation_latency_ms_sum Total observed DB operation latency in milliseconds.\n");
-        out.push_str("# TYPE skysyncr_db_operation_latency_ms_sum counter\n");
-        out.push_str("# HELP skysyncr_db_operation_latency_ms_max Maximum observed DB operation latency in milliseconds.\n");
-        out.push_str("# TYPE skysyncr_db_operation_latency_ms_max gauge\n");
+        out.push_str("# HELP skysync_db_operation_latency_ms_sum Total observed DB operation latency in milliseconds.\n");
+        out.push_str("# TYPE skysync_db_operation_latency_ms_sum counter\n");
+        out.push_str("# HELP skysync_db_operation_latency_ms_max Maximum observed DB operation latency in milliseconds.\n");
+        out.push_str("# TYPE skysync_db_operation_latency_ms_max gauge\n");
         for (operation, metric) in self
             .db_latency
             .lock()
@@ -424,30 +424,30 @@ impl Metrics {
             let labels = [("operation", *operation)];
             push_metric(
                 &mut out,
-                "skysyncr_db_operation_latency_ms_count",
+                "skysync_db_operation_latency_ms_count",
                 &labels,
                 metric.count as f64,
             );
             push_metric(
                 &mut out,
-                "skysyncr_db_operation_latency_ms_sum",
+                "skysync_db_operation_latency_ms_sum",
                 &labels,
                 metric.sum,
             );
             push_metric(
                 &mut out,
-                "skysyncr_db_operation_latency_ms_max",
+                "skysync_db_operation_latency_ms_max",
                 &labels,
                 metric.max,
             );
         }
 
-        out.push_str("# HELP skysyncr_operational_alerts_total Operational alert emissions grouped by alert name.\n");
-        out.push_str("# TYPE skysyncr_operational_alerts_total counter\n");
+        out.push_str("# HELP skysync_operational_alerts_total Operational alert emissions grouped by alert name.\n");
+        out.push_str("# TYPE skysync_operational_alerts_total counter\n");
         for (name, count) in self.alerts.lock().expect("metrics mutex poisoned").iter() {
             push_metric(
                 &mut out,
-                "skysyncr_operational_alerts_total",
+                "skysync_operational_alerts_total",
                 &[("alert", *name)],
                 *count as f64,
             );

@@ -3,8 +3,8 @@ import test from 'node:test'
 import { createQrPath } from './qr.ts'
 
 test('createQrPath returns a deterministic SVG path and viewBox for the same value', () => {
-  const first = createQrPath('https://skysyncr.example/share/token')
-  const second = createQrPath('https://skysyncr.example/share/token')
+  const first = createQrPath('https://skysync.example/share/token')
+  const second = createQrPath('https://skysync.example/share/token')
 
   assert.equal(first.viewBox, '0 0 49 49')
   assert.equal(first.path, second.path)
@@ -23,7 +23,7 @@ test('createQrPath supports share links with embedded file keys', () => {
 })
 
 test('createQrPath supports compact TOTP setup URLs', () => {
-  const value = 'otpauth://totp/SkysyncR:user@example.com?secret=GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ&issuer=SkysyncR'
+  const value = 'otpauth://totp/Skysync:user@example.com?secret=GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ&issuer=Skysync'
 
   assert.ok(createQrPath(value).path.length > 1000)
 })

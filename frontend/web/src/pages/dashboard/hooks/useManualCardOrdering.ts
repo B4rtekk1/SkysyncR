@@ -2,7 +2,7 @@ import { useState, type Dispatch, type DragEvent, type SetStateAction } from 're
 import { saveOrderIds } from '../storage'
 import type { FileSortKey, Item, ViewKey } from '../types'
 
-export const FILE_CARD_DRAG_MIME = 'application/x-skysyncr-file-id'
+export const FILE_CARD_DRAG_MIME = 'application/x-skysync-file-id'
 export type FileCardDropPosition = 'before' | 'after'
 
 type UseManualCardOrderingParams = {

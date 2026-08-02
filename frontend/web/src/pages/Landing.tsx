@@ -95,7 +95,7 @@ function Landing() {
                 window.location.reload()
               }}
             >
-              SkysyncR
+              Skysync
             </Link>
             <div className="nav__actions">
               <ThemeToggle className="nav__theme-toggle" />
@@ -122,7 +122,7 @@ function Landing() {
               <span className="h1__line">before they leave your device.</span>
             </h1>
             <p className="lede">
-              SkysyncR encrypts every file locally with AES-256 before it
+              Skysync encrypts every file locally with AES-256 before it
               goes anywhere else. We never see the contents — only that
               it's safe.
             </p>
@@ -176,7 +176,7 @@ function Landing() {
         </section>
 
         <footer className="footer">
-          <span>© {new Date().getFullYear()} SkysyncR</span>
+          <span>© {new Date().getFullYear()} Skysync</span>
           <span className="footer__sep">·</span>
           <span>Encrypted locally, always.</span>
         </footer>

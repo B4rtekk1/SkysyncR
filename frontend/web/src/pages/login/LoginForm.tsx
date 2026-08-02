@@ -74,7 +74,7 @@ function LoginForm() {
     if (!email.trim()) {
       return {
         title: 'Email is required',
-        message: 'Enter the email address connected to your SkysyncR account.',
+        message: 'Enter the email address connected to your Skysync account.',
         field: 'email',
       }
     }

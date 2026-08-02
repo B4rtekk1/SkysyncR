@@ -175,7 +175,7 @@ function RegisterForm() {
     if (!recoveryKey) return
 
     const content = [
-      'SkysyncR recovery key',
+      'Skysync recovery key',
       '',
       recoveryKey,
       '',
@@ -185,7 +185,7 @@ function RegisterForm() {
     const url = URL.createObjectURL(blob)
     const link = document.createElement('a')
     link.href = url
-    link.download = 'skysyncr-recovery-key.txt'
+    link.download = 'skysync-recovery-key.txt'
     link.click()
     URL.revokeObjectURL(url)
   }
@@ -224,7 +224,7 @@ function RegisterForm() {
             <code>{recoveryKey}</code>
           </div>
           <p className="recovery-key__warning" role="alert">
-            <strong>SkysyncR cannot show this key again.</strong>
+            <strong>Skysync cannot show this key again.</strong>
             <span> Store it somewhere private before continuing.</span>
           </p>
           <div className="recovery-key__actions">

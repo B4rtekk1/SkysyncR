@@ -15,32 +15,32 @@ WORKDIR /app/backend
 RUN set -eux; \
     service postgresql start; \
     su postgres -c "psql -c \"ALTER USER postgres PASSWORD 'postgres';\""; \
-    su postgres -c "createdb skysyncr_build"; \
+    su postgres -c "createdb skysync_build"; \
     for migration in migrations/*.sql; do \
-        PGPASSWORD=postgres psql -h localhost -U postgres -d skysyncr_build -v ON_ERROR_STOP=1 -f "$migration"; \
+        PGPASSWORD=postgres psql -h localhost -U postgres -d skysync_build -v ON_ERROR_STOP=1 -f "$migration"; \
     done; \
-    DATABASE_URL=postgres://postgres:postgres@localhost/skysyncr_build \
-    cargo build --release --locked --bin skysyncr-server --bin migrate
+    DATABASE_URL=postgres://postgres:postgres@localhost/skysync_build \
+    cargo build --release --locked --bin skysync-server --bin migrate
 
 FROM debian:bookworm-slim AS runtime
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates libssl3 \
     && rm -rf /var/lib/apt/lists/* \
-    && useradd --system --create-home --home-dir /var/lib/skysyncr --shell /usr/sbin/nologin skysyncr \
-    && mkdir -p /var/lib/skysyncr/uploads \
-    && chown -R skysyncr:skysyncr /var/lib/skysyncr
+    && useradd --system --create-home --home-dir /var/lib/skysync --shell /usr/sbin/nologin skysync \
+    && mkdir -p /var/lib/skysync/uploads \
+    && chown -R skysync:skysync /var/lib/skysync
 
-COPY --from=builder /app/backend/target/release/skysyncr-server /usr/local/bin/skysyncr-server
-COPY --from=builder /app/backend/target/release/migrate /usr/local/bin/skysyncr-migrate
+COPY --from=builder /app/backend/target/release/skysync-server /usr/local/bin/skysync-server
+COPY --from=builder /app/backend/target/release/migrate /usr/local/bin/skysync-migrate
 
 ENV APP_ENV=production \
     LOG_FORMAT=json \
-    UPLOAD_DIR=/var/lib/skysyncr/uploads
+    UPLOAD_DIR=/var/lib/skysync/uploads
 
 WORKDIR /app
-USER skysyncr
+USER skysync
 
 EXPOSE 3000
 
-CMD ["skysyncr-server"]
+CMD ["skysync-server"]

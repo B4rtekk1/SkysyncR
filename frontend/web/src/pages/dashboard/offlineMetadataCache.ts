@@ -1,7 +1,7 @@
 import type { ApiFile, ApiFolder, SharedFile } from '../../api/files'
 import type { Item, ViewKey } from './types'
 
-const DB_NAME = 'skysyncr-offline-metadata'
+const DB_NAME = 'skysync-offline-metadata'
 const DB_VERSION = 1
 const STORE_NAME = 'snapshots'
 

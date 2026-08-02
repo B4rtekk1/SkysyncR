@@ -61,13 +61,13 @@ pub struct ResendVerificationRequest {
     pub email: String,
 }
 
-const REFRESH_TOKEN_COOKIE: &str = "skysyncr_refresh_token";
-const REFRESH_PERSISTENCE_COOKIE: &str = "skysyncr_refresh_persistent";
+const REFRESH_TOKEN_COOKIE: &str = "skysync_refresh_token";
+const REFRESH_PERSISTENCE_COOKIE: &str = "skysync_refresh_persistent";
 const REFRESH_COOKIE_PATH: &str = "/";
 const INVALID_LOGIN_MESSAGE: &str = "Invalid email or password";
 const SESSION_ACTIVITY_LIMIT: i64 = 30;
-const DEVICE_ID_HEADER: &str = "x-skysyncr-device-id";
-const DEVICE_LABEL_HEADER: &str = "x-skysyncr-device-label";
+const DEVICE_ID_HEADER: &str = "x-skysync-device-id";
+const DEVICE_LABEL_HEADER: &str = "x-skysync-device-label";
 
 #[derive(Serialize)]
 pub struct SessionsResponse {
@@ -98,14 +98,14 @@ enum TarEntrySource {
 }
 
 const EXPORT_FORMAT_VERSION: u32 = 1;
-const EXPORT_RECOVERY_INSTRUCTIONS: &str = r#"SkysyncR user data export recovery instructions
+const EXPORT_RECOVERY_INSTRUCTIONS: &str = r#"Skysync user data export recovery instructions
 
-This archive contains your server-side data export. Files in encrypted-files/ are the original encrypted blobs stored by SkysyncR; the server cannot decrypt them.
+This archive contains your server-side data export. Files in encrypted-files/ are the original encrypted blobs stored by Skysync; the server cannot decrypt them.
 
 To recover data:
 1. Open manifest.json and find the file entry by id or filename.
 2. Use that entry's encrypted_key and encryption_nonce values. They are base64-encoded.
-3. Unlock your private key using your SkysyncR password or account recovery flow.
+3. Unlock your private key using your Skysync password or account recovery flow.
 4. Unwrap the file key locally with your private key, then decrypt the encrypted blob from encrypted-files/.
 5. For files or folders shared with other users, shares.*.encrypted_key contains that recipient's wrapped key and can only be unwrapped by that recipient's private key.
 
@@ -400,7 +400,7 @@ pub async fn export_user_data(
     let manifest_bytes = serde_json::to_vec_pretty(&manifest)
         .map_err(|e| internal_error("serialize user export manifest", e))?;
 
-    let export_filename = format!("skysyncr-export-{}-{export_id}.tar", auth.user_id);
+    let export_filename = format!("skysync-export-{}-{export_id}.tar", auth.user_id);
     let export_path = user_export_path(&state.config.upload_dir, auth.user_id, export_id);
     if let Some(parent) = export_path.parent() {
         fs::create_dir_all(parent)
@@ -1715,7 +1715,7 @@ async fn build_user_export_manifest(
     .await?;
 
     let manifest = serde_json::json!({
-        "format": "skysyncr-user-data-export",
+        "format": "skysync-user-data-export",
         "format_version": EXPORT_FORMAT_VERSION,
         "export_id": export_id,
         "exported_at": Utc::now(),
