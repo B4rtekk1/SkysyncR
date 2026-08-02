@@ -8,8 +8,6 @@
 
 Skysync is a self-hosted workspace for storing, organising, sharing, and recovering files without giving up control of their contents. Files are encrypted in the browser before upload, while a Rust API, PostgreSQL, and Docker-based deployment provide a straightforward full-stack experience.
 
-![Skysync dashboard](frontend/web/src/assets/icon.png)
-
 ## Key functionality
 
 - **Client-side encryption** — files are encrypted locally with AES-256-GCM before transfer. Per-file keys are wrapped for the owner or authorised recipients, so the stored file blobs remain encrypted.
@@ -79,10 +77,10 @@ Create a production environment file from the supplied example:
 Copy-Item infra\docker\.env.prod.example infra\env\.env.prod
 ```
 
-Edit `infra\env\.env.prod`, set `FRONTEND_URL` to the public HTTPS address of the application (without a trailing `/`). This address is also embedded in the social-media preview metadata, then build and start the production stack:
+Edit `infra\docker\.env.prod`, set `FRONTEND_URL` to the public HTTPS address of the application (without a trailing `/`). This address is also embedded in the social-media preview metadata, then build and start the production stack:
 
 ```powershell
-docker compose --env-file infra\env\.env.prod -f infra\docker\docker-compose.prod.yml up -d --build
+docker compose --env-file infra\docker\.env.prod -f infra\docker\docker-compose.prod.yml up -d --build
 ```
 
 The application is available at `http://localhost` by default, or at the port configured through `HTTP_PORT`.
