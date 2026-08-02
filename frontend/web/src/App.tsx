@@ -38,7 +38,10 @@ function LandingRoute() {
         let active = true
 
         import('./api/session')
-            .then(({ getUnlockedVaultSession }) => getUnlockedVaultSession({ allowRefresh: false }))
+            // A new tab starts without the in-memory access token. Let the
+            // refresh cookie restore it, otherwise a remembered browser
+            // session is treated as signed out until the original tab reloads.
+            .then(({ getUnlockedVaultSession }) => getUnlockedVaultSession())
             .then((session) => {
                 if (active && session) {
                     navigate('/dashboard', {replace: true})

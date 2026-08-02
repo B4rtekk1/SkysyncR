@@ -45,7 +45,9 @@ function LoginForm() {
   useEffect(() => {
     let active = true
 
-    getUnlockedVaultSession({ allowRefresh: false })
+    // Access tokens intentionally live only in memory. In a new tab recover
+    // the remembered browser session from its HttpOnly refresh cookie.
+    getUnlockedVaultSession()
       .then((session) => {
         if (active && session) {
           navigate('/dashboard', { replace: true })
@@ -224,7 +226,10 @@ function LoginForm() {
       }
 
       await storeActivePrivateKey(user.id, privateKey, {
-        persist: rememberUnlock ? 'background' : false,
+        // A persistent sign-in also needs the short-lived vault key cache.
+        // Without it, a newly opened tab can refresh the login cookie but is
+        // immediately sent back to this form because it cannot unlock files.
+        persist: remember || rememberUnlock,
       })
       setUnlockedVaultSession({ user, privateKey })
 
