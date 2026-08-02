@@ -1489,6 +1489,24 @@ html[data-theme='light'] .file-card--can-preview:hover {
     }
 }
 
+/* Two narrow cards leave too little space for file names and actions on phones. */
+@media (max-width: 560px) {
+    .file-grid:not(.file-grid--list) {
+        grid-template-columns: 1fr;
+    }
+
+    .file-grid:not(.file-grid--list) .file-card {
+        min-height: 156px;
+    }
+
+    .file-grid:not(.file-grid--list) .file-card__top {
+        min-height: 48px;
+        flex-direction: row;
+        align-items: center;
+        padding-top: 0;
+    }
+}
+
 /* file-loading.css */
 .spinner {
     width: 10px;

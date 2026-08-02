@@ -648,3 +648,166 @@
         grid-column: 2;
     }
 }
+
+/* Phone layout: keep navigation and search useful without taking over the screen. */
+@media (max-width: 560px) {
+    .shell__sidebar,
+    .shell.is-sidebar-compact .shell__sidebar {
+        position: relative;
+        grid-template-columns: minmax(0, 1fr) auto auto;
+        grid-template-areas:
+            "logo footer toggle"
+            "nav nav nav";
+        gap: 8px;
+        padding: 10px 12px 8px;
+    }
+
+    .shell__storage {
+        display: none !important;
+    }
+
+    .shell__navlist--primary,
+    .shell.is-sidebar-compact .shell__navlist--primary {
+        display: flex;
+        grid-template-columns: none;
+        gap: 6px;
+        overflow-x: auto;
+        padding: 1px 0 3px;
+        scrollbar-width: none;
+        touch-action: pan-x;
+    }
+
+    .shell__navlist--primary::-webkit-scrollbar {
+        display: none;
+    }
+
+    .shell__navlist--primary .shell__nav-indicator {
+        display: none;
+    }
+
+    .shell__navlist--footer {
+        display: block;
+        grid-area: footer;
+        margin: 0;
+    }
+
+    .shell__navlist--footer .shell__navitem {
+        width: 36px;
+        height: 36px;
+        padding: 0;
+    }
+
+    .shell__navlist--footer .shell__sidebar-label {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+        border: 0;
+    }
+
+    .shell__navlist--primary .shell__navitem,
+    .shell.is-sidebar-compact .shell__navlist--primary .shell__navitem {
+        flex: 0 0 44px;
+        width: 44px;
+        height: 44px;
+        padding: 0;
+    }
+
+    .shell__navlist--primary .shell__sidebar-label {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+        border: 0;
+    }
+
+    .shell__navlist--primary .shell__navitem.is-active {
+        background: rgba(var(--signal-rgb), 0.12);
+        box-shadow: inset 0 0 0 1px rgba(var(--signal-rgb), 0.2);
+    }
+
+    .shell__topbar {
+        flex-wrap: nowrap;
+        gap: 10px;
+        padding: 10px 12px;
+    }
+
+    .shell__search {
+        order: initial;
+        min-width: 0;
+        min-height: 42px;
+        flex: 1 1 auto;
+    }
+
+    .shell__shortcuts {
+        display: none;
+    }
+
+    .shell__topbar-actions {
+        gap: 8px;
+        margin-left: 0;
+    }
+
+    .shell__content {
+        padding: 20px 12px 32px;
+    }
+
+    .shell__content-head {
+        gap: 14px;
+        margin-bottom: 18px;
+    }
+
+    .shell__title {
+        font-size: 1.45rem;
+    }
+
+    .shell__content-actions {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        width: 100%;
+        gap: 8px;
+    }
+
+    .shell__content-actions > * {
+        min-width: 0;
+    }
+
+    .shell__content-actions .sort-dropdown__trigger,
+    .shell__content-actions .add-dropdown__trigger {
+        justify-content: center;
+        width: 100%;
+        min-width: 0;
+        min-height: 42px;
+        padding: 0 8px;
+    }
+
+    .shell__content-actions .sort-dropdown__text,
+    .shell__content-actions .sort-dropdown__trigger > svg {
+        display: none;
+    }
+
+    .shell__content-actions .sort-dropdown__icon {
+        width: 30px;
+        height: 30px;
+    }
+
+    .shell__content-actions .view-toggle {
+        width: 100%;
+        justify-content: center;
+        min-height: 42px;
+    }
+
+    .shell__content-actions .add-dropdown__menu {
+        right: 0;
+        left: auto;
+        width: min(220px, calc(100vw - 24px));
+    }
+}
