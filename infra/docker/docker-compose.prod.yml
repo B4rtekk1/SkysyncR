@@ -70,6 +70,7 @@ services:
       dockerfile: frontend/web/Dockerfile
       args:
         VITE_API_BASE: /api/
+        VITE_PUBLIC_URL: ${FRONTEND_URL:-http://localhost}
     restart: unless-stopped
     depends_on:
       backend:

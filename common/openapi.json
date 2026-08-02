@@ -165,6 +165,23 @@
         }
       }
     },
+    "/users/private-key-backup": {
+      "get": {
+        "operationId": "getPrivateKeyBackup",
+        "responses": {
+          "200": {
+            "description": "Recovery-key-encrypted private-key backup for the authenticated user",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecoveryBlob"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/users/settings": {
       "patch": {
         "operationId": "updateUserSettings",

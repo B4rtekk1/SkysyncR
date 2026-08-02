@@ -80,6 +80,12 @@ pub struct OperationLogResponse {
     pub operations: Vec<crate::db::audit_logs::OperationLogRecord>,
 }
 
+#[derive(Serialize)]
+pub struct PrivateKeyBackupResponse {
+    pub user_id: String,
+    pub encrypted_private_key_recovery: String,
+}
+
 struct ExportFilePayload {
     id: Uuid,
     filename: String,
@@ -385,6 +391,24 @@ pub async fn current_user(
         device_lock: profile.device_lock,
         sync_on_metered: profile.sync_on_metered,
         trash_retention_days: profile.trash_retention_days,
+    }))
+}
+
+/// Returns the recovery-encrypted private-key backup only to an authenticated
+/// account session. The client still needs the separately stored recovery key
+/// to decrypt it before it can be saved on a new device.
+pub async fn private_key_backup(
+    State(state): State<AppState>,
+    auth: AuthUser,
+) -> Result<Json<PrivateKeyBackupResponse>, ApiError> {
+    let record = get_recovery_blob_by_user_id(&state.db_pool, auth.user_id)
+        .await
+        .map_err(|e| internal_error("get authenticated private key backup", e))?
+        .ok_or_else(|| ApiError::BadRequest("Private key backup is unavailable".into()))?;
+
+    Ok(Json(PrivateKeyBackupResponse {
+        user_id: record.user_id.to_string(),
+        encrypted_private_key_recovery: record.encrypted_private_key_recovery,
     }))
 }
 

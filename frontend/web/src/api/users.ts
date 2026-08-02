@@ -356,6 +356,18 @@ export async function getRecoveryBlob(token: string): Promise<RecoveryBlob> {
   return readJson(res, recoveryBlob, 'RecoveryBlob')
 }
 
+export async function getPrivateKeyBackup(): Promise<RecoveryBlob> {
+  const res = await authenticatedFetch(`${url}users/private-key-backup`, {
+    method: 'GET',
+  })
+
+  if (!res.ok) {
+    await throwApiError(res, 'Could not load the private-key backup')
+  }
+
+  return readJson(res, recoveryBlob, 'RecoveryBlob')
+}
+
 export async function resetPassword(payload: ResetPasswordPayload): Promise<void> {
   const res = await apiFetch(`${url}users/reset-password`, {
     method: 'POST',

@@ -79,7 +79,7 @@ Create a production environment file from the supplied example:
 Copy-Item infra\docker\.env.prod.example infra\env\.env.prod
 ```
 
-Edit `infra\env\.env.prod`, set `FRONTEND_URL` to the public HTTPS address of the application, then build and start the production stack:
+Edit `infra\env\.env.prod`, set `FRONTEND_URL` to the public HTTPS address of the application (without a trailing `/`). This address is also embedded in the social-media preview metadata, then build and start the production stack:
 
 ```powershell
 docker compose --env-file infra\env\.env.prod -f infra\docker\docker-compose.prod.yml up -d --build

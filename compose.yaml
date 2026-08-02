@@ -76,6 +76,7 @@ services:
         condition: service_started
     environment:
       VITE_API_BASE: /api/
+      VITE_PUBLIC_URL: ${FRONTEND_URL:-http://localhost:${HTTP_PORT:-8080}}
       VITE_USE_POLLING: ${VITE_USE_POLLING:-true}
     ports:
       - "${HTTP_PORT:-8080}:5173"

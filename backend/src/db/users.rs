@@ -565,6 +565,32 @@ pub async fn get_recovery_blob_by_token(
     ))
 }
 
+pub async fn get_recovery_blob_by_user_id(
+    pool: &PgPool,
+    user_id: Uuid,
+) -> Result<Option<RecoveryBlobRecord>, sqlx::Error> {
+    let result = sqlx::query_as::<_, (Uuid, String)>(
+        r#"
+        SELECT id, encrypted_private_key_recovery
+        FROM users
+        WHERE id = $1
+          AND is_active = TRUE
+          AND email_verified = TRUE
+          AND encrypted_private_key_recovery <> ''
+        "#,
+    )
+    .bind(user_id)
+    .fetch_optional(pool)
+    .await?;
+
+    Ok(result.map(
+        |(user_id, encrypted_private_key_recovery)| RecoveryBlobRecord {
+            user_id,
+            encrypted_private_key_recovery,
+        },
+    ))
+}
+
 pub async fn reset_password_with_token(
     pool: &PgPool,
     token: &str,

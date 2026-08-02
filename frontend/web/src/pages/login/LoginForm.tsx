@@ -2,15 +2,15 @@ import { type SubmitEvent, useEffect, useState } from 'react'
 import { Link, useNavigate } from '../../router'
 import { clearTokens } from '../../api/auth.ts'
 import { getUnlockedVaultSession, setUnlockedVaultSession } from '../../api/session.ts'
-import { ApiRequestError, getCurrentUser, loginUser, loginWithTotp, resendVerificationEmail } from '../../api/users.ts'
+import { ApiRequestError, getCurrentUser, getPrivateKeyBackup, loginUser, loginWithTotp, resendVerificationEmail, type CurrentUserResponse } from '../../api/users.ts'
 import { isNetworkError } from '../../api/http.ts'
 import {
   clearPendingVerificationEmail,
   loadPendingVerificationEmail,
   savePendingVerificationEmail,
 } from '../../api/verificationReminder.ts'
-import { decryptPrivateKey } from '../../crypto/keys'
-import { loadEncryptedPrivateKey, storeActivePrivateKey } from '../../crypto/storage'
+import { decryptPrivateKey, encryptPrivateKey, type EncryptedPrivateKey } from '../../crypto/keys'
+import { loadEncryptedPrivateKey, storeActivePrivateKey, storeEncryptedPrivateKey } from '../../crypto/storage'
 import EyeIcon from './EyeIcon'
 
 type LoginError = {
@@ -41,6 +41,9 @@ function LoginForm() {
   const [showPassword, setShowPassword] = useState(false)
   const [totpChallengeId, setTotpChallengeId] = useState<string | null>(null)
   const [totpCode, setTotpCode] = useState('')
+  const [privateKeyBackup, setPrivateKeyBackup] = useState<EncryptedPrivateKey | null>(null)
+  const [backupUser, setBackupUser] = useState<CurrentUserResponse | null>(null)
+  const [recoveryKey, setRecoveryKey] = useState('')
 
   useEffect(() => {
     let active = true
@@ -202,12 +205,21 @@ function LoginForm() {
       const encryptedPrivateKey = await loadEncryptedPrivateKey(user.id)
 
       if (!encryptedPrivateKey) {
-        clearTokens()
-        setError({
-          title: 'This device cannot unlock the vault',
-          message: 'The encrypted private key is not stored in this browser.',
-          action: 'Sign in on the device where the account was created or restore the key first.',
-        })
+        try {
+          const backup = await getPrivateKeyBackup()
+          if (backup.user_id !== user.id) throw new Error('The private-key backup belongs to another account.')
+          setPrivateKeyBackup(JSON.parse(backup.encrypted_private_key_recovery) as EncryptedPrivateKey)
+          setBackupUser(user)
+          setRecoveryKey('')
+          setError(null)
+        } catch (err) {
+          clearTokens()
+          setError({
+            title: 'This device cannot unlock the vault',
+            message: 'The encrypted private key is not stored in this browser.',
+            action: err instanceof Error ? err.message : 'Sign in on the original device or restore the key first.',
+          })
+        }
         return
       }
 
@@ -225,6 +237,10 @@ function LoginForm() {
         return
       }
 
+      await completeVaultUnlock(user, privateKey)
+  }
+
+  async function completeVaultUnlock(user: CurrentUserResponse, privateKey: CryptoKey) {
       await storeActivePrivateKey(user.id, privateKey, {
         // A persistent sign-in also needs the short-lived vault key cache.
         // Without it, a newly opened tab can refresh the login cookie but is
@@ -236,6 +252,31 @@ function LoginForm() {
       clearPendingVerificationEmail()
       setPendingVerificationEmail(null)
       navigate('/dashboard', { replace: true })
+  }
+
+  async function handleRecoveryKeySubmit(e: SubmitEvent<HTMLFormElement>) {
+    e.preventDefault()
+    if (!privateKeyBackup || !backupUser || !recoveryKey.trim()) return
+
+    setLoading(true)
+    setError(null)
+    try {
+      // The server holds only this recovery-key-encrypted copy. The recovery
+      // key is never sent to it; it is used locally to provision this device.
+      const exportedPrivateKey = await decryptPrivateKey(privateKeyBackup, recoveryKey.trim(), true)
+      const encryptedForPassword = await encryptPrivateKey(exportedPrivateKey, password)
+      await storeEncryptedPrivateKey(backupUser.id, encryptedForPassword)
+      const privateKey = await decryptPrivateKey(encryptedForPassword, password)
+      await completeVaultUnlock(backupUser, privateKey)
+    } catch {
+      setError({
+        title: 'Could not restore the vault key',
+        message: 'Check the recovery key and try again.',
+        field: 'password',
+      })
+    } finally {
+      setLoading(false)
+    }
   }
 
   async function handleTotpSubmit(e: SubmitEvent<HTMLFormElement>) {
@@ -302,7 +343,7 @@ function LoginForm() {
             </div>
         )}
 
-        <form className="auth-form" onSubmit={totpChallengeId ? handleTotpSubmit : handleSubmit} noValidate>
+        <form className="auth-form" onSubmit={totpChallengeId ? handleTotpSubmit : privateKeyBackup ? handleRecoveryKeySubmit : handleSubmit} noValidate>
           {totpChallengeId ? (
             <>
               <p className="auth__subtitle">Enter the 6-digit code from your authenticator app.</p>
@@ -312,7 +353,21 @@ function LoginForm() {
               </label>
               <button type="button" className="btn btn--outline" onClick={() => { setTotpChallengeId(null); setTotpCode(''); setError(null) }}>Use a different account</button>
             </>
-          ) : <>
+          ) : privateKeyBackup ? <>
+          <p className="auth__subtitle">Enter the recovery key saved when you created this account. It stays on this device and unlocks the encrypted key backup locally.</p>
+          <label className="field">
+            <span className="field__label">Recovery key</span>
+            <input
+                className="field__input"
+                type="text"
+                autoComplete="off"
+                required
+                value={recoveryKey}
+                onChange={(e) => setRecoveryKey(e.target.value)}
+                placeholder="xxxx-xxxx-xxxx-…"
+            />
+          </label>
+          </> : <>
           <label className="field">
             <span className="field__label">Email address</span>
             <input
@@ -414,7 +469,7 @@ function LoginForm() {
               className="btn btn--solid btn--lg auth-form__submit"
               disabled={loading}
           >
-            {loading ? 'Unlocking…' : totpChallengeId ? 'Verify code' : 'Sign in'}
+            {loading ? 'Unlocking…' : totpChallengeId ? 'Verify code' : privateKeyBackup ? 'Restore this device' : 'Sign in'}
           </button>
         </form>
 
