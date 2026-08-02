@@ -131,7 +131,7 @@ export function useDashboardData({ view, activeFolderId, privateKey, userId }: U
                     return
                 }
 
-                if (view === 'groups' || view === 'calendar') {
+                if (view === 'groups') {
                     return
                 }
 
@@ -162,6 +162,8 @@ export function useDashboardData({ view, activeFolderId, privateKey, userId }: U
                     ])
                     fileData = files
                     folderData = foldersData
+                } else if (view === 'calendar') {
+                    fileData = await listFiles()
                 } else if (view === 'trash') {
                     const [trashedFiles, trashedFolders] = await Promise.all([listTrash(), listFolders(undefined, false, true)])
                     fileData = trashedFiles
@@ -206,7 +208,7 @@ export function useDashboardData({ view, activeFolderId, privateKey, userId }: U
                     setItems(applySavedOrder(scopedFileData, view))
                     setFolders(visibleFolderData)
                     setOfflineSnapshot(null)
-                    if (view === 'all' || view === 'favourites' || view === 'recent') {
+                    if (view === 'all' || view === 'favourites' || view === 'recent' || view === 'calendar') {
                         const ownedVisibleFiles = visibleFileData.filter((file): file is ApiFile => !('permissions' in file))
                         setStorageItems(ownedVisibleFiles)
                         setFavouriteIds(new Set(fileData.filter((file) => !('permissions' in file) && file.is_favourite).map((file) => file.id)))

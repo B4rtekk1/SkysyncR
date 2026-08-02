@@ -47,11 +47,13 @@ export function FileInfoPopover({ item, view, typeLabel, position, onClose, onRe
         status: 'idle',
     })
     const [restorePendingId, setRestorePendingId] = useState<string | null>(null)
+    const [restoreConfirmationId, setRestoreConfirmationId] = useState<string | null>(null)
     const title = isFolder ? item.name : item.filename
+    const isSharedFile = !isFolder && isShared(item)
     const hasCurrentHistory = !isFolder && history.fileId === item.id
     const versions = hasCurrentHistory ? history.versions : []
     const activity = hasCurrentHistory ? history.activity : []
-    const historyStatus = !isFolder && !hasCurrentHistory ? 'loading' : history.status
+    const historyStatus = !isFolder && !isSharedFile && !hasCurrentHistory ? 'loading' : history.status
     const infoRows = isFolder
         ? [
               ['Name', item.name],
@@ -82,7 +84,7 @@ export function FileInfoPopover({ item, view, typeLabel, position, onClose, onRe
           ]
 
     useEffect(() => {
-        if (isFolder) return
+        if (isFolder || isSharedFile) return
 
         let active = true
         Promise.all([listFileVersions(item.id), listFileActivity(item.id)])
@@ -108,7 +110,7 @@ export function FileInfoPopover({ item, view, typeLabel, position, onClose, onRe
         return () => {
             active = false
         }
-    }, [isFolder, item.id])
+    }, [isFolder, isSharedFile, item.id])
 
     async function restoreVersion(versionId: string) {
         if (!onRestoreVersion || restorePendingId) return
@@ -126,6 +128,7 @@ export function FileInfoPopover({ item, view, typeLabel, position, onClose, onRe
                 activity: nextActivity,
                 status: 'idle',
             })
+            setRestoreConfirmationId(null)
         } finally {
             setRestorePendingId(null)
         }
@@ -170,7 +173,11 @@ export function FileInfoPopover({ item, view, typeLabel, position, onClose, onRe
                         </div>
                     ))}
                 </dl>
-                {!isFolder && (
+                {isSharedFile ? (
+                    <div className="file-card__history" aria-label={`Change history for ${title}`}>
+                        <p className="file-card__history-muted">Version history and activity are available to the file owner only.</p>
+                    </div>
+                ) : !isFolder && (
                     <div className="file-card__history" aria-label={`Change history for ${title}`}>
                         <section className="file-card__history-section">
                             <h3>Versions</h3>
@@ -188,15 +195,36 @@ export function FileInfoPopover({ item, view, typeLabel, position, onClose, onRe
                                         </span>
                                         <span>{version.device_label || 'Unknown device'}</span>
                                     </div>
-                                    {onRestoreVersion && (
-                                        <button
-                                            type="button"
-                                            onClick={() => void restoreVersion(version.id)}
-                                            disabled={restorePendingId !== null}
-                                        >
-                                            {restorePendingId === version.id ? 'Restoring...' : 'Restore'}
-                                        </button>
-                                    )}
+                                    {onRestoreVersion &&
+                                        (restoreConfirmationId === version.id ? (
+                                            <div className="file-card__version-confirmation" role="alert">
+                                                <span>Replace the current file with this version? The current contents will be saved as a version.</span>
+                                                <div>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setRestoreConfirmationId(null)}
+                                                        disabled={restorePendingId !== null}
+                                                    >
+                                                        Cancel
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => void restoreVersion(version.id)}
+                                                        disabled={restorePendingId !== null}
+                                                    >
+                                                        {restorePendingId === version.id ? 'Restoring...' : 'Restore version'}
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <button
+                                                type="button"
+                                                onClick={() => setRestoreConfirmationId(version.id)}
+                                                disabled={restorePendingId !== null}
+                                            >
+                                                Restore
+                                            </button>
+                                        ))}
                                 </div>
                             ))}
                         </section>

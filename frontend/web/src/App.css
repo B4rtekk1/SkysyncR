@@ -415,6 +415,31 @@ html[data-theme='light'] {
   color: var(--mist);
 }
 
+.settings-loading {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(0, 0, 0, 0.62);
+  backdrop-filter: blur(12px);
+}
+
+.settings-loading__dialog {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 52px;
+  padding: 0 18px;
+  border: 1px solid rgba(var(--signal-rgb), 0.14);
+  border-radius: 10px;
+  background: var(--panel);
+  color: var(--mist);
+  box-shadow: 0 30px 100px rgba(0, 0, 0, 0.48);
+  font-size: 0.86rem;
+}
+
 @keyframes route-loading-spin {
   to {
     transform: rotate(360deg);

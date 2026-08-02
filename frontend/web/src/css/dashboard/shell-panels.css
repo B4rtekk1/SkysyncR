@@ -3,7 +3,8 @@
     padding: 12px 10px;
     border-top: 1px solid var(--line);
     min-width: 0;
-    overflow: hidden;
+    /* Allows the storage-info tooltip to extend above this panel. */
+    overflow: visible;
 }
 
 .shell__storage-row {
@@ -22,8 +23,6 @@
     align-items: center;
     min-width: 0;
     gap: 5px;
-    overflow: hidden;
-    text-overflow: ellipsis;
     white-space: nowrap;
 }
 

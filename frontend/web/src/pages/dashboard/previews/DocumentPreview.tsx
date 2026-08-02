@@ -65,7 +65,11 @@ function textContent(node: Element): string {
 
 function parseXml(xml: string) {
     const parsed = new DOMParser().parseFromString(xml, 'application/xml')
-    const parserError = parsed.querySelector('parsererror')
+    // XML parser errors can be emitted in a browser-specific namespace. Using a
+    // selector on an XML document causes Firefox to throw for that element name.
+    const parserError = Array.from(parsed.getElementsByTagNameNS('*', '*')).find(
+        (element) => element.localName === 'parsererror',
+    )
     if (parserError) throw new Error('The document XML is malformed.')
     return parsed
 }
@@ -251,7 +255,7 @@ export function DocumentPreview({
                 {document?.truncated && (
                     <p className="document-preview__notice">Showing the first {MAX_PARAGRAPHS} text blocks.</p>
                 )}
-                <dl className="pdf-preview__info document-preview__info">
+                <dl className="document-preview__info">
                     <div>
                         <dt>Size</dt>
                         <dd>{formatBytes(item.size_bytes)}</dd>

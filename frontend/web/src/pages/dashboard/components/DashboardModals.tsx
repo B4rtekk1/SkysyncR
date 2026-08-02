@@ -93,6 +93,17 @@ function ModalFallback() {
     )
 }
 
+function SettingsModalFallback() {
+    return (
+        <div className="settings-loading" role="status" aria-live="polite">
+            <div className="settings-loading__dialog">
+                <span className="spinner" />
+                <span>Loading settings...</span>
+            </div>
+        </div>
+    )
+}
+
 type FolderShareKeyring = {
     v: 1
     folders: Record<string, string>
@@ -241,7 +252,7 @@ export function DashboardModals({
                 </Suspense>
             )}
             {settingsOpen && (
-                <Suspense fallback={<ModalFallback />}>
+                <Suspense fallback={<SettingsModalFallback />}>
                     <SettingsModal
                         currentUser={currentUser}
                         onClose={onCloseSettings}

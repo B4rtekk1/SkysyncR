@@ -99,7 +99,40 @@
 }
 
 .document-preview__info {
+    display: grid;
+    align-content: start;
+    gap: 10px;
+    min-width: 0;
     align-self: end;
+    margin: 0;
+    padding: 14px;
+    border-top: 1px solid rgba(246, 248, 251, 0.1);
+}
+
+.document-preview__info div {
+    display: grid;
+    gap: 4px;
+    min-width: 0;
+    padding-bottom: 10px;
+    border-bottom: 1px solid rgba(246, 248, 251, 0.1);
+}
+
+.document-preview__info div:last-child {
+    padding-bottom: 0;
+    border-bottom: none;
+}
+
+.document-preview__info dt {
+    color: var(--mist);
+    font-size: 0.72rem;
+}
+
+.document-preview__info dd {
+    min-width: 0;
+    margin: 0;
+    overflow-wrap: anywhere;
+    color: var(--paper);
+    font-size: 0.82rem;
 }
 
 .document-preview__fallback {

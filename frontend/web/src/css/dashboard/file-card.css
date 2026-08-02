@@ -540,6 +540,29 @@
     opacity: 0.58;
 }
 
+.file-card__version-confirmation {
+    display: grid;
+    gap: 7px;
+    padding: 8px;
+    border: 1px solid rgba(245, 158, 11, 0.4);
+    border-radius: 8px;
+    background: rgba(245, 158, 11, 0.08);
+    color: var(--paper);
+    font-size: 0.68rem;
+    line-height: 1.35;
+}
+
+.file-card__version-confirmation > div {
+    display: flex;
+    justify-content: flex-end;
+    gap: 6px;
+}
+
+.file-card__version-confirmation button {
+    min-width: auto;
+    padding: 0 8px;
+}
+
 .file-card__action--cancel:hover,
 .file-card__action--cancel:focus-visible {
     color: #ef4444;

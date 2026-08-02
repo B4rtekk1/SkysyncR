@@ -223,7 +223,7 @@
     padding-top: 66px;
 }
 
-.recent-important__file-grid .file-card:not(.folder-card) {
+.recent-important__file-grid .file-card:not(.folder-card) .file-card__top {
     position: absolute;
     top: 16px;
     left: 16px;
