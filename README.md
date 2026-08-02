@@ -66,7 +66,9 @@ The development Compose file provides safe-for-local-development defaults. Befor
 | `JWT_SECRET` | Signing secret for access tokens |
 | `TOTP_ENCRYPTION_KEY` | Encryption key for server-side TOTP secrets |
 | `CORS_ORIGINS` | Allowed frontend origin or origins |
+| `FRONTEND_URL` | Public frontend URL used in email verification and password-reset links |
 | `SMTP_HOST`, `SMTP_USERNAME`, `SMTP_EMAIL`, `SMTP_PASSWORD` | Email verification and password-reset delivery |
+| `FROM_EMAIL` | Sender displayed in email messages |
 | `MAX_FILE_SIZE_BYTES` | Maximum accepted upload size; defaults to 1 GiB |
 
 ## Production deployment
@@ -74,13 +76,13 @@ The development Compose file provides safe-for-local-development defaults. Befor
 Create a production environment file from the supplied example:
 
 ```powershell
-Copy-Item infra\docker\.env.prod.example infra\docker\.env.prod
+Copy-Item infra\docker\.env.prod.example infra\env\.env.prod
 ```
 
-Edit `infra\docker\.env.prod`, then build and start the production stack:
+Edit `infra\env\.env.prod`, set `FRONTEND_URL` to the public HTTPS address of the application, then build and start the production stack:
 
 ```powershell
-docker compose --env-file infra\docker\.env.prod -f infra\docker\docker-compose.prod.yml up -d --build
+docker compose --env-file infra\env\.env.prod -f infra\docker\docker-compose.prod.yml up -d --build
 ```
 
 The application is available at `http://localhost` by default, or at the port configured through `HTTP_PORT`.
@@ -128,4 +130,3 @@ cargo test
 ## License
 
 Skysync is distributed under the [MIT License](LICENSE).
-

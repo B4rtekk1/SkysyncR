@@ -47,10 +47,12 @@ services:
       APP_ENV: production
       LOG_FORMAT: ${LOG_FORMAT:-json}
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost}
       SMTP_HOST: ${SMTP_HOST:-}
       SMTP_USERNAME: ${SMTP_USERNAME:-}
       SMTP_EMAIL: ${SMTP_EMAIL:-}
       SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      FROM_EMAIL: ${FROM_EMAIL:-}
       UPLOAD_DIR: /var/lib/skysync/uploads
       MAX_FILE_SIZE_BYTES: ${MAX_FILE_SIZE_BYTES:-1073741824}
       MAX_CONCURRENT_FILE_TRANSFERS: ${MAX_CONCURRENT_FILE_TRANSFERS:-4}
