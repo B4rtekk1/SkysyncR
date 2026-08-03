@@ -502,6 +502,15 @@
     .offline-mode__stamp {
         white-space: normal;
     }
+
+    /* A transparent sidebar still contributes its intrinsic height to the grid. */
+    .shell.is-sidebar-hidden {
+        grid-template-rows: minmax(0, 1fr);
+    }
+
+    .shell.is-sidebar-hidden .shell__sidebar {
+        display: none;
+    }
 }
 
 @media (max-width: 560px) {
@@ -649,8 +658,8 @@
     }
 }
 
-/* Phone layout: keep navigation and search useful without taking over the screen. */
-@media (max-width: 560px) {
+/* Narrow tablets often report phone-like widths above 560px. */
+@media (max-width: 900px) {
     .shell__sidebar,
     .shell.is-sidebar-compact .shell__sidebar {
         position: relative;
@@ -669,9 +678,14 @@
     .shell__navlist--primary,
     .shell.is-sidebar-compact .shell__navlist--primary {
         display: flex;
+        flex-direction: row;
+        align-items: center;
+        min-height: 48px;
+        max-height: 48px;
         grid-template-columns: none;
         gap: 6px;
         overflow-x: auto;
+        overflow-y: hidden;
         padding: 1px 0 3px;
         scrollbar-width: none;
         touch-action: pan-x;
@@ -745,6 +759,7 @@
         min-width: 0;
         min-height: 42px;
         flex: 1 1 auto;
+        flex-basis: auto;
     }
 
     .shell__shortcuts {
@@ -754,6 +769,10 @@
     .shell__topbar-actions {
         gap: 8px;
         margin-left: 0;
+    }
+
+    .shell__sync {
+        display: none;
     }
 
     .shell__content {
@@ -773,7 +792,7 @@
         display: grid;
         grid-template-columns: repeat(4, minmax(0, 1fr));
         width: 100%;
-        gap: 8px;
+        gap: 6px;
     }
 
     .shell__content-actions > * {
@@ -803,11 +822,32 @@
         width: 100%;
         justify-content: center;
         min-height: 42px;
+        box-sizing: border-box;
+    }
+
+    /* The active indicator is sized for the two 30px icon buttons. On mobile
+       those buttons are centered inside a wider control, so anchor it there too. */
+    .shell__content-actions .view-toggle::before {
+        top: 50%;
+        left: 50%;
+        transform: translate(-31px, -50%);
+    }
+
+    .shell__content-actions .view-toggle--list::before {
+        transform: translate(1px, -50%);
+    }
+
+    .shell__content-actions > :only-child {
+        grid-column: 1 / -1;
     }
 
     .shell__content-actions .add-dropdown__menu {
         right: 0;
         left: auto;
         width: min(220px, calc(100vw - 24px));
+    }
+
+    .shell__content-actions .add-dropdown__trigger {
+        font-size: 0.82rem;
     }
 }

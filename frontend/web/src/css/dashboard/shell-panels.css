@@ -429,6 +429,7 @@
     display: flex;
     align-items: center;
     gap: 18px;
+    flex: 0 0 auto;
 }
 
 .shell__sync {
@@ -643,6 +644,7 @@
 
 .shell__user {
     position: relative;
+    flex: 0 0 34px;
 }
 
 .shell__avatar {
@@ -660,6 +662,7 @@
     font-weight: 600;
     cursor: pointer;
     overflow: hidden;
+    flex: 0 0 34px;
     transition: border-color 0.15s ease;
 }
 

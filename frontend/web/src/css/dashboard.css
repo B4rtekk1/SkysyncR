@@ -1,6 +1,6 @@
 @import './dashboard/base.css';
-@import './dashboard/shell.css';
 @import './dashboard/shell-panels.css';
+@import './dashboard/shell.css';
 @import './dashboard/file-filters.css';
 @import './dashboard/file-grid.css';
 @import './dashboard/file-card.css';
