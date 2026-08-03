@@ -1,4 +1,4 @@
-import { readQuotedString } from './readQuotedString'
+import { readQuotedString } from './readQuotedString.ts'
 
 export type CudaHighlightTokenType =
     | 'builtin'

@@ -361,12 +361,18 @@
 @media (max-width: 900px) {
     .shell {
         grid-template-columns: 1fr;
-        grid-template-rows: auto minmax(0, 1fr);
+        grid-template-rows: minmax(0, 1fr);
     }
 
     .shell__sidebar {
-        position: sticky;
-        top: 0;
+        /* Navigation is a drawer on narrow screens.  It must not create a
+           grid row, otherwise opening it moves the toolbar and content. */
+        position: absolute;
+        /* The compact topbar is 62px high (42px control + 10px padding on
+           each side), and stays available while the drawer is open. */
+        top: 62px;
+        right: 0;
+        left: 0;
         z-index: 30;
         height: auto;
         max-width: 100%;
@@ -501,11 +507,6 @@
 
     .offline-mode__stamp {
         white-space: normal;
-    }
-
-    /* A transparent sidebar still contributes its intrinsic height to the grid. */
-    .shell.is-sidebar-hidden {
-        grid-template-rows: minmax(0, 1fr);
     }
 
     .shell.is-sidebar-hidden .shell__sidebar {
@@ -662,7 +663,8 @@
 @media (max-width: 900px) {
     .shell__sidebar,
     .shell.is-sidebar-compact .shell__sidebar {
-        position: relative;
+        position: absolute;
+        top: 62px;
         grid-template-columns: minmax(0, 1fr) auto auto;
         grid-template-areas:
             "logo footer toggle"
@@ -771,21 +773,12 @@
         margin-left: 0;
     }
 
-    /* Keep account controls in the top row while the mobile navigation is open.
-       The search then gets the complete row below the navigation. */
-    .shell:not(.is-sidebar-hidden) .shell__topbar-actions {
-        position: fixed;
-        top: 10px;
-        right: 110px;
-        z-index: 35;
-    }
-
     .shell__sync {
         display: none;
     }
 
     @media (max-width: 390px) {
-        .shell:not(.is-sidebar-hidden) .shell__theme-toggle {
+        .shell__theme-toggle {
             display: none;
         }
     }

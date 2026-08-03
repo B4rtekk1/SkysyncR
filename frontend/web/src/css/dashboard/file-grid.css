@@ -1474,33 +1474,36 @@ html[data-theme='light'] .file-card--can-preview:hover {
 
 @media (max-width: 420px) {
     .file-grid {
-        grid-template-columns: 1fr;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 
     .file-card {
-        min-height: 174px;
+        min-height: 146px;
+        padding: 10px;
     }
 
     .file-card__top {
-        min-height: 54px;
+        min-height: 44px;
         flex-direction: row;
         align-items: center;
         padding-top: 0;
     }
 }
 
-/* Two narrow cards leave too little space for file names and actions on phones. */
+/* Keep two compact cards per row in the mobile grid view. */
 @media (max-width: 560px) {
     .file-grid:not(.file-grid--list) {
-        grid-template-columns: 1fr;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 8px;
     }
 
     .file-grid:not(.file-grid--list) .file-card {
-        min-height: 156px;
+        min-height: 146px;
+        padding: 10px;
     }
 
     .file-grid:not(.file-grid--list) .file-card__top {
-        min-height: 48px;
+        min-height: 44px;
         flex-direction: row;
         align-items: center;
         padding-top: 0;
