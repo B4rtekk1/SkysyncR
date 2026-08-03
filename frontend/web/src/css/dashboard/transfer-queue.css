@@ -144,19 +144,45 @@
         right: 12px;
         bottom: 12px;
         width: calc(100vw - 24px);
+        max-height: min(260px, calc(100dvh - 24px));
     }
 
-    .transfer-queue__head,
+    .transfer-queue__head {
+        grid-template-columns: minmax(0, 1fr) auto;
+    }
+
     .transfer-queue__row {
-        grid-template-columns: minmax(0, 1fr);
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 4px 10px;
+        min-height: 0;
+        padding-block: 7px;
     }
 
-    .transfer-queue__actions,
+    .transfer-queue__file {
+        grid-row: 1 / span 2;
+    }
+
+    .transfer-queue__actions {
+        gap: 6px;
+    }
+
     .transfer-queue__row-actions {
-        justify-content: flex-start;
+        gap: 5px;
+        justify-content: flex-end;
+    }
+
+    .transfer-queue__button,
+    .transfer-queue__icon-button {
+        min-height: 26px;
+        padding-inline: 7px;
     }
 
     .transfer-queue__status {
+        justify-self: end;
         width: fit-content;
+    }
+
+    .transfer-queue__list {
+        max-height: 178px;
     }
 }
