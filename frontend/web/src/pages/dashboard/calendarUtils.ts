@@ -3,6 +3,7 @@ import type { FileKind } from './fileUtils'
 import type { CalendarEntry, CalendarKindFilter, CalendarSourceFilter, CalendarViewMode } from './calendarTypes'
 
 export const DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+export const CALENDAR_LOCALE = 'en-US'
 export const CALENDAR_ENTRIES_STORAGE_KEY = 'calendar_entries'
 export const KIND_OPTIONS: CalendarKindFilter[] = [
     'all',
@@ -32,7 +33,7 @@ export const REMINDER_OPTIONS = [
     { value: '1w', label: '1 week before' },
 ]
 export const MONTH_LABELS = Array.from({ length: 12 }, (_, month) =>
-    new Intl.DateTimeFormat(undefined, { month: 'short' }).format(new Date(2026, month, 1)),
+    new Intl.DateTimeFormat(CALENDAR_LOCALE, { month: 'short' }).format(new Date(2026, month, 1)),
 )
 
 export function toDateKey(date: Date) {
@@ -54,18 +55,18 @@ export function startOfWeek(date: Date) {
 
 export function formatPeriod(date: Date, mode: CalendarViewMode) {
     if (mode === 'month') {
-        return new Intl.DateTimeFormat(undefined, { month: 'long', year: 'numeric' }).format(date)
+        return new Intl.DateTimeFormat(CALENDAR_LOCALE, { month: 'long', year: 'numeric' }).format(date)
     }
 
     const start = startOfWeek(date)
     const end = new Date(start)
     end.setDate(start.getDate() + 6)
-    const formatter = new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' })
+    const formatter = new Intl.DateTimeFormat(CALENDAR_LOCALE, { month: 'short', day: 'numeric' })
     return `${formatter.format(start)} - ${formatter.format(end)}, ${end.getFullYear()}`
 }
 
 export function formatFullDate(date: Date) {
-    return new Intl.DateTimeFormat(undefined, { weekday: 'long', month: 'long', day: 'numeric' }).format(date)
+    return new Intl.DateTimeFormat(CALENDAR_LOCALE, { weekday: 'long', month: 'long', day: 'numeric' }).format(date)
 }
 
 export function formatTime(value: string) {

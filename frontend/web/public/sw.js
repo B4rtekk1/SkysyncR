@@ -1,5 +1,5 @@
-const CACHE_NAME = 'skysync-app-shell-v1'
-const APP_SHELL = ['/', '/index.html', '/manifest.webmanifest', '/og-image.png', '/icons.svg']
+const CACHE_NAME = 'skysync-app-shell-v4'
+const APP_SHELL = ['/', '/index.html', '/manifest.webmanifest', '/og-image.png', '/icons.svg', '/icons/skysync-cloud-usb.svg']
 
 self.addEventListener('install', (event) => {
   event.waitUntil(

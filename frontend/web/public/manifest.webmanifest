@@ -9,9 +9,9 @@
   "theme_color": "#0f766e",
   "icons": [
     {
-      "src": "../src/assets/icon.png",
-      "sizes": "1024x1024",
-      "type": "image/png",
+      "src": "/icons/icon-1024.png",
+      "sizes": "any",
+      "type": "image/svg+xml",
       "purpose": "any"
     }
   ]
