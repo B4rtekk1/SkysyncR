@@ -52,7 +52,7 @@ docker compose logs -f backend
 docker compose down
 ```
 
-Database data and uploaded encrypted blobs persist in the `skysync_db_data` and `skysync_uploads` Docker volumes. Frontend source files are bind-mounted; polling is enabled by default for reliable file watching on Docker Desktop and OneDrive-backed folders. Set `VITE_USE_POLLING=false` if native file watching works on your machine.
+Database data and uploaded encrypted blobs persist in the `skysync_db_data` and `skysync_uploads` Docker volumes. Frontend source files are bind-mounted.
 
 ## Configuration
 
